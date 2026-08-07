@@ -56,16 +56,54 @@ behavior before deciding on A or B.
 ## Your data & backups
 
 - Data lives in this browser's local storage on this device only — it does
-  **not** sync automatically between your phone and PC.
+  **not** sync automatically between your phone and PC, unless you set up
+  Google Drive Sync (below).
 - Go to **Setup → Backup & Restore** any time to:
   - **Export backup (.json)** — downloads a file with everything (livestock,
     production, feed, income/expenses, health records, categories).
   - **Import backup (.json)** — restores from a previously exported file.
-- To move data between devices, or keep a copy in Google Drive: export a
-  backup, then upload that `.json` file to your Google Drive (or Dropbox, or
-  email it to yourself). On the other device, open the app and import it.
-- Consider exporting a backup weekly — local storage isn't indestructible
-  (clearing browser data/cache will remove it).
+
+## Google Drive Sync (optional, live sync)
+
+For automatic, live syncing to your own Google Drive (instead of manual
+export/import), the app has a built-in **Google Drive Sync** panel under
+**Setup**. This requires a one-time setup on your part — it's free, but it
+does take about 10–15 minutes and needs a Google account:
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and
+   create a new project (any name, e.g. "Green Horizon Farm App").
+2. **APIs & Services → Library** → search **Google Drive API** → **Enable**.
+3. **APIs & Services → OAuth consent screen**:
+   - User type: **External**
+   - Fill in app name and your email
+   - Add scope: `.../auth/drive.file`
+   - Add your own Gmail address as a **test user**
+   - Save, and leave the app in **Testing** status (fine indefinitely for
+     personal use — you don't need Google's full verification review)
+4. **Credentials → Create Credentials → OAuth client ID**:
+   - Application type: **Web application**
+   - Authorized JavaScript origins: add your GitHub Pages URL, e.g.
+     `https://henokj2000-prog.github.io`
+5. Copy the generated **Client ID**.
+6. In the app: **Setup → Google Drive Sync** → paste the Client ID → **Save**
+   → **Connect to Google Drive**.
+
+The first time you connect, Google will show an **"unverified app"** warning
+— this is expected for your own personal app (it hasn't gone through
+Google's public app review, which isn't necessary here). Click
+**Advanced → Go to (app name)** to continue.
+
+**What to expect:**
+- Once connected, the app can push/pull a single `green-horizon-farm-data.json`
+  file in your Drive.
+- Turn on **Auto-sync every change** to have every add/edit/delete pushed to
+  Drive automatically, or leave it off and use **Sync now** manually.
+- The Google sign-in session expires after roughly an hour of inactivity —
+  when it does, just tap **Connect** again. There's no way around this
+  without a paid backend server, so treat Drive Sync as a convenience layer
+  on top of local storage, not a replacement for it — your data is always
+  safe on-device regardless of sync status.
+
 
 ## Files in this folder
 
