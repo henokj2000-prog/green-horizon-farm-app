@@ -227,10 +227,11 @@ const STORE_KEYS = {
   calc:'gh_calc'
 };
 
+const FEED_PER_BIRD_KG = 0.112; // 112 g per bird per day — standard layer feed intake assumption
+
 const DEFAULT_CALC = {
   layerBirds: 0,
   layingRatePct: 70,
-  feedTotalKgPerDay: 0,
   feedCostPerKg: 0,
   otherCostPerDay: 0,
   wastePct: 2,
@@ -428,13 +429,6 @@ function calcAutoDefaults(){
   if(layerFeedType){
     const avg = feedAvgCost(layerFeedType);
     if(avg > 0) c.feedCostPerKg = Math.round(avg*100)/100;
-
-    const feedRows = state.feeding.filter(f=>f.animalType==='Poultry' && f.feedType===layerFeedType);
-    if(feedRows.length){
-      const totalUsed = feedRows.reduce((s,f)=>s+num(f.qtyUsed),0);
-      const feedDays = new Set(feedRows.map(f=>f.date)).size || 1;
-      if(totalUsed > 0) c.feedTotalKgPerDay = Math.round((totalUsed/feedDays)*10)/10;
-    }
   }
 
   const eggOutput = productGoodOutput('Eggs');
@@ -456,8 +450,9 @@ function computeCalcResults(c){
   const birds = num(c.layerBirds);
   const rawEggsPerDay = birds * (num(c.layingRatePct)/100);
   const dailyEggs = Math.max(0, rawEggsPerDay * (1 - num(c.wastePct)/100));
-  const dailyFeedCost = num(c.feedTotalKgPerDay) * num(c.feedCostPerKg);
-  const impliedPerBirdKg = birds > 0 ? num(c.feedTotalKgPerDay)/birds : 0;
+  const feedTotalKgPerDay = birds * FEED_PER_BIRD_KG;
+  const dailyFeedCost = feedTotalKgPerDay * num(c.feedCostPerKg);
+  const impliedPerBirdKg = FEED_PER_BIRD_KG;
   const dailyOtherCost = num(c.otherCostPerDay);
   const impliedOtherPerBird = birds > 0 ? dailyOtherCost/birds : 0;
   const dailyTotalCost = dailyFeedCost + dailyOtherCost;
@@ -481,7 +476,7 @@ function computeCalcResults(c){
   if(soldQty > 0) currentAvgPrice = productValue('Eggs')/soldQty;
 
   return {
-    dailyEggs, dailyFeedCost, dailyOtherCost, dailyTotalCost, costPerEgg,
+    dailyEggs, feedTotalKgPerDay, dailyFeedCost, dailyOtherCost, dailyTotalCost, costPerEgg,
     priceEgg, profitEgg, crate, priceCrate: priceEgg*crate, costCrate: costPerEgg*crate,
     dailyProfit, dailyRevenue, impliedPerBirdKg, impliedOtherPerBird,
     monthlyProfit: dailyProfit*30, monthlyRevenue: dailyRevenue*30, monthlyCost: dailyTotalCost*30,
@@ -855,9 +850,10 @@ function renderCalculator(){
   <div class="section-title">Feed &amp; Other Costs</div>
   <div class="panel"><div class="panel-pad">
     <div class="calc-grid">
-      <div>
-        ${field('feedTotalKgPerDay','Total feed used per day, whole flock (kg)',{step:'0.1',hint:'Whatever you actually give the flock each day — same number you log in the Feed tab'})}
-        <p class="calc-hint" id="calcImpliedPerBird" style="margin-top:6px;">≈ ${r.impliedPerBirdKg?r.impliedPerBirdKg.toFixed(3):'0.000'} kg/bird/day at current bird count — sanity check: layers typically eat ≈0.11–0.13 kg/day.</p>
+      <div class="calc-field">
+        <span>Total feed used per day, whole flock (kg)</span>
+        <div class="mono" id="calcFeedPerDayComputed" style="font-size:18px;font-weight:600;color:var(--green-dark);padding:9px 10px;background:var(--surface-alt);border-radius:8px;border:1px solid var(--rule);">${fmtNum(r.feedTotalKgPerDay.toFixed(2))} kg</div>
+        <span class="calc-hint" id="calcFeedPerDayHint">Auto-calculated: ${fmtNum(c.layerBirds)} birds × 112g/bird/day</span>
       </div>
       ${field('feedCostPerKg','Feed cost (ETB/kg)')}
       <div>
@@ -918,6 +914,8 @@ function updateCalcDom(){
   const r = computeCalcResults(state.calc);
   const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
   set('calcDailyEggs', fmtNum(r.dailyEggs.toFixed(1)));
+  set('calcFeedPerDayComputed', fmtNum(r.feedTotalKgPerDay.toFixed(2)) + ' kg');
+  set('calcFeedPerDayHint', `Auto-calculated: ${fmtNum(state.calc.layerBirds)} birds × 112g/bird/day`);
   set('calcFeedCost', fmtMoney(r.dailyFeedCost));
   set('calcOtherCost', fmtMoney(r.dailyOtherCost));
   set('calcBreakeven', fmtMoney(r.breakeven));
@@ -932,7 +930,6 @@ function updateCalcDom(){
   set('calcRowProfitEgg', fmtMoney(r.profitEgg));
   set('calcRowProfitCrate', fmtMoney(r.profitEgg*r.crate));
   set('calcNote', calcComparisonNote(r));
-  set('calcImpliedPerBird', `≈ ${r.impliedPerBirdKg?r.impliedPerBirdKg.toFixed(3):'0.000'} kg/bird/day at current bird count — sanity check: layers typically eat ≈0.11–0.13 kg/day.`);
   set('calcImpliedOtherPerBird', `≈ ${fmtMoney(r.impliedOtherPerBird)}/bird/day at current bird count.`);
 }
 function attachCalculatorEvents(){
