@@ -15,7 +15,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+Ethiopic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#F5F6F0;
@@ -34,7 +34,7 @@
   --shadow:0 1px 2px rgba(35,38,31,0.06), 0 4px 14px rgba(35,38,31,0.06);
 }
 *{box-sizing:border-box;}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;line-height:1.45;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter','Noto Sans Ethiopic',sans-serif;font-size:14px;line-height:1.45;}
 h1,h2,h3,.brand,.navlabel,.kpi-label{font-family:'Space Grotesk',sans-serif;}
 .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
 button{font-family:inherit;cursor:pointer;}
@@ -193,19 +193,35 @@ td.num,th.num{text-align:right;}
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--green-dark);color:#fff;padding:9px 16px;border-radius:20px;font-size:12.5px;z-index:80;box-shadow:var(--shadow);opacity:0;transition:opacity .2s;}
 @media(min-width:900px){ .toast{bottom:24px;} }
 .toast.show{opacity:1;}
+
+/* ---------- Formal report + print ---------- */
+.rep-sheet{background:#fff;border:1px solid var(--rule);border-radius:var(--radius);padding:20px;margin-bottom:18px;}
+.rep-head{text-align:center;margin-bottom:14px;}
+.rep-head h2{margin:0 0 4px;font-size:18px;color:var(--green-dark);}
+.rep-meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12.5px;margin:10px 0 14px;}
+.rep-table td.sec{background:var(--surface-alt);font-weight:700;color:var(--green-dark);}
+.rep-table td.tot{font-weight:700;border-top:2px solid var(--ink);}
+.rep-table td.ind{padding-left:26px;}
+.langbtn{margin-left:auto;background:transparent;color:#F5F6F0;border:1px solid #6d8f7c;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;}
+@media(min-width:640px){ .langbtn{margin-left:14px;} }
+@media print{
+  .topbar,.weave,.sidenav,.no-print,.toast{display:none!important;}
+  body{background:#fff;} .content{padding:0!important;} .rep-sheet{border:none;padding:0;}
+}
 </style>
 </head>
 <body>
 <div id="app">
   <div class="topbar">
-    <span class="brand">🐔🐝🐐 Green Horizon Farm</span>
-    <span class="tagline">Poultry · Bees · Goats · Sheep · Oxen</span>
+    <span class="brand">🐔🐝🐐 <span data-i18n="Green Horizon Farm">Green Horizon Farm</span></span>
+    <span class="tagline" data-i18n="Poultry · Bees · Goats · Sheep · Oxen">Poultry · Bees · Goats · Sheep · Oxen</span>
+    <button class="langbtn" id="langToggle" onclick="setLang()">አማ</button>
   </div>
   <div class="weave"></div>
   <div class="shell">
     <nav class="sidenav" id="sidenav"></nav>
     <main class="content" id="content">
-      <div class="loading">Loading farm data…</div>
+      <div class="loading" data-i18n="Loading farm data…">Loading farm data…</div>
     </main>
   </div>
 </div>
@@ -224,7 +240,9 @@ const STORE_KEYS = {
   feedPurchases:'gh_feedPurchases', feeding:'gh_feeding',
   income:'gh_income', expenses:'gh_expenses',
   vaccinations:'gh_vaccinations', medications:'gh_medications',
-  calc:'gh_calc'
+  calc:'gh_calc', assets:'gh_assets',
+  customers:'gh_customers', payments:'gh_payments', comments:'gh_comments', inquiries:'gh_inquiries',
+  acct:'gh_acct'
 };
 
 const FEED_PER_BIRD_KG = 0.112; // 112 g per bird per day — standard layer feed intake assumption
@@ -246,11 +264,14 @@ const DEFAULT_SETUP = {
   feedTypes:["Starter Feed","Grower Feed","Layer Feed","Broiler Finisher","Hay","Pasture/Grazing","Concentrate/Mineral Mix","Bee Syrup/Pollen Supplement"],
   diseases:["Newcastle Disease","Coccidiosis","Fowl Typhoid","Infectious Bronchitis","Avian Influenza","Fowl Pox","Mastitis","Foot Rot","PPR (Peste des Petits Ruminants)","Foot & Mouth Disease","Bloat","Internal Parasites/Worms","Varroa Mites","Nosema","Anaplasmosis"],
   animalTypes:["Poultry","Bees","Goats","Sheep","Oxen"],
-  productTypes:["Eggs","Honey","Milk","Wool","Manure"]
+  productTypes:["Eggs","Honey","Milk","Wool","Manure"],
+  customerTypes:["Retail / Walk-in","Wholesale / Shop","Distributor","Institution","Other"]
 };
 
 const REDUCTION_REASONS = ["Death","Sale","Cull","Swarm Lost","Transfer Out","Theft/Loss","Other"];
 const PROD_REDUCTION_REASONS = ["Sale","Consumption","Spoilage","Given Away","Broken","Other"];
+const PAYMENT_METHODS = ["Cash","Bank Transfer","Mobile Money","Other"];
+const INQUIRY_STATUSES = ["New","Contacted","Quoted","Converted","Lost"];
 
 function seedExamples(){
   return {
@@ -292,6 +313,10 @@ function seedExamples(){
     ],
     medications:[
       {id:uid(),date:"2026-02-05",animalType:"Poultry",batchId:"FL-001",disease:"Coccidiosis",medication:"Amprolium",dosage:"1g/liter drinking water, 5 days",cost:620,notes:"Improved within 3 days"}
+    ],
+    acct:[
+      {id:uid(),date:"2026-01-01",type:AT.INV,party:"Owner",amount:250000,fromParty:"",ownershipPct:100,loanTerm:"",interestRate:0,dueDate:"",refNo:"",notes:"Sample: start-up capital"},
+      {id:uid(),date:"2026-01-05",type:AT.LOAN,party:"Sample Microfinance",amount:100000,fromParty:"",ownershipPct:0,loanTerm:TERM_LONG,interestRate:14,dueDate:"2028-01-05",refNo:"",notes:"Sample loan"}
     ]
   };
 }
@@ -299,12 +324,341 @@ function seedExamples(){
 let state = {
   setup: JSON.parse(JSON.stringify(DEFAULT_SETUP)),
   livestock:[], reductions:[], production:[], prodReductions:[],
-  feedPurchases:[], feeding:[], income:[], expenses:[], vaccinations:[], medications:[],
+  feedPurchases:[], feeding:[], income:[], expenses:[], vaccinations:[], medications:[], assets:[],
+  customers:[], payments:[], comments:[], inquiries:[], acct:[],
   calc: JSON.parse(JSON.stringify(DEFAULT_CALC))
 };
 let currentTab = 'dashboard';
 let healthSubTab = 'vaccinations';
-let reportsYear = new Date().getFullYear();
+let reportsYear = currentEFY();   // Ethiopian fiscal year (EFY), not calendar year
+let lang = 'en';
+try{ lang = localStorage.getItem('gh_lang') || 'en'; }catch(e){}
+
+/* ---------------- Language (English / Amharic) ---------------- */
+const AM = {
+  /* --- static / navigation --- */
+  'Green Horizon Farm':'ግሪን ሆራይዘን እርሻ','Green Horizon Farm Manager':'ግሪን ሆራይዘን የእርሻ አስተዳዳሪ',
+  'Poultry · Bees · Goats · Sheep · Oxen':'ዶሮ · ንብ · ፍየል · በግ · በሬ','Loading farm data…':'የእርሻ መረጃ በመጫን ላይ…',
+  'Dashboard':'ዳሽቦርድ','Livestock':'እንስሳት','Reductions':'ቅናሾች','Production':'ምርት','Prod. Stock':'የምርት ክምችት',
+  'Feed':'መኖ','Price Calc':'የዋጋ ማስያ','Income':'ገቢ','Expenses':'ወጪዎች','Assets':'ንብረት','Health':'ጤና','Reports':'ሪፖርቶች','Setup':'ቅንብር',
+  /* --- common --- */
+  'Date':'ቀን','Category':'ምድብ','Description':'መግለጫ','Amount':'መጠን','Notes':'ማስታወሻ','Status':'ሁኔታ','Source':'ምንጭ','Unit':'መለኪያ',
+  'Qty':'ብዛት','Quantity':'ብዛት','Cost':'ወጪ','Product':'ምርት','Reason':'ምክንያት','Supplier':'አቅራቢ','Profit':'ትርፍ','Metric':'መለኪያ',
+  'Edit':'አርም','Delete':'ሰርዝ','Save':'አስቀምጥ','Cancel':'ተወው','Add':'ጨምር','Change':'ለውጥ','Yes':'አዎ','No':'አይ','Never':'በጭራሽ',
+  'Active':'ንቁ','Closed':'ተዘግቷል','ETB':'ብር','count':'ብዛት','kg':'ኪ.ግ','liters':'ሊትር','-- select --':'-- ምረጥ --','Other':'ሌላ',
+  'Unit Price':'የአንዱ ዋጋ','Unit Cost':'የአንዱ ዋጋ','Total Cost':'ጠቅላላ ወጪ','Total Value':'ጠቅላላ ዋጋ','Animal Type':'የእንስሳት ዓይነት',
+  /* --- animal types / products --- */
+  'Poultry':'ዶሮዎች','Bees':'ንቦች','Goats':'ፍየሎች','Sheep':'በጎች','Oxen':'በሬዎች',
+  'Eggs':'እንቁላል','Honey':'ማር','Milk':'ወተት','Wool':'ሱፍ','Manure':'ፍግ',
+  /* --- income / expense categories --- */
+  'Egg Sales':'የእንቁላል ሽያጭ','Live Bird Sales':'የሕያው ዶሮ ሽያጭ','Honey Sales':'የማር ሽያጭ','Milk Sales':'የወተት ሽያጭ','Wool Sales':'የሱፍ ሽያጭ',
+  'Livestock Sales (Goats/Sheep/Oxen)':'የእንስሳት ሽያጭ (ፍየል/በግ/በሬ)','Manure Sales':'የፍግ ሽያጭ','Other Income':'ሌላ ገቢ',
+  'Feed Purchase':'የመኖ ግዢ','Vaccination':'ክትባት','Medication':'መድኃኒት','Labor':'የሠራተኛ ወጪ','Utilities':'የፍጆታ ወጪዎች','Equipment':'መሣሪያዎች',
+  'Transport':'ትራንስፖርት','Rent':'ኪራይ','Beekeeping Supplies':'የንብ እርባታ አቅርቦቶች','Shearing/Processing':'የሱፍ ማሳጠር/ማቀነባበሪያ','Other Expense':'ሌላ ወጪ',
+  /* --- feed types / diseases --- */
+  'Starter Feed':'የጫጩት መጀመሪያ መኖ','Grower Feed':'የማሳደጊያ መኖ','Layer Feed':'የእንቁላል ጣይ መኖ','Broiler Finisher':'የሥጋ ዶሮ ማጠናቀቂያ መኖ','Hay':'ድርቆሽ',
+  'Pasture/Grazing':'ግጦሽ','Concentrate/Mineral Mix':'ኮንሰንትሬት/ማዕድን ቅልቅል','Bee Syrup/Pollen Supplement':'የንብ ሽሮፕ/የአበባ ዱቄት ማሟያ',
+  'Newcastle Disease':'ኒውካስል በሽታ','Coccidiosis':'ኮክሲዲዮሲስ','Fowl Typhoid':'የወፍ ታይፎይድ','Infectious Bronchitis':'ተላላፊ ብሮንካይተስ','Avian Influenza':'የወፍ ጉንፋን',
+  'Fowl Pox':'የወፍ ፈንጣጣ','Mastitis':'የጡት በሽታ (ማስቲታይስ)','Foot Rot':'የኮቴ መበስበስ','PPR (Peste des Petits Ruminants)':'ፒፒአር (የበግና ፍየል ቸነፈር)',
+  'Foot & Mouth Disease':'የአፍና እግር በሽታ','Bloat':'የሆድ መነፋት','Internal Parasites/Worms':'የውስጥ ጥገኛ ተውሳኮች/ትሎች','Varroa Mites':'ቫሮአ ምስጦች',
+  'Nosema':'ኖሴማ','Anaplasmosis':'አናፕላዝሞሲስ',
+  /* --- reasons --- */
+  'Death':'ሞት','Sale':'ሽያጭ','Cull':'ማስወገድ','Swarm Lost':'የጠፋ ቅኝ','Transfer Out':'ወደ ሌላ ማዛወር','Theft/Loss':'ስርቆት/ጥፋት',
+  'Consumption':'ፍጆታ','Spoilage':'መበላሸት','Given Away':'በስጦታ የተሰጠ','Broken':'የተሰበረ',
+  /* --- asset classes / methods --- */
+  'Buildings / structures':'ሕንፃዎች / መዋቅሮች','Equipment / machinery':'መሣሪያዎች / ማሽነሪዎች','Vehicles':'ተሽከርካሪዎች','Furniture & fittings':'የቤት ዕቃዎችና ተጓዳኞች',
+  'Computers & software':'ኮምፒውተሮችና ሶፍትዌር','Straight-line':'ቀጥተኛ መስመር','Declining balance':'ቀሪ ሒሳብ መቀነስ',
+  /* --- dashboard --- */
+  'Overview across all species and products.':'በሁሉም የእንስሳት ዓይነቶችና ምርቶች ላይ አጠቃላይ እይታ።',
+  'Current Livestock Qty':'አሁን ያሉ እንስሳት ብዛት','Current Egg Stock':'አሁን ያለ የእንቁላል ክምችት','Current Feed Stock (kg)':'አሁን ያለ የመኖ ክምችት (ኪ.ግ)',
+  'Total Income':'ጠቅላላ ገቢ','Total Expenses':'ጠቅላላ ወጪ','Net Profit / (Loss)':'የተጣራ ትርፍ / (ኪሳራ)','YTD Net Profit / (Loss)':'እስከ አሁን የዓመቱ የተጣራ ትርፍ / (ኪሳራ)',
+  'Livestock by Type':'እንስሳት በዓይነት','Product Stock Summary':'የምርት ክምችት ማጠቃለያ','Current Qty':'አሁን ያለ ብዛት','Current Stock':'አሁን ያለ ክምችት',
+  'No animal types configured.':'ምንም የእንስሳት ዓይነት አልተዋቀረም።','No product types configured.':'ምንም የምርት ዓይነት አልተዋቀረም።','No feed types configured.':'ምንም የመኖ ዓይነት አልተዋቀረም።',
+  'Data is stored privately on this device only (nothing sent to any server). Use Setup → Backup & Restore to move data between devices or save a copy to Google Drive.':'መረጃው በዚህ መሣሪያ ላይ ብቻ በግል ይቀመጣል (ወደ ማንኛውም አገልጋይ አይላክም)። መረጃን በመሣሪያዎች መካከል ለማስተላለፍ ወይም ቅጂ ወደ Google Drive ለማስቀመጥ ቅንብር → ምትኬና መልሶ ማግኛን ይጠቀሙ።',
+  /* --- livestock --- */
+  'One row per batch, herd, or hive — any species.':'ለእያንዳንዱ ቡድን፣ መንጋ ወይም ቀፎ አንድ ረድፍ — ማንኛውም የእንስሳት ዓይነት።','+ Add batch/herd':'+ ቡድን/መንጋ ጨምር',
+  'Batch/Herd ID':'የቡድን/መንጋ መለያ','Breed/Type':'ዝርያ/ዓይነት','Date Acquired':'የተገኘበት ቀን','Initial Qty':'መጀመሪያ ብዛት','Age (Days)':'ዕድሜ (ቀናት)',
+  'No batches/herds yet. Add your first one below.':'እስካሁን ምንም ቡድን/መንጋ የለም። የመጀመሪያውን ይጨምሩ።',
+  /* --- reductions --- */
+  'Livestock Reductions':'የእንስሳት ቅናሾች','Deaths, culls, sales, swarm loss, or transfers — any species.':'ሞት፣ ማስወገድ፣ ሽያጭ፣ የቅኝ መጥፋት ወይም ዝውውር — ማንኛውም የእንስሳት ዓይነት።',
+  '+ Add reduction':'+ ቅናሽ ጨምር','No reductions logged yet.':'እስካሁን ምንም ቅናሽ አልተመዘገበም።',
+  /* --- production --- */
+  'Eggs, honey, milk, wool — one row per collection event.':'እንቁላል፣ ማር፣ ወተት፣ ሱፍ — ለእያንዳንዱ የስብሰባ ጊዜ አንድ ረድፍ።','+ Add production':'+ ምርት ጨምር',
+  'Qty Produced':'የተመረተ ብዛት','Waste/Loss':'ብክነት/ጉዳት','Good Output':'ጥሩ ምርት','No production logged yet.':'እስካሁን ምንም ምርት አልተመዘገበም።',
+  /* --- product stock --- */
+  'Product Stock':'የምርት ክምችት','Auto-calculated stock, plus the sales/consumption log behind it.':'በራስ-ሰር የሚሰላ ክምችት፣ ከጀርባው ካለው የሽያጭና የፍጆታ መዝገብ ጋር።',
+  'Current Stock by Product':'አሁን ያለ ክምችት በምርት','Produced':'የተመረተ','Reduced':'የቀነሰ','Value Sold/Used':'የተሸጠ/የተጠቀመ ዋጋ','Reductions Log':'የቅናሽ መዝገብ',
+  'Sold, consumed, spoiled, or given away.':'የተሸጠ፣ የተበላ፣ የተበላሸ ወይም በስጦታ የተሰጠ።','No product reductions logged yet.':'እስካሁን ምንም የምርት ቅናሽ አልተመዘገበም።',
+  /* --- feed --- */
+  'Stock, purchases, and daily feeding — any species.':'ክምችት፣ ግዢና የዕለት መኖ — ማንኛውም የእንስሳት ዓይነት።','Feed Stock Summary':'የመኖ ክምችት ማጠቃለያ','Feed Type':'የመኖ ዓይነት',
+  'Purchased (kg)':'የተገዛ (ኪ.ግ)','Used (kg)':'የተጠቀመ (ኪ.ግ)','Current Stock (kg)':'አሁን ያለ ክምችት (ኪ.ግ)','Avg Cost/kg':'አማካይ ዋጋ/ኪ.ግ','Stock Value':'የክምችት ዋጋ',
+  'Feed Purchases':'የመኖ ግዢዎች','+ Add purchase':'+ ግዢ ጨምር','Qty (kg)':'ብዛት (ኪ.ግ)','Feeding Log':'የአመጋገብ መዝገብ','+ Add feeding':'+ አመጋገብ ጨምር','Qty Used':'የተጠቀመ ብዛት',
+  'No feed purchases logged yet.':'እስካሁን ምንም የመኖ ግዢ አልተመዘገበም።','No feeding logged yet.':'እስካሁን ምንም አመጋገብ አልተመዘገበም።',
+  /* --- calculator --- */
+  'Egg Price & Profitability Calculator':'የእንቁላል ዋጋና ትርፋማነት ማስያ',
+  'Set your flock, feed and cost assumptions to find your break-even cost and a recommended selling price per egg.':'የመንጋዎን፣ የመኖዎንና የወጪ ግምቶችዎን ያስገቡ፤ የወጪ ማወራረጃና የሚመከር የአንድ እንቁላል መሸጫ ዋጋ ያገኛሉ።',
+  '↻ Auto-fill from my farm records':'↻ ከእርሻ መዝገቤ በራስ-ሰር ሙላ','Flock & Production':'መንጋና ምርት','Laying birds (count)':'እንቁላል ጣይ ወፎች (ብዛት)',
+  'Laying rate (% eggs/bird/day)':'የእንቁላል ጣይነት መጠን (% እንቁላል/ወፍ/ቀን)','Hen-day production — typically 60–90% for healthy layers':'ዕለታዊ የእንቁላል ምርት መጠን — ለጤናማ ጣይ ዶሮዎች በተለምዶ 60–90%',
+  'Breakage / waste (%)':'መሰበር / ብክነት (%)','Cracked, spoiled or lost eggs':'የተሰነጠቁ፣ የተበላሹ ወይም የጠፉ እንቁላሎች','Feed & Other Costs':'መኖና ሌሎች ወጪዎች',
+  'Total feed used per day, whole flock (kg)':'በቀን የሚጠቀም ጠቅላላ መኖ፣ ለመላው መንጋ (ኪ.ግ)','Feed cost (ETB/kg)':'የመኖ ዋጋ (ብር/ኪ.ግ)',
+  'Other cost per day, whole flock (ETB)':'በቀን ሌላ ወጪ፣ ለመላው መንጋ (ብር)','Labor, health, utilities, housing — everything but feed, as a daily total':'የሠራተኛ፣ ጤና፣ ፍጆታ፣ መጠለያ — ከመኖ ውጭ ያሉ ሁሉም፣ እንደ ዕለታዊ ድምር',
+  'Margin & Selling':'ትርፍና ሽያጭ','Markup on cost':'በወጪ ላይ የሚጨመር ትርፍ','Margin on price':'ከዋጋ የሚገኝ ትርፍ ድርሻ','Desired markup (%)':'የሚፈለግ ጭማሪ (%)','Desired margin (%)':'የሚፈለግ የትርፍ ድርሻ (%)',
+  'Added on top of cost per egg':'በአንድ እንቁላል ወጪ ላይ የሚጨመር','Share of the selling price that is profit':'ከመሸጫ ዋጋ ውስጥ ትርፍ የሆነው ድርሻ','Eggs per crate':'በአንድ ሣጥን ውስጥ ያሉ እንቁላሎች',
+  'Results':'ውጤቶች','Eggs / Day (net of waste)':'እንቁላል / ቀን (ከብክነት በኋላ)','Daily Feed Cost':'የዕለት መኖ ወጪ','Daily Other Cost':'የዕለት ሌላ ወጪ','Break-even Cost / Egg':'የወጪ ማወራረጃ / እንቁላል',
+  'Recommended Price / Egg':'የሚመከር ዋጋ / እንቁላል','Profit / Egg':'ትርፍ / እንቁላል','Recommended Price / Crate':'የሚመከር ዋጋ / ሣጥን','Projected Monthly Profit':'የሚጠበቅ ወርሃዊ ትርፍ',
+  'Break-even vs. Recommended vs. Your Current Average':'የወጪ ማወራረጃ ከሚመከረው እና ከአሁኑ አማካይ ዋጋዎ ጋር ሲነጻጸር','Per Egg':'በአንድ እንቁላል','Cost (break-even)':'ወጪ (ማወራረጃ)',
+  'Recommended selling price':'የሚመከር መሸጫ ዋጋ','Your current average selling price':'የአሁኑ አማካይ መሸጫ ዋጋዎ','Your current average selling price (no egg sales logged yet)':'የአሁኑ አማካይ መሸጫ ዋጋዎ (እስካሁን የእንቁላል ሽያጭ አልተመዘገበም)',
+  "Log some egg sales under Product Stock to compare this recommendation against what you're actually charging today.":'ይህን ምክር አሁን ከሚሸጡበት ዋጋ ጋር ለማነጻጸር በምርት ክምችት ውስጥ የተወሰኑ የእንቁላል ሽያጮችን ያስመዝግቡ።',
+  'Your current average selling price matches the recommended price for this margin.':'የአሁኑ አማካይ መሸጫ ዋጋዎ ለዚህ የትርፍ ድርሻ ከሚመከረው ዋጋ ጋር ይመሳሰላል።',
+  "This calculator doesn't change any of your logged records — it's a planning tool. Your inputs are saved on this device so you can come back to them any time. Figures assume steady daily production; actual results will vary with season, disease, and market prices.":'ይህ ማስያ ከተመዘገቡ መዝገቦችዎ መካከል ምንም አይለውጥም — የዕቅድ መሣሪያ ነው። ያስገቡት መረጃ በዚህ መሣሪያ ላይ ይቀመጣል። አሃዞቹ ዕለታዊ ምርት ቋሚ እንደሆነ ይገምታሉ፤ ትክክለኛ ውጤቱ እንደ ወቅት፣ በሽታና የገበያ ዋጋ ይለያያል።',
+  /* --- income / expenses --- */
+  'Enter Quantity × Unit Price (e.g. eggs sold × price/egg). For lump sums, use Qty = 1.':'ብዛት × የአንዱ ዋጋ ያስገቡ (ለምሳሌ የተሸጡ እንቁላሎች × የእንቁላል ዋጋ)። ለጥቅል መጠን ብዛት = 1 ይጠቀሙ።',
+  '+ Add income':'+ ገቢ ጨምር','Ref No.':'የደረሰኝ ቁጥር','WHT':'ተቀናሽ ግብር','No income logged yet.':'እስካሁን ምንም ገቢ አልተመዘገበም።',
+  'All money out, categorized.':'የወጣ ገንዘብ ሁሉ፣ በምድብ።','+ Add expense':'+ ወጪ ጨምር','Non-deductible':'የማይቀነስ','No expenses logged yet.':'እስካሁን ምንም ወጪ አልተመዘገበም።',
+  /* --- assets --- */
+  '+ Add asset':'+ ንብረት ጨምር','Asset':'ንብረት','Class':'ክፍል','Acquired':'የተገኘበት','Method':'ዘዴ','Rate':'መጠን','Accumulated':'የተጠራቀመ','Net book value':'የተጣራ መዝገብ ዋጋ',
+  'No fixed assets yet. Add houses, mixers, equipment, vehicles.':'እስካሁን ምንም ቋሚ ንብረት የለም። ቤቶችን፣ ማቀላቀያዎችን፣ መሣሪያዎችንና ተሽከርካሪዎችን ይጨምሩ።',
+  /* --- customers / CRM --- */
+  'Customers':'ደንበኞች','Customer':'ደንበኛ','Add customer':'ደንበኛ ጨምር','Add payment':'ክፍያ ጨምር','Add comment':'አስተያየት ጨምር','Add inquiry':'ጥያቄ ጨምር',
+  'Phone':'ስልክ','Type':'ዓይነት','Total Sales':'ጠቅላላ ሽያጭ','Total Paid':'የተከፈለ','Balance Due':'የሚቀር ዕዳ',
+  'No customers yet. Add your first one below.':'እስካሁን ምንም ደንበኛ የለም። የመጀመሪያውን ይጨምሩ።',
+  'Payments Received':'የተገኙ ክፍያዎች','No payments logged yet.':'እስካሁን ምንም ክፍያ አልተመዘገበም።','Method':'ዘዴ',
+  'Comments / Interaction Log':'አስተያየቶች / የግንኙነት መዝገብ','No comments logged yet.':'እስካሁን ምንም አስተያየት አልተመዘገበም።','Comment':'አስተያየት',
+  'Sales Inquiries':'የሽያጭ ጥያቄዎች','No inquiries logged yet.':'እስካሁን ምንም ጥያቄ አልተመዘገበም።','Interested In':'ፍላጎት ያለው','Interested in':'ፍላጎት ያለው',
+  'Status':'ሁኔታ','Follow-up':'ክትትል','Follow-up date':'የክትትል ቀን','Name':'ስም','Location / Address':'አድራሻ','Customer name':'የደንበኛ ስም',
+  'Customer (optional)':'ደንበኛ (አማራጭ)','Payment status':'የክፍያ ሁኔታ','Paid in full':'ሙሉ ተከፍሏል','Partial / Credit':'ከፊል / ብድር',
+  'Amount received now (ETB) — only if Partial/Credit':'አሁን የተከፈለ መጠን (ብር) — ከፊል/ብድር ከተመረጠ ብቻ','Cash':'ጥሬ ገንዘብ','Bank Transfer':'የባንክ ዝውውር','Mobile Money':'ሞባይል ገንዘብ',
+  'New':'አዲስ','Contacted':'ተነጋግሯል','Quoted':'ዋጋ ተሰጥቷል','Converted':'ደንበኛ ሆኗል','Lost':'ጠፍቷል',
+  'Customer directory, cash received, receivables, comments, and sales inquiries.':'የደንበኞች ማውጫ፣ የተገኘ ገንዘብ፣ የሚቀር ዕዳ፣ አስተያየቶችና የሽያጭ ጥያቄዎች።',
+  'Balance Due = total invoiced − amount collected at time of sale − payments logged above. Sales already booked at full invoice value in Income and the Financial Report (accrual basis) regardless of payment status.':'የሚቀር ዕዳ = ጠቅላላ የተላከ ደረሰኝ − በሽያጭ ጊዜ የተሰበሰበ − ከላይ የተመዘገቡ ክፍያዎች። ሽያጮች ምንም ይሁን የክፍያ ሁኔታ በገቢና በፋይናንስ ሪፖርት ውስጥ በሙሉ ደረሰኝ ዋጋ ተመዝግበዋል (በክምችት መሠረት)።',
+  'Total Receivables':'ጠቅላላ የሚቀር ዕዳ','TIN':'የግብር ከፋይ መለያ ቁጥር (TIN)','Buyer name / TIN (if no customer record)':'የገዢ ስም / TIN (ደንበኛ መዝገብ ከሌለ)',
+  'Customer Types':'የደንበኛ ዓይነቶች','Retail / Walk-in':'ችርቻሮ / በቀጥታ የመጣ','Wholesale / Shop':'ጅምላ / ሱቅ','Distributor':'አከፋፋይ','Institution':'ተቋም',
+  /* --- health --- */
+  'Vaccinations and medications — any species.':'ክትባትና መድኃኒት — ማንኛውም የእንስሳት ዓይነት።','💉 Vaccinations':'💉 ክትባቶች','💊 Medications':'💊 መድኃኒቶች','+ Add vaccination':'+ ክትባት ጨምር','+ Add medication':'+ መድኃኒት ጨምር',
+  'Vaccine':'ክትባት','Dose/Route':'መጠን/መስጫ መንገድ','Administered By':'የሰጠው','Disease':'በሽታ','Dosage':'መጠን','No vaccinations logged yet.':'እስካሁን ምንም ክትባት አልተመዘገበም።','No medications logged yet.':'እስካሁን ምንም መድኃኒት አልተመዘገበም።',
+  /* --- reports --- */
+  'Financial Report':'የፋይናንስ ሪፖርት','Profit & Loss Statement':'የትርፍና ኪሳራ መግለጫ',
+  'Business name':'የንግድ ስም','TIN':'የግብር ከፋይ መለያ ቁጥር (TIN)','Taxpayer category':'የግብር ከፋይ ምድብ',
+  'Tax year':'የግብር ዘመን','Report date':'የሪፖርት ቀን','Currency':'ገንዘብ',
+  '1. Revenue':'1. ገቢ (ሽያጭ)','Total revenue':'ጠቅላላ ገቢ','2. Cost of production':'2. የምርት ወጪ','Total cost of production':'ጠቅላላ የምርት ወጪ',
+  '3. Gross profit':'3. ጠቅላላ ትርፍ','4. Operating expenses':'4. የሥራ ማስኬጃ ወጪዎች','Total operating expenses':'ጠቅላላ የሥራ ማስኬጃ ወጪ',
+  '5. Depreciation':'5. የእርጅና ቅናሽ','6. Net profit / (loss) before tax':'6. ከግብር በፊት የተጣራ ትርፍ / (ኪሳራ)',
+  '7. Tax adjustments':'7. የግብር ማስተካከያዎች','Add: non-deductible expenses':'ይጨመር: የማይፈቀዱ ወጪዎች','Less: exempt income':'ይቀነስ: ከግብር ነጻ ገቢ',
+  '8. Taxable income':'8. ግብር የሚከፈልበት ገቢ','Tax rate (%)':'የግብር መጠን (%)','Tax due':'የሚከፈል ግብር',
+  '9. Tax credits':'9. የግብር ክሬዲቶች','Less: withholding tax already deducted':'ይቀነስ: ቀድሞ የተቀነሰ ተቀናሽ ግብር (Withholding)','Net tax payable / (refundable)':'የሚከፈል / (የሚመለስ) የተጣራ ግብር',
+  '10. Livestock on hand':'10. ያሉ እንስሳት','Animal type':'የእንስሳት ዓይነት','Description':'መግለጫ',
+  'Print / Save PDF':'አትም / PDF አስቀምጥ','🖨 Print / Save PDF':'🖨 አትም / PDF አስቀምጥ','Fiscal year':'የበጀት ዓመት','Business & tax details':'የንግድና የግብር ዝርዝር',
+  'Adjustments for this year':'የዚህ ዓመት ማስተካከያዎች','Tax override (ETB)':'የተወሰነ ግብር (ብር) — ከተሞላ ከመጠን ይልቅ ይጠቀማል',
+  'No entries':'ምንም መዝገብ የለም','Prepared by':'ያዘጋጀው','Signature / stamp':'ፊርማ / ማኅተም',
+  'Gross sales (tax base)':'ጠቅላላ ሽያጭ (የግብር መሠረት)','Less: quarterly advance payments made':'ይቀነስ: የተከፈሉ የሩብ ዓመት ቅድመ ክፍያዎች',
+  'Category B — presumptive tax on gross sales':'ምድብ B — በጠቅላላ ሽያጭ ላይ የተመሠረተ ግብር','Category A — tax on net profit':'ምድብ A — በተጣራ ትርፍ ላይ የሚሰላ ግብር',
+  'Presumptive tax on gross sales':'በጠቅላላ ሽያጭ ላይ የተመሠረተ ግብር',
+  'Other depreciation (manual)':'ሌላ የእርጅና ቅናሽ (በእጅ)','Extra non-deductible expenses (manual)':'ተጨማሪ የማይፈቀዱ ወጪዎች (በእጅ)',
+  'Extra exempt income (manual)':'ተጨማሪ ከግብር ነጻ ገቢ (በእጅ)','Extra withholding tax (manual)':'ተጨማሪ ተቀናሽ ግብር (በእጅ)',
+  'Fiscal year boundary is fixed at Jul 8 – Jul 7; check entries dated on those days in Ethiopian leap-year cycles. Tax is computed from the rate or override you enter — confirm rates and category with the tax authority or your accountant.':'የበጀት ዓመቱ ወሰን ከጁላይ 8 እስከ ጁላይ 7 ተወስኗል፤ በኢትዮጵያ የአጋማሽ ዓመት ዑደት በእነዚህ ቀናት የተመዘገቡ መዝገቦችን ያረጋግጡ። ግብሩ የሚሰላው ባስገቡት መጠን ወይም በተወሰነ ግብር ነው — መጠኖችንና ምድቡን ከግብር ባለሥልጣን ወይም ከሂሳብ ባለሙያዎ ጋር ያረጋግጡ።',
+  /* --- setup --- */
+  'Customize the dropdown options used throughout the app.':'በመተግበሪያው ውስጥ የሚጠቀሙ የምርጫ ዝርዝሮችን ያብጁ።',
+  'Income Categories':'የገቢ ምድቦች','Expense Categories':'የወጪ ምድቦች','Feed Types':'የመኖ ዓይነቶች','Diseases':'በሽታዎች','Animal Types':'የእንስሳት ዓይነቶች','Product Types':'የምርት ዓይነቶች','No items yet.':'እስካሁን ምንም የለም።',
+  'Backup & Restore':'ምትኬና መልሶ ማግኛ',
+  'Download a backup file any time and save it to Google Drive, Dropbox, or email it to yourself. Import it later on any device to restore everything.':'በማንኛውም ጊዜ የምትኬ ፋይል አውርደው ወደ Google Drive፣ Dropbox ያስቀምጡ ወይም በኢሜይል ለራስዎ ይላኩ። በኋላ በማንኛውም መሣሪያ ላይ አስገብተው ሁሉንም መልሰው ያግኙ።',
+  '⬇ Export backup (.json)':'⬇ ምትኬ ላክ (.json)','⬆ Import backup (.json)':'⬆ ምትኬ አስገባ (.json)','Danger zone':'የአደጋ ቀጠና',
+  'This permanently clears all farm data (livestock, logs, income/expenses) from this device/account. Category lists are kept.':'ይህ ሁሉንም የእርሻ መረጃ (እንስሳት፣ መዝገቦች፣ ገቢ/ወጪ) ከዚህ መሣሪያ/መለያ እስከመጨረሻው ያጠፋል። የምድብ ዝርዝሮች ይቀራሉ።',
+  'Clear all farm data':'ሁሉንም የእርሻ መረጃ አጽዳ',
+  '☁️ Google Drive Sync':'☁️ Google Drive ማመሳሰል','(optional)':'(አማራጭ)','How to get a Google Client ID (one-time setup)':'Google Client ID እንዴት እንደሚገኝ (አንድ ጊዜ ብቻ የሚደረግ ማዋቀር)',
+  'Go to {0} and create a new project.':'ወደ {0} ይሂዱ እና አዲስ ፕሮጀክት ይፍጠሩ።',
+  'APIs & Services → Library → search {0} → Enable.':'APIs & Services → Library → {0} ይፈልጉ → Enable ይጫኑ።',
+  'APIs & Services → OAuth consent screen. User type: External. Fill in app name/email. Add scope {0}. Add your own Gmail as a test user. Keep it in "Testing" status.':'APIs & Services → OAuth consent screen። User type: External ይምረጡ። የመተግበሪያውን ስምና ኢሜይል ይሙሉ። {0} scope ይጨምሩ። የራስዎን Gmail እንደ test user ይጨምሩ። በ "Testing" ሁኔታ ላይ ያቆዩት።',
+  'Credentials → Create Credentials → OAuth client ID → Application type: {0}.':'Credentials → Create Credentials → OAuth client ID → Application type: {0}።',
+  'Under Authorized JavaScript origins, add: {0}':'በ Authorized JavaScript origins ስር ይህን ይጨምሩ: {0}',
+  'Copy the generated Client ID and paste it below.':'የተፈጠረውን Client ID ገልብጠው ከታች ይለጥፉ።',
+  'The first time you connect, Google shows an "unverified app" warning — expected for your own personal app. Click {0} to continue.':'ለመጀመሪያ ጊዜ ሲገናኙ Google "unverified app" የሚል ማስጠንቀቂያ ያሳያል — ለራስዎ የግል መተግበሪያ የሚጠበቅ ነው። ለመቀጠል {0} ይጫኑ።',
+  'Advanced → Go to (app name)':'Advanced → Go to (የመተግበሪያው ስም)',
+  'Paste your Google Client ID…':'Google Client ID ያስገቡ…','Client ID saved. {0}':'Client ID ተቀምጧል። {0}','🟢 Connected — Last synced: {0}':'🟢 ተገናኝቷል — ለመጨረሻ ጊዜ የተመሳሰለው: {0}',
+  'Sync now':'አሁን አመሳስል','Disconnect':'አቋርጥ','Auto-sync every change':'እያንዳንዱን ለውጥ በራስ-ሰር አመሳስል','Connecting…':'በማገናኘት ላይ…',
+  'Not connected this session — access expires after a while, so you may need to reconnect from time to time.':'በዚህ ክፍለ ጊዜ አልተገናኘም — መዳረሻው ከጊዜ በኋላ ስለሚያልቅ አልፎ አልፎ እንደገና መገናኘት ሊያስፈልግ ይችላል።',
+  'Connect to Google Drive':'ከ Google Drive ጋር ተገናኝ',
+  /* --- forms --- */
+  'Batch / Herd':'ቡድን / መንጋ','Livestock Reduction':'የእንስሳት ቅናሽ','Production Entry':'የምርት መዝገብ','Product Reduction':'የምርት ቅናሽ','Feeding Entry':'የአመጋገብ መዝገብ',
+  'Income Entry':'የገቢ መዝገብ','Expense Entry':'የወጪ መዝገብ','Vaccination Entry':'የክትባት መዝገብ','Medication Entry':'የመድኃኒት መዝገብ','Fixed Asset':'ቋሚ ንብረት',
+  'Initial Quantity':'መጀመሪያ ብዛት','Unit Price (ETB)':'የአንዱ ዋጋ (ብር)','Amount (ETB)':'መጠን (ብር)','Quantity Produced':'የተመረተ ብዛት','Unit (count/kg/liters)':'መለኪያ (ብዛት/ኪ.ግ/ሊትር)',
+  'Quantity (kg)':'ብዛት (ኪ.ግ)','Unit Cost (ETB/kg)':'የአንዱ ዋጋ (ብር/ኪ.ግ)','Quantity Used':'የተጠቀመ ብዛት','Cost (ETB)':'ወጪ (ብር)','Medication':'መድኃኒት',
+  'Asset name':'የንብረት ስም','Date acquired':'የተገኘበት ቀን','Depreciation method':'የእርጅና ቅናሽ ዘዴ','Annual depreciation rate (%) — use the rate allowed for this class':'ዓመታዊ የእርጅና ቅናሽ መጠን (%) — ለዚህ ክፍል የተፈቀደውን መጠን ይጠቀሙ',
+  'Date disposed (if sold/lost)':'የተወገደበት ቀን (ከተሸጠ/ከጠፋ)','Receipt / Invoice No.':'የደረሰኝ / ኢንቮይስ ቁጥር','Buyer name / TIN':'የገዢ ስም / TIN','Withholding tax deducted by buyer (ETB)':'በገዢ የተቀነሰ ተቀናሽ ግብር (ብር)',
+  'Tax-exempt income?':'ከግብር ነጻ ገቢ ነው?','Supplier name / TIN':'የአቅራቢ ስም / TIN','Non-deductible for tax?':'ለግብር የማይቀነስ ነው?',
+  'e.g. FL-002':'ለምሳሌ FL-002','e.g. Layer house, feed mixer':'ለምሳሌ የዶሮ ቤት፣ የመኖ ማቀላቀያ',
+  /* --- messages (toasts / dialogs) --- */
+  '⚠ Could not save — device storage may be full':'⚠ ማስቀመጥ አልተቻለም — የመሣሪያው ማከማቻ ሞልቶ ሊሆን ይችላል','Filled from your current farm records':'ከአሁኑ የእርሻ መዝገቦችዎ ተሞልቷል',
+  'Saved':'ተቀምጧል','Deleted':'ተሰርዟል','Delete this entry? This cannot be undone.':'ይህ መዝገብ ይሰረዝ? ይህ ወደ ኋላ አይመለስም።',
+  'Google sign-in was cancelled or failed':'የ Google መግቢያ ተሰርዟል ወይም አልተሳካም','Connected, but the first sync failed — try "Sync now"':'ተገናኝቷል፣ ነገር ግን የመጀመሪያው ማመሳሰል አልተሳካም — "አሁን አመሳስል" ይሞክሩ',
+  'Paste your Google Client ID first.':'መጀመሪያ Google Client ID ያስገቡ።','Still loading Google sign-in — try again in a moment':'የ Google መግቢያ አሁንም እየተጫነ ነው — ከጥቂት ቆይታ በኋላ ይሞክሩ',
+  'Could not start Google sign-in':'የ Google መግቢያን ማስጀመር አልተቻለም','Disconnected — your data stays safely on this device':'ግንኙነት ተቋርጧል — መረጃዎ በዚህ መሣሪያ ላይ በደኅንነት ይቆያል',
+  'Google Drive session expired — tap Connect to sign in again':'የ Google Drive ክፍለ ጊዜ አብቅቷል — እንደገና ለመግባት "ተገናኝ" ይጫኑ',
+  "Found existing farm data on Google Drive. OK = load it (replaces data on this device) Cancel = keep this device's data and upload it to Drive instead":"በ Google Drive ላይ ነባር የእርሻ መረጃ ተገኝቷል።\n\nOK = ጫነው (በዚህ መሣሪያ ላይ ያለውን መረጃ ይተካል)\nCancel = የዚህን መሣሪያ መረጃ አቆይተህ ወደ Drive ስቀል",
+  'Loaded data from Google Drive':'መረጃ ከ Google Drive ተጭኗል',"Uploaded this device's data to Google Drive":'የዚህ መሣሪያ መረጃ ወደ Google Drive ተሰቅሏል','Google Drive connected — backup created':'Google Drive ተገናኝቷል — ምትኬ ተፈጥሯል',
+  'Not connected':'አልተገናኘም','Synced to Google Drive':'ወደ Google Drive ተመሳስሏል','Backup downloaded':'ምትኬ ወርዷል',
+  'Could not read that file. Make sure it is a Green Horizon Farm backup (.json) file.':'ፋይሉን ማንበብ አልተቻለም። የ Green Horizon Farm ምትኬ (.json) ፋይል መሆኑን ያረጋግጡ።',
+  'Import this backup? This will replace ALL current data in the app with the contents of this file.':'ይህ ምትኬ ይግባ? ይህ በመተግበሪያው ውስጥ ያለውን ሁሉንም መረጃ በዚህ ፋይል ይዘት ይተካል።',
+  'Backup imported':'ምትኬ ገብቷል','Already in list':'አስቀድሞ በዝርዝሩ ውስጥ አለ','Added':'ተጨምሯል','Removed':'ተወግዷል','Paste a Client ID first':'መጀመሪያ Client ID ያስገቡ',
+  'Change Client ID? You will need to reconnect.':'Client ID ይቀየር? እንደገና መገናኘት ያስፈልግዎታል።','Auto-sync enabled':'በራስ-ሰር ማመሳሰል በርቷል','Auto-sync disabled':'በራስ-ሰር ማመሳሰል ጠፍቷል',
+  'This will permanently delete ALL livestock, production, feed, income/expense and health records. Continue?':'ይህ ሁሉንም የእንስሳት፣ የምርት፣ የመኖ፣ የገቢ/ወጪና የጤና መዝገቦች እስከመጨረሻው ይሰርዛል። ይቀጥሉ?',
+  'Are you absolutely sure? This cannot be undone.':'እርግጠኛ ነዎት? ይህ ወደ ኋላ አይመለስም።','All farm data cleared':'ሁሉም የእርሻ መረጃ ጸድቷል'
+};
+
+/* Patterns for strings that contain numbers or other variable parts */
+const AM_PATTERNS = [
+  [/^Fiscal year (\d+) EFY$/, m=>`የበጀት ዓመት ${m[1]} ዓ.ም`],
+  [/^Adjustments for this year \((\d+) EFY\)$/, m=>`የዚህ ዓመት ማስተካከያዎች (${m[1]} ዓ.ም)`],
+  [/^Dep\. (\d+) EFY$/, m=>`የእርጅና ቅናሽ ${m[1]} ዓ.ም`],
+  [/^Per Crate \((\d+)\)$/, m=>`በአንድ ሣጥን (${m[1]})`],
+  [/^Auto-calculated: ([\d,\.]+) birds × 112g\/bird\/day$/, m=>`በራስ-ሰር የሚሰላ: ${m[1]} ወፎች × 112 ግ/ወፍ/ቀን`],
+  [/^≈ (.+)\/bird\/day at current bird count\.$/, m=>`≈ ${m[1]}/ወፍ/ቀን በአሁኑ የወፎች ብዛት።`],
+  [/^Fixed-asset register\. Depreciation for (\d+) EFY \(change year in Reports\) is added to the financial report automatically\.$/, m=>`የቋሚ ንብረት መዝገብ። የ${m[1]} ዓ.ም የእርጅና ቅናሽ በራስ-ሰር ወደ የፋይናንስ ሪፖርቱ ይጨመራል (ዓመቱን በሪፖርቶች ውስጥ ይቀይሩ)።`],
+  [/^Total depreciation for (\d+) EFY: (\{0\})\. Depreciation starts in the fiscal year the asset is acquired \(no part-year proration\)\. Enter the rate your tax authority allows for each class\.$/, m=>`የ${m[1]} ዓ.ም ጠቅላላ የእርጅና ቅናሽ: ${m[2]}። የእርጅና ቅናሹ የሚጀምረው ንብረቱ በተገኘበት የበጀት ዓመት ነው (ከፊል ዓመት ምጣኔ የለም)። ግብር ባለሥልጣንዎ ለእያንዳንዱ ክፍል የፈቀደውን መጠን ያስገቡ።`],
+  [/^Your current average price is (.+) above the recommended price — you're earning more margin than the (.+)% target\.$/, m=>`የአሁኑ አማካይ ዋጋዎ ከሚመከረው ዋጋ በ${m[1]} ከፍ ይላል — ከ${m[2]}% ዒላማው የበለጠ ትርፍ እያገኙ ነው።`],
+  [/^Your current average price is (.+) below the recommended price — at today's feed cost you're earning less than the (.+)% target margin\.$/, m=>`የአሁኑ አማካይ ዋጋዎ ከሚመከረው ዋጋ በ${m[1]} ዝቅ ይላል — በዛሬው የመኖ ወጪ ከ${m[2]}% የዒላማ ትርፍ ያነሰ እያገኙ ነው።`],
+  [/^Remove "(.+)" from (\w+)\? Existing records keep this value, but it won't appear as an option anymore\.$/, m=>`"${m[1]}" ከዝርዝሩ ይወገድ? ያሉ መዝገቦች ይህን እሴት ይይዛሉ፣ ነገር ግን ከዚህ በኋላ እንደ ምርጫ አይታይም።`],
+  [/^Add new (.+)…$/, ()=>'አዲስ ጨምር…'],
+  [/^Add (.+)$/, m=>{ const x=trStr(m[1]); return x===null ? null : `አዲስ ${x} ጨምር`; }],
+  [/^Edit (.+)$/, m=>{ const x=trStr(m[1]); return x===null ? null : `${x} አርም`; }],
+  [/^(.+) \*$/, m=>{ const x=trStr(m[1]); return x===null ? null : x+' *'; }],
+  [/^(.+) — (.+) \((Poultry|Bees|Goats|Sheep|Oxen)\)$/, m=>`${m[1]} — ${m[2]} (${AM[m[3]]})`]
+];
+
+Object.assign(AM, {
+  'Accounting':'ሂሳብ አያያዝ','Add transaction':'ግብይት ጨምር','Balance Sheet':'የሂሳብ ሚዛን መግለጫ','Cash Flow':'የገንዘብ ፍሰት','Profit & Loss':'ትርፍና ኪሳራ',
+  "Owner's Equity":'የባለቤት ካፒታል','Ledger / Trial Balance':'የሂሳብ መዝገብ / የሙከራ ሚዛን','Loan received':'የተቀበለ ብድር','Loan repayment (principal)':'የብድር ክፍያ (ዋና ገንዘብ)',
+  'Loan interest paid':'የተከፈለ የብድር ወለድ','Owner investment (cash)':'የባለቤት ካፒታል መዋጮ (ጥሬ ገንዘብ)','Owner drawing / profit distribution':'የባለቤት ወጪ / የትርፍ ክፍፍል',
+  'Income tax paid':'የተከፈለ የገቢ ግብር','Cash and bank':'ጥሬ ገንዘብና ባንክ','Total assets':'ጠቅላላ ንብረት','TOTAL ASSETS':'ጠቅላላ ንብረት','TOTAL LIABILITIES':'ጠቅላላ ዕዳ',
+  'ASSETS':'ንብረት','LIABILITIES':'ዕዳዎች',"OWNER'S EQUITY":'የባለቤት ካፒታል','Current assets':'የአጭር ጊዜ ንብረት','Non-current assets':'የረጅም ጊዜ ንብረት',
+  'Current liabilities':'የአጭር ጊዜ ዕዳዎች','Non-current liabilities':'የረጅም ጊዜ ዕዳዎች','OPERATING ACTIVITIES':'የሥራ እንቅስቃሴዎች','INVESTING ACTIVITIES':'የኢንቨስትመንት እንቅስቃሴዎች',
+  'FINANCING ACTIVITIES':'የፋይናንስ እንቅስቃሴዎች','As at':'እስከ','Debit':'ዴቢት','Credit':'ክሬዲት','Account':'ሂሳብ','Code':'ኮድ','Total':'ጠቅላላ',
+  'Net profit / (loss) after tax':'የተጣራ ትርፍ / (ኪሳራ) ከግብር በኋላ','Retained earnings':'የተጠራቀመ ትርፍ',"Owner's capital":'የባለቤት ካፒታል','Loans outstanding':'ያልተከፈሉ ብድሮች'
+});
+function trStr(raw){
+  if(raw===undefined || raw===null) return null;
+  const s = String(raw).replace(/\s+/g,' ').trim();
+  if(!s) return null;
+  if(Object.prototype.hasOwnProperty.call(AM, s)) return AM[s];
+  for(const p of AM_PATTERNS){ const m = s.match(p[0]); if(m){ const out = p[1](m); if(out!==null && out!==undefined) return out; } }
+  return null;
+}
+function amFinish(s){ return s.replace(/\bETB\b/g,'ብር').replace(/(\d{4}) EFY/g,'$1 ዓ.ም'); }
+function tr(raw){ if(lang!=='am') return raw; const o = trStr(raw); return amFinish(o!==null ? o : String(raw)); }
+function t(k){ return tr(k); }
+function ask(msg){ return confirm(tr(msg)); }
+function say(msg){ alert(tr(msg)); }
+
+/* Translate everything visible inside a container (called after each render when Amharic is selected) */
+function translateDom(root){
+  if(lang!=='am' || !root) return;
+  // 1) elements that mix text with child elements (e.g. "Go to <a>…</a> and create…") – matched as one sentence with {0},{1} placeholders
+  root.querySelectorAll('li,p,div,span,label,td').forEach(el=>{
+    let hasEl=false, hasTxt=false;
+    el.childNodes.forEach(n=>{ if(n.nodeType===1) hasEl=true; else if(n.nodeType===3 && n.nodeValue.trim()) hasTxt=true; });
+    if(!(hasEl && hasTxt)) return;
+    const kids=[]; let tpl='';
+    el.childNodes.forEach(n=>{ if(n.nodeType===3) tpl+=n.nodeValue; else if(n.nodeType===1){ tpl+='{'+kids.length+'}'; kids.push(n.outerHTML); } });
+    const out = trStr(tpl);
+    if(out!==null) el.innerHTML = out.replace(/\{(\d+)\}/g,(m,i)=>kids[+i]||'');
+  });
+  // 2) plain text nodes
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes=[]; while(w.nextNode()) nodes.push(w.currentNode);
+  nodes.forEach(n=>{
+    const p=n.parentNode; if(!p) return;
+    const tag=p.nodeName; if(tag==='SCRIPT'||tag==='STYLE'||tag==='TEXTAREA'||tag==='CODE') return;
+    const raw=n.nodeValue; if(!raw.trim()) return;
+    const lead=raw.match(/^\s*/)[0], trail=raw.match(/\s*$/)[0];
+    const o=trStr(raw);
+    n.nodeValue = lead + amFinish(o!==null ? o : raw.trim()) + trail;
+  });
+  // 3) placeholder / title attributes
+  root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(el=>{
+    ['placeholder','title','aria-label'].forEach(a=>{ if(el.hasAttribute(a)){ const o=trStr(el.getAttribute(a)); if(o!==null) el.setAttribute(a, amFinish(o)); } });
+  });
+}
+function applyStaticLang(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(e=>{ e.textContent = tr(e.getAttribute('data-i18n')); });
+  document.title = tr('Green Horizon Farm Manager');
+  const b = document.getElementById('langToggle'); if(b) b.textContent = (lang==='am') ? 'EN' : 'አማ';
+}
+function setLang(){
+  lang = (lang==='am') ? 'en' : 'am';
+  try{ localStorage.setItem('gh_lang', lang); }catch(e){}
+  applyStaticLang();
+  renderNav(); render();
+  const mr = document.getElementById('modalRoot'); if(mr) mr.innerHTML='';   // close any open form so it reopens in the new language
+}
+
+/* ---------------- Ethiopian calendar + fiscal year (Hamle 1 - Sene 30) ---------------- */
+const EC_MONTHS_EN = ['Meskerem','Tikimt','Hidar','Tahsas','Tir','Yekatit','Megabit','Miazia','Ginbot','Sene','Hamle','Nehase','Pagume'];
+const EC_MONTHS_AM = ['መስከረም','ጥቅምት','ኅዳር','ታኅሣሥ','ጥር','የካቲት','መጋቢት','ሚያዝያ','ግንቦት','ሰኔ','ሐምሌ','ነሐሴ','ጳጉሜ'];
+function gregToEth(iso){
+  const p = iso.split('-').map(Number), y=p[0], m=p[1], d=p[2];
+  const a = Math.floor((14-m)/12), yy = y+4800-a, mm = m+12*a-3;
+  const jdn = d + Math.floor((153*mm+2)/5) + 365*yy + Math.floor(yy/4) - Math.floor(yy/100) + Math.floor(yy/400) - 32045;
+  const r = (jdn-1723856) % 1461, n = (r%365) + 365*Math.floor(r/1460);
+  return { y: 4*Math.floor((jdn-1723856)/1461) + Math.floor(r/365) - Math.floor(r/1460), m: Math.floor(n/30)+1, d: (n%30)+1 };
+}
+function ethDateStr(iso){
+  if(!iso) return '';
+  const e = gregToEth(iso);
+  return e.d+' '+((lang==='am')?EC_MONTHS_AM:EC_MONTHS_EN)[e.m-1]+' '+e.y;
+}
+function efyOf(iso){ const y=parseInt(iso.slice(0,4),10); return iso >= y+'-07-08' ? y-7 : y-8; }
+function currentEFY(){ return efyOf(todayISO()); }
+function fyRange(efy){ return [ (efy+7)+'-07-08', (efy+8)+'-07-07' ]; }
+function inFY(d, efy){ const r=fyRange(efy); return !!d && d>=r[0] && d<=r[1]; }
+function fyList(){
+  const s = new Set([currentEFY()-1, currentEFY()]);
+  state.income.concat(state.expenses).concat(state.acct.filter(x=>!isOpeningType(x.type))).forEach(r=>{ if(validDate(r.date)) s.add(efyOf(r.date)); });
+  state.assets.forEach(a=>{ if(validDate(a.dateAcquired)) s.add(efyOf(a.dateAcquired)); });
+  return Array.from(s).sort((a,b)=>a-b);
+}
+
+/* ---------------- Tax profile (stored inside state.setup so backups/Drive sync include it) ---------------- */
+const COST_OF_PRODUCTION_CATS = ['Feed Purchase','Vaccination','Medication','Beekeeping Supplies','Shearing/Processing'];
+function taxProfile(){
+  if(!state.setup.tax) state.setup.tax = {businessName:'Green Horizon', tin:'', category:'', taxRatePct:0, taxOverride:0, adj:{}};
+  if(!state.setup.tax.adj) state.setup.tax.adj = {};
+  if(!state.setup.tax.regime){ state.setup.tax.regime = 'B'; state.setup.tax.category = 'B'; }
+  return state.setup.tax;
+}
+function taxAdj(efy){
+  const tx = taxProfile();
+  if(!tx.adj[efy]) tx.adj[efy] = {depreciation:0, nonDeductible:0, exempt:0, wht:0, advance:0};
+  return tx.adj[efy];
+}
+function groupByCat(rows, amountFn){
+  const m = {}; rows.forEach(r=>{ m[r.category] = (m[r.category]||0) + amountFn(r); });
+  return Object.keys(m).map(k=>({cat:k, amt:m[k]}));
+}
+function fyReport(efy){
+  const tx = taxProfile(), adj = taxAdj(efy);
+  const inc = state.income.filter(r=>inFY(r.date,efy));
+  const exp = state.expenses.filter(r=>inFY(r.date,efy));
+  const revenue = groupByCat(inc, incomeAmount);
+  const cop = groupByCat(exp.filter(r=>COST_OF_PRODUCTION_CATS.includes(r.category)), r=>num(r.amount));
+  const invChange = inventoryOn() ? feedInventoryValueAsOf(fyRange(efy)[1]) - feedInventoryValueAsOf(fyRange(efy-1)[1]) : 0;
+  if(Math.abs(invChange)>0.005) cop.push({cat:'Less: increase in feed inventory (closing − opening stock)', amt:-invChange});
+  const opex = groupByCat(exp.filter(r=>!COST_OF_PRODUCTION_CATS.includes(r.category)), r=>num(r.amount));
+  const sum = a => a.reduce((s,x)=>s+x.amt,0);
+  const totRev=sum(revenue), totCop=sum(cop), totOpex=sum(opex);
+  const gross = totRev-totCop;
+  const dep = assetsDepreciation(efy) + num(adj.depreciation);
+  const nonDed = exp.filter(r=>r.nonDeductible==='Yes').reduce((s,r)=>s+num(r.amount),0) + num(adj.nonDeductible);
+  const exempt = inc.filter(r=>r.exempt==='Yes').reduce((s,r)=>s+incomeAmount(r),0) + num(adj.exempt);
+  const wht = inc.reduce((s,r)=>s+num(r.whtAmount),0) + num(adj.wht);
+  const finance = acctSum(AT.INT, efy), otherInc = acctSum(AT.OINC, efy);
+  const gainLoss = state.assets.map(assetDisposal).filter(d=>d && d.fy===efy).reduce((s,d)=>s+d.gl,0);
+  const netBefore = gross - totOpex - dep - finance + otherInc + gainLoss;
+  const taxable = netBefore + nonDed - exempt;
+  const base = tx.regime==='A' ? Math.max(0,taxable) : totRev;   // B = presumptive on gross sales, A = net profit
+  const taxDue = num(tx.taxOverride)>0 ? num(tx.taxOverride) : base*num(tx.taxRatePct)/100;
+  const credits = wht + num(adj.advance);
+  return {revenue,cop,opex,totRev,totCop,totOpex,gross,dep,netBefore,taxable,base,taxDue,nonDed,exempt,wht,advance:num(adj.advance),netPayable:taxDue-credits,finance,otherInc,gainLoss,invChange,netAfter:netBefore-taxDue};
+}
 
 /* ---------------- Google Drive sync state ---------------- */
 let driveConfig = { clientId:'', fileId:null, autoSync:false, lastSync:null };
@@ -330,7 +684,7 @@ function escHtml(s){ return String(s===undefined||s===null?'':s).replace(/[&<>"]
 function fmtDate(s){ return s || ''; }
 function showToast(msg){
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = tr(msg); t.classList.add('show');
   clearTimeout(t._timer);
   t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
 }
@@ -370,7 +724,8 @@ function maybeAutoSync(){
 async function initApp(){
   loadDriveConfigLocal();
   const [setup, livestock, reductions, production, prodReductions,
-         feedPurchases, feeding, income, expenses, vaccinations, medications, calc] = await Promise.all([
+         feedPurchases, feeding, income, expenses, vaccinations, medications, calc, assets,
+         customers, payments, comments, inquiries, acct] = await Promise.all([
     loadKey(STORE_KEYS.setup, null),
     loadKey(STORE_KEYS.livestock, null),
     loadKey(STORE_KEYS.reductions, null),
@@ -382,7 +737,13 @@ async function initApp(){
     loadKey(STORE_KEYS.expenses, null),
     loadKey(STORE_KEYS.vaccinations, null),
     loadKey(STORE_KEYS.medications, null),
-    loadKey(STORE_KEYS.calc, null)
+    loadKey(STORE_KEYS.calc, null),
+    loadKey(STORE_KEYS.assets, null),
+    loadKey(STORE_KEYS.customers, null),
+    loadKey(STORE_KEYS.payments, null),
+    loadKey(STORE_KEYS.comments, null),
+    loadKey(STORE_KEYS.inquiries, null),
+    loadKey(STORE_KEYS.acct, null)
   ]);
 
   const isFirstRun = livestock === null;
@@ -399,6 +760,12 @@ async function initApp(){
   state.expenses = expenses || seeds.expenses || [];
   state.vaccinations = vaccinations || seeds.vaccinations || [];
   state.medications = medications || seeds.medications || [];
+  state.assets = assets || [];
+  state.customers = customers || [];
+  state.payments = payments || [];
+  state.comments = comments || [];
+  state.inquiries = inquiries || [];
+  state.acct = acct || seeds.acct || [];
   state.calc = calc || calcAutoDefaults();
 
   if(isFirstRun){
@@ -406,11 +773,12 @@ async function initApp(){
       saveSetup(),
       saveEntity('livestock'), saveEntity('reductions'), saveEntity('production'),
       saveEntity('prodReductions'), saveEntity('feedPurchases'), saveEntity('feeding'),
-      saveEntity('income'), saveEntity('expenses'), saveEntity('vaccinations'), saveEntity('medications')
+      saveEntity('income'), saveEntity('expenses'), saveEntity('vaccinations'), saveEntity('medications'), saveEntity('acct')
     ]);
   }
   if(!calc) await saveCalc();
 
+  applyStaticLang();
   renderNav();
   render();
 }
@@ -577,16 +945,21 @@ const TABS = [
   {key:'calculator', label:'Price Calc', icon:'🧮'},
   {key:'income', label:'Income', icon:'💰'},
   {key:'expenses', label:'Expenses', icon:'💸'},
+  {key:'customers', label:'Customers', icon:'👥'},
+  {key:'assets', label:'Assets', icon:'🏗️'},
+  {key:'accounting', label:'Accounting', icon:'💼'},
   {key:'health', label:'Health', icon:'💊'},
   {key:'reports', label:'Reports', icon:'📊'},
   {key:'setup', label:'Setup', icon:'⚙️'}
 ];
 
 function renderNav(){
+  const t_ = t;   // TABS.map uses 't' as its loop variable
   const nav = document.getElementById('sidenav');
   nav.innerHTML = TABS.map(t=>
-    `<button class="navbtn${currentTab===t.key?' active':''}" data-tab="${t.key}"><span class="ic">${t.icon}</span><span>${t.label}</span></button>`
+    `<button class="navbtn${currentTab===t.key?' active':''}" data-tab="${t.key}"><span class="ic">${t.icon}</span><span>${t_(t.label)}</span></button>`
   ).join('');
+  translateDom(nav);
   nav.querySelectorAll('.navbtn').forEach(b=>{
     b.addEventListener('click', ()=>{ currentTab = b.dataset.tab; renderNav(); render(); window.scrollTo({top:0,behavior:'smooth'}); });
   });
@@ -598,10 +971,11 @@ function render(){
     dashboard: renderDashboard, livestock: renderLivestock, reductions: renderReductions,
     production: renderProduction, prodstock: renderProdStock, feed: renderFeed,
     calculator: renderCalculator,
-    income: renderIncome, expenses: renderExpenses, health: renderHealth,
+    income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
     reports: renderReports, setup: renderSetup
   };
   c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
+  translateDom(c);
   attachTabEvents();
 }
 
@@ -631,8 +1005,13 @@ function renderDashboard(){
     ['Total Income', fmtMoney(inc), false],
     ['Total Expenses', fmtMoney(exp), false],
     ['Net Profit / (Loss)', fmtMoney(net), net<0],
-    ['YTD Net Profit / (Loss)', fmtMoney(yNet), yNet<0]
+    ['YTD Net Profit / (Loss)', fmtMoney(yNet), yNet<0],
+    ['Total Receivables', fmtMoney(totalReceivables()), totalReceivables()>0]
   ];
+  try{
+    const bsNow = balanceSheet(currentEFY());
+    kpis.push(['Cash & Bank (ledger)', fmtMoney(bsNow.rawCash), bsNow.rawCash<0], ['Loans Outstanding', fmtMoney(bsNow.loans), false], ["Owner's Equity", fmtMoney(bsNow.te), bsNow.te<0]);
+  }catch(err){ console.error(err); }
 
   const kpiHtml = kpis.map(([label,val,neg])=>
     `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value mono${neg?' neg':''}">${val}</div></div>`
@@ -647,7 +1026,7 @@ function renderDashboard(){
   ).join('') || emptyRow(2,'No product types configured.');
 
   return `
-  <div class="pagehead"><div><h1>Dashboard</h1><p>Overview across all species and products.</p></div></div>
+  <div class="pagehead"><div><h1>${t('Dashboard')}</h1><p>Overview across all species and products.</p></div></div>
   <div class="kpi-grid">${kpiHtml}</div>
   <div class="two-col">
     <div class="panel"><div class="panel-pad"><div class="section-title" style="margin-top:0">Livestock by Type</div></div>
@@ -963,21 +1342,80 @@ function attachCalculatorEvents(){
 }
 
 /* ================= INCOME ================= */
+/* ---------------- Customers / receivables computed values ---------------- */
+function incomePaidAmt(r){ return r.paymentStatus==='Partial / Credit' ? num(r.amountPaid) : incomeAmount(r); }
+function incomeBalance(r){ return incomeAmount(r) - incomePaidAmt(r); }
+function customerSales(cid){ return state.income.filter(r=>r.customerId===cid).reduce((s,r)=>s+incomeAmount(r),0); }
+function customerPaidAtSale(cid){ return state.income.filter(r=>r.customerId===cid).reduce((s,r)=>s+incomePaidAmt(r),0); }
+function customerPaymentsTotal(cid){ return state.payments.filter(p=>p.customerId===cid).reduce((s,p)=>s+num(p.amount),0); }
+function customerBalance(cid){ return customerSales(cid) - customerPaidAtSale(cid) - customerPaymentsTotal(cid); }
+function totalReceivables(){ return state.customers.reduce((s,c)=>s+Math.max(0,customerBalance(c.id)),0); }
+
+function renderCustomers(){
+  const dirRows = state.customers.length ? state.customers.map(c=>{
+    const sales=customerSales(c.id), paidAtSale=customerPaidAtSale(c.id), pmts=customerPaymentsTotal(c.id), bal=sales-paidAtSale-pmts;
+    return `<tr><td>${escHtml(c.name)}</td><td>${escHtml(c.phone)}</td><td>${escHtml(c.type)}</td>
+      <td class="num mono">${fmtMoney(sales)}</td><td class="num mono">${fmtMoney(paidAtSale+pmts)}</td>
+      <td class="num mono"><strong>${fmtMoney(bal)}</strong></td><td class="notes-cell">${escHtml(c.notes)}</td>
+      ${rowActionsHtml('customers', c.id)}</tr>`;
+  }).join('') : emptyRow(8,'No customers yet. Add your first one below.');
+
+  const pRows = state.payments.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>
+    `<tr><td>${fmtDate(p.date)}</td><td>${escHtml(customerName(p.customerId))}</td><td class="num mono">${fmtMoney(p.amount)}</td>
+     <td>${escHtml(p.method)}</td><td class="mono">${escHtml(p.refNo)}</td><td class="notes-cell">${escHtml(p.notes)}</td>
+     ${rowActionsHtml('payments', p.id)}</tr>`).join('') || emptyRow(7,'No payments logged yet.');
+
+  const cRows = state.comments.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(c=>
+    `<tr><td>${fmtDate(c.date)}</td><td>${escHtml(customerName(c.customerId))}</td><td class="notes-cell">${escHtml(c.comment)}</td>
+     ${rowActionsHtml('comments', c.id)}</tr>`).join('') || emptyRow(4,'No comments logged yet.');
+
+  const iRows = state.inquiries.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(i=>
+    `<tr><td>${fmtDate(i.date)}</td><td>${escHtml(i.name)}</td><td>${escHtml(i.phone)}</td><td>${escHtml(i.interestedIn)}</td>
+     <td><span class="tag ${i.status==='Converted'?'tag-active':'tag-closed'}">${escHtml(i.status)}</span></td>
+     <td>${fmtDate(i.followUpDate)}</td><td class="notes-cell">${escHtml(i.notes)}</td>
+     ${rowActionsHtml('inquiries', i.id)}</tr>`).join('') || emptyRow(8,'No inquiries logged yet.');
+
+  return `
+  <div class="pagehead">
+    <div><h1>${t('Customers')}</h1><p>Customer directory, cash received, receivables, comments, and sales inquiries.</p></div>
+    <button class="btn btn-primary" id="addCustomers">+ ${t('Add customer')}</button>
+  </div>
+  ${tableShell([{label:'Name'},{label:'Phone'},{label:'Type'},{label:'Total Sales',num:true},{label:'Total Paid',num:true},{label:'Balance Due',num:true},{label:'Notes'}], dirRows)}
+
+  <div class="pagehead"><div><div class="section-title" style="margin-top:0">${t('Payments Received')}</div></div>
+    <button class="btn btn-primary" id="addPayments">+ ${t('Add payment')}</button></div>
+  ${tableShell([{label:'Date'},{label:'Customer'},{label:'Amount',num:true},{label:'Method'},{label:'Ref No.'},{label:'Notes'}], pRows)}
+
+  <div class="pagehead"><div><div class="section-title" style="margin-top:0">${t('Comments / Interaction Log')}</div></div>
+    <button class="btn btn-primary" id="addComments">+ ${t('Add comment')}</button></div>
+  ${tableShell([{label:'Date'},{label:'Customer'},{label:'Comment'}], cRows)}
+
+  <div class="pagehead"><div><div class="section-title" style="margin-top:0">${t('Sales Inquiries')}</div></div>
+    <button class="btn btn-primary" id="addInquiries">+ ${t('Add inquiry')}</button></div>
+  ${tableShell([{label:'Date'},{label:'Name'},{label:'Phone'},{label:'Interested In'},{label:'Status'},{label:'Follow-up'},{label:'Notes'}], iRows)}
+  <p class="note">Balance Due = total invoiced − amount collected at time of sale − payments logged above. Sales already booked at full invoice value in Income and the Financial Report (accrual basis) regardless of payment status.</p>
+  `;
+}
+
 function renderIncome(){
   const rows = state.income.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const body = rows.length ? rows.map(r=>`
     <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td>${escHtml(r.description)}</td>
+    <td>${escHtml(customerName(r.customerId)) || escHtml(r.buyer)}</td>
+    <td class="mono">${escHtml(r.refNo)}</td>
     <td class="num mono">${fmtNum(r.qty)}</td><td class="num mono">${fmtMoney(r.unitPrice)}</td>
     <td class="num mono"><strong>${fmtMoney(incomeAmount(r))}</strong></td>
+    <td class="num mono">${fmtMoney(incomeBalance(r))}</td>
+    <td class="num mono">${fmtMoney(r.whtAmount)}</td>
     <td class="notes-cell">${escHtml(r.notes)}</td>
-    ${rowActionsHtml('income', r.id)}</tr>`).join('') : emptyRow(8,'No income logged yet.');
+    ${rowActionsHtml('income', r.id)}</tr>`).join('') : emptyRow(12,'No income logged yet.');
 
   return `
   <div class="pagehead">
     <div><h1>Income</h1><p>Enter Quantity × Unit Price (e.g. eggs sold × price/egg). For lump sums, use Qty = 1.</p></div>
     <button class="btn btn-primary" id="addIncome">+ Add income</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Amount',num:true},{label:'Notes'}], body)}
+  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Customer'},{label:'Ref No.'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Amount',num:true},{label:'Balance Due',num:true},{label:'WHT',num:true},{label:'Notes'}], body)}
   `;
 }
 
@@ -986,16 +1424,59 @@ function renderExpenses(){
   const rows = state.expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const body = rows.length ? rows.map(r=>`
     <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td>${escHtml(r.description)}</td>
+    <td class="mono">${escHtml(r.refNo)}</td>
     <td class="num mono"><strong>${fmtMoney(r.amount)}</strong></td>
+    <td>${r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : ''}</td>
+    <td>${r.nonDeductible==='Yes'?'Yes':''}</td>
     <td class="notes-cell">${escHtml(r.notes)}</td>
-    ${rowActionsHtml('expenses', r.id)}</tr>`).join('') : emptyRow(6,'No expenses logged yet.');
+    ${rowActionsHtml('expenses', r.id)}</tr>`).join('') : emptyRow(9,'No expenses logged yet.');
 
   return `
   <div class="pagehead">
     <div><h1>Expenses</h1><p>All money out, categorized.</p></div>
     <button class="btn btn-primary" id="addExpenses">+ Add expense</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Amount',num:true},{label:'Notes'}], body)}
+  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Ref No.'},{label:'Amount',num:true},{label:'Payment'},{label:'Non-deductible'},{label:'Notes'}], body)}
+  `;
+}
+
+/* ================= ASSETS (fixed-asset register) ================= */
+const ASSET_CLASSES = ['Buildings / structures','Equipment / machinery','Vehicles','Furniture & fittings','Computers & software','Livestock (breeding stock)','Land','Other'];
+function assetDepFor(a, efy){
+  const cost = num(a.cost), rate = num(a.ratePct)/100;
+  if(!a.dateAcquired) return {dep:0, acc:0, nbv:cost};
+  const start = efyOf(a.dateAcquired);
+  if(efy < start) return {dep:0, acc:0, nbv:0};                                   // not owned yet
+  if(a.disposedDate && efy > efyOf(a.disposedDate)) return {dep:0, acc:0, nbv:0};  // already disposed
+  if(!cost || !rate) return {dep:0, acc:0, nbv:cost};                              // e.g. land: owned, not depreciated
+  let nbv = cost, acc = 0, dep = 0;
+  for(let y=start; y<=efy; y++){
+    dep = (a.method==='Declining balance') ? nbv*rate : Math.min(cost*rate, nbv);
+    dep = Math.min(dep, nbv); nbv -= dep; acc += dep;
+  }
+  return {dep, acc, nbv};
+}
+function assetsDepreciation(efy){ return state.assets.reduce((s,a)=>s+assetDepFor(a,efy).dep,0); }
+
+function renderAssets(){
+  const efy = reportsYear;
+  const rows = state.assets.slice().sort((a,b)=>(a.dateAcquired||'').localeCompare(b.dateAcquired||''));
+  const body = rows.length ? rows.map(a=>{
+    const d = assetDepFor(a, efy);
+    return `<tr><td>${escHtml(a.name)}</td><td>${escHtml(a.assetClass)}</td><td>${fmtDate(a.dateAcquired)}</td>
+      <td class="num mono">${fmtMoney(a.cost)}</td><td>${escHtml(a.method)}</td><td class="num mono">${num(a.ratePct)}%</td>
+      <td class="num mono">${fmtMoney(d.dep)}</td><td class="num mono">${fmtMoney(d.acc)}</td><td class="num mono"><strong>${fmtMoney(d.nbv)}</strong></td>
+      <td class="mono">${escHtml(a.refNo)}</td>${rowActionsHtml('assets', a.id)}</tr>`;
+  }).join('') : emptyRow(11,'No fixed assets yet. Add houses, mixers, equipment, vehicles.');
+  const tot = assetsDepreciation(efy);
+  return `
+  <div class="pagehead">
+    <div><h1>${t('Assets')}</h1><p>Fixed-asset register. Depreciation for ${efy} EFY (change year in Reports) is added to the financial report automatically.</p></div>
+    <button class="btn btn-primary" id="addAssets">+ Add asset</button>
+  </div>
+  ${tableShell([{label:'Asset'},{label:'Class'},{label:'Acquired'},{label:'Cost',num:true},{label:'Method'},{label:'Rate',num:true},{label:'Dep. '+efy+' EFY',num:true},{label:'Accumulated',num:true},{label:'Net book value',num:true},{label:'Ref No.'}], body)}
+  <p class="note">Total depreciation for ${efy} EFY: <strong>${fmtMoney(tot)}</strong>. Depreciation starts in the fiscal year the asset is acquired (no part-year proration). Enter the rate your tax authority allows for each class.</p>
+  <p class="note">Do not also enter an asset purchase in Expenses (e.g. category "Equipment") — it would be counted twice. For land use rate 0%. If you sold an asset, fill in the date disposed and the sale proceeds so the gain or loss is booked.</p>
   `;
 }
 
@@ -1041,62 +1522,714 @@ function renderHealth(){
   }
 }
 
-/* ================= REPORTS ================= */
-function renderReports(){
-  const incMap = incomeByCategory(), expMap = expensesByCategory();
-  const totalInc = totalIncomeAll(), totalExp = totalExpensesAll(), net = totalInc-totalExp;
-  const yInc = ytdIncome(), yExp = ytdExpenses(), yNet = yInc-yExp;
+/* ================= REPORTS (formal financial report) ================= */
+/* ================= ACCOUNTING ENGINE (double-entry ledger built from all records) =================
+   Every sale, expense, asset, payment and accounting transaction is turned into balanced journal
+   entries (debits = credits). The Balance Sheet, Cash Flow, Owner's Equity and Trial Balance are all
+   read from that one ledger, so they always agree with each other and with the Profit & Loss. */
+const AT = {
+  INV:'Owner investment (cash)',
+  SALE:'Sale of ownership (new partner / investor pays in)',
+  XFER:'Ownership transfer between owners (no cash to business)',
+  DRAW:'Owner drawing / profit distribution',
+  LOAN:'Loan received',
+  REPAY:'Loan repayment (principal)',
+  INT:'Loan interest paid',
+  SUPP:'Payment to supplier (settle unpaid expense)',
+  ASUPP:'Payment to asset supplier (settle unpaid asset purchase)',
+  TAX:'Income tax paid',
+  OINC:'Other income received (grant, subsidy, interest earned)',
+  OPCASH:'Opening balance — cash & bank',
+  OPLOAN:'Opening balance — loan owed'
+};
+const ACCT_TYPE_LIST = Object.keys(AT).map(k=>AT[k]);
+const OPEN_DATE = '0000-01-01';   // opening balances always sit before the first fiscal year
+const TERM_LONG = 'Long-term (over 1 year)', TERM_SHORT = 'Short-term (within 1 year)';
+const PAY_PAID = 'Paid (cash / bank)', PAY_UNPAID = 'Unpaid (on credit)', PAY_OWNER = 'Paid personally by owner';
+const FUND_PAID = 'Paid (cash / bank)', FUND_CREDIT = 'Supplier credit (unpaid)', FUND_OWNER = 'Contributed by owner (in kind)', FUND_OPEN = 'Owned before using this app (opening balance)';
+const ACCT_NAMES = {
+  '1000':'Cash and bank', '1100':'Accounts receivable (net of customer advances)', '1150':'Withholding tax receivable', '1200':'Feed inventory',
+  '1500':'Fixed assets — cost', '1510':'Accumulated depreciation',
+  '2000':'Accounts payable — suppliers', '2050':'Payable to asset suppliers', '2100':'Loans payable — short-term', '2150':'Loans payable — long-term', '2300':'Income tax payable',
+  '3000':"Owner's capital", '3100':"Owner's drawings",
+  '4000':'Sales revenue', '4900':'Other income', '5000':'Cost of production', '5100':'Change in feed inventory',
+  '6000':'Operating expenses', '6100':'Depreciation', '6200':'Finance costs (loan interest)', '6900':'Gain / (loss) on disposal of assets', '8000':'Income tax expense'
+};
+const PL_ACCTS = ['4000','4900','5000','5100','6000','6100','6200','6900','8000'];
+const PL_PRETAX = ['4000','4900','5000','5100','6000','6100','6200','6900'];
 
-  const incRows = state.setup.incomeCats.map(c=>`<tr><td>${escHtml(c)}</td><td class="num mono">${fmtMoney(incMap[c]||0)}</td></tr>`).join('');
-  const expRows = state.setup.expenseCats.map(c=>`<tr><td>${escHtml(c)}</td><td class="num mono">${fmtMoney(expMap[c]||0)}</td></tr>`).join('');
+let _canon = {};
+function defaultOwnerName(){ return String((state.setup.acctOpts && state.setup.acctOpts.ownerName) || '').trim() || 'Owner'; }
+function partyName(p){ p = String(p||'').trim() || defaultOwnerName(); const k = p.toLowerCase(); if(!_canon[k]) _canon[k] = p; return _canon[k]; }
+function lenderName(x){ return String(x.party||'').trim() || 'Unnamed lender'; }
+function isOpeningType(ty){ return ty===AT.OPCASH || ty===AT.OPLOAN; }
+function validDate(d){ return typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d); }
+function inventoryOn(){ return !!(state.setup.acctOpts && state.setup.acctOpts.feedInventory); }
+function fmtAcc(n){ n = num(n); if(Math.abs(n)<0.005) n = 0; return n<0 ? '('+fmtMoney(-n)+')' : fmtMoney(n); }
 
-  const years = dataYearsRange();
-  if(!years.includes(reportsYear)) reportsYear = years[years.length-1];
-  const yearOptions = years.map(y=>`<option value="${y}" ${y===reportsYear?'selected':''}>${y}</option>`).join('');
-  const yearlyRows = years.map(y=>{ const p=yearlyPL(y); return `<tr><td>${y}</td><td class="num mono">${fmtMoney(p.inc)}</td><td class="num mono">${fmtMoney(p.exp)}</td><td class="num mono"><strong>${fmtMoney(p.net)}</strong></td></tr>`; }).join('');
-  const monthly = monthlyPL(reportsYear);
-  const monthlyRows = monthly.map(m=>`<tr><td>${MONTH_NAMES[m.month-1]}</td><td class="num mono">${fmtMoney(m.inc)}</td><td class="num mono">${fmtMoney(m.exp)}</td><td class="num mono"><strong>${fmtMoney(m.net)}</strong></td></tr>`).join('');
-  const monthlyTotalInc = monthly.reduce((s,m)=>s+m.inc,0), monthlyTotalExp = monthly.reduce((s,m)=>s+m.exp,0);
+function acctSum(type, efy){
+  return state.acct.filter(x=>x.type===type && validDate(x.date) && inFY(x.date,efy)).reduce((s,x)=>s+num(x.amount),0);
+}
+function loanTermFor(x){
+  if(x.type===AT.REPAY){
+    const k = lenderName(x).toLowerCase();
+    const src = state.acct.find(y=>(y.type===AT.LOAN||y.type===AT.OPLOAN) && lenderName(y).toLowerCase()===k);
+    if(src && src.loanTerm) return src.loanTerm;
+  }
+  return x.loanTerm || TERM_LONG;
+}
+function loanAcctFor(x){ return String(loanTermFor(x)).indexOf('Short')===0 ? '2100' : '2150'; }
 
+/* Feed stock valued at weighted-average cost as at a date (only used if "feed stock as inventory" is switched on) */
+function feedInventoryValueAsOf(cut){
+  let total = 0;
+  Array.from(new Set(state.feedPurchases.map(f=>f.feedType))).forEach(ft=>{
+    let q=0, c=0, u=0;
+    state.feedPurchases.forEach(f=>{ if(f.feedType===ft && validDate(f.date) && f.date<=cut){ q+=num(f.qty); c+=num(f.qty)*num(f.unitCost); } });
+    state.feeding.forEach(f=>{ if(f.feedType===ft && validDate(f.date) && f.date<=cut) u+=num(f.qtyUsed); });
+    if(q>0) total += Math.max(0, q-u) * (c/q);
+  });
+  return total;
+}
+/* Withholding tax is recognised only to the extent the buyer has actually paid */
+function whtRecognisedOnSale(r){ return Math.min(num(r.whtAmount), Math.max(0, incomePaidAmt(r))); }
+function whtRecognised(efy){
+  return state.income.filter(r=>inFY(r.date,efy)).reduce((s,r)=>s+whtRecognisedOnSale(r),0) + num(taxAdj(efy).wht);
+}
+function assetDisposal(a){
+  if(!a.disposedDate || !a.dateAcquired || !num(a.cost)) return null;
+  const fy = efyOf(a.disposedDate), cost = num(a.cost), acc = assetDepFor(a, fy).acc, proceeds = num(a.disposalProceeds);
+  return {fy, cost, acc, nbv:cost-acc, proceeds, gl:proceeds-(cost-acc)};
+}
+function acctFirstFY(){
+  let m = null;
+  const upd = d => { if(!validDate(d)) return; const y = efyOf(d); if(m===null || y<m) m = y; };
+  state.income.forEach(r=>upd(r.date)); state.expenses.forEach(r=>upd(r.date)); state.payments.forEach(r=>upd(r.date));
+  state.assets.forEach(a=>upd(a.dateAcquired));
+  state.acct.forEach(x=>{ if(!isOpeningType(x.type)) upd(x.date); });
+  if(inventoryOn()) state.feedPurchases.forEach(f=>upd(f.date));
+  return m===null ? currentEFY() : m;
+}
+
+function buildJournal(sel){
+  _canon = {};
+  const J = [], end = fyRange(sel)[1];
+  const drcr = (a,amt,party)=> amt>=0 ? [a,amt,0,party] : [a,0,-amt,party];
+  const add = (date,desc,src,kind,cf,lines)=>{
+    lines = lines.filter(l=>Math.abs(l[1]||0)+Math.abs(l[2]||0)>1e-9);
+    if(lines.length) J.push({date,desc,src,kind,cf,lines});
+  };
+
+  /* --- sales --- */
+  state.income.forEach(r=>{
+    if(!validDate(r.date) || r.date>end) return;
+    const amt = incomeAmount(r), paid = incomePaidAmt(r), w = whtRecognisedOnSale(r);
+    add(r.date, 'Sale: '+(r.description||r.category||''), 'income', 'sale', 'op',
+      [drcr('1000',paid-w), drcr('1150',w), drcr('1100',amt-paid), drcr('4000',-amt)]);
+  });
+  /* --- customer payments --- */
+  state.payments.forEach(p=>{
+    if(!validDate(p.date) || p.date>end) return;
+    add(p.date, 'Customer payment: '+(customerName(p.customerId)||''), 'payment', 'collection', 'op',
+      [drcr('1000',num(p.amount)), drcr('1100',-num(p.amount))]);
+  });
+  /* --- expenses --- */
+  state.expenses.forEach(r=>{
+    if(!validDate(r.date) || r.date>end) return;
+    const amt = num(r.amount), cop = COST_OF_PRODUCTION_CATS.includes(r.category), ps = r.payStatus || PAY_PAID;
+    let credit, kind = 'expense';
+    if(ps.indexOf('Unpaid')===0) credit = drcr('2000',-amt);
+    else if(ps.indexOf('Paid personally')===0){ credit = drcr('3000',-amt,partyName('')); kind = 'ownerPaidExp'; }
+    else credit = drcr('1000',-amt);
+    add(r.date, 'Expense: '+(r.description||r.category||''), 'expense', kind, 'op', [drcr(cop?'5000':'6000',amt), credit]);
+  });
+  /* --- fixed assets --- */
+  state.assets.forEach(a=>{
+    const cost = num(a.cost);
+    if(!cost || !validDate(a.dateAcquired) || a.dateAcquired>end) return;
+    const fb = a.fundedBy || FUND_PAID, acqFY = efyOf(a.dateAcquired);
+    let credit, date = a.dateAcquired, kind = 'asset';
+    if(fb.indexOf('Supplier credit')===0){ credit = drcr('2050',-cost); kind = 'assetCredit'; }
+    else if(fb.indexOf('Contributed')===0){ credit = drcr('3000',-cost,partyName('')); kind = 'assetInKind'; }
+    else if(fb.indexOf('Owned before')===0){ credit = drcr('3000',-cost,partyName('')); date = OPEN_DATE; kind = 'assetOpen'; }
+    else credit = drcr('1000',-cost);
+    add(date, 'Asset acquired: '+(a.name||''), 'asset', kind, 'inv', [drcr('1500',cost), credit]);
+    const lastFY = a.disposedDate ? Math.min(sel, efyOf(a.disposedDate)) : sel;
+    for(let fy=acqFY; fy<=lastFY; fy++){
+      const d = assetDepFor(a,fy).dep;
+      add(fyRange(fy)[1], 'Depreciation '+fy+' EFY: '+(a.name||''), 'dep', 'dep', null, [drcr('6100',d), drcr('1510',-d)]);
+    }
+    const ds = assetDisposal(a);
+    if(ds && a.disposedDate<=end){
+      add(a.disposedDate, 'Asset disposed: '+(a.name||''), 'disposal', 'disposal', 'inv',
+        [drcr('1000',ds.proceeds), drcr('1510',ds.acc), drcr('1500',-ds.cost), drcr('6900',-ds.gl)]);
+    }
+  });
+  /* --- accounting transactions (loans, capital, drawings ...) --- */
+  state.acct.forEach(x=>{
+    const amt = num(x.amount); if(!amt) return;
+    const open = isOpeningType(x.type);
+    if(!open && (!validDate(x.date) || x.date>end)) return;
+    const d = open ? OPEN_DATE : x.date, p = partyName(x.party);
+    switch(x.type){
+      case AT.INV:   add(d,'Owner investment — '+p,'acct','inv','fin',[drcr('1000',amt),drcr('3000',-amt,p)]); break;
+      case AT.SALE:  add(d,'Sale of ownership to '+p,'acct','saleown','fin',[drcr('1000',amt),drcr('3000',-amt,p)]); break;
+      case AT.XFER:  add(d,'Ownership transfer '+partyName(x.fromParty)+' → '+p,'acct','xfer',null,[drcr('3000',amt,partyName(x.fromParty)),drcr('3000',-amt,p)]); break;
+      case AT.DRAW:  add(d,'Owner drawing — '+p,'acct','draw','fin',[drcr('3100',amt,p),drcr('1000',-amt)]); break;
+      case AT.LOAN:  add(d,'Loan received — '+lenderName(x),'acct','loan','fin',[drcr('1000',amt),drcr(loanAcctFor(x),-amt)]); break;
+      case AT.REPAY: add(d,'Loan repayment — '+lenderName(x),'acct','repay','fin',[drcr(loanAcctFor(x),amt),drcr('1000',-amt)]); break;
+      case AT.INT:   add(d,'Loan interest paid'+(String(x.party||'').trim()?' — '+lenderName(x):''),'acct','int','op',[drcr('6200',amt),drcr('1000',-amt)]); break;
+      case AT.SUPP:  add(d,'Payment to supplier'+(String(x.party||'').trim()?' — '+String(x.party).trim():''),'acct','supp','op',[drcr('2000',amt),drcr('1000',-amt)]); break;
+      case AT.ASUPP: add(d,'Payment to asset supplier'+(String(x.party||'').trim()?' — '+String(x.party).trim():''),'acct','asupp','inv',[drcr('2050',amt),drcr('1000',-amt)]); break;
+      case AT.TAX:   add(d,'Income tax paid','acct','taxpaid','op',[drcr('2300',amt),drcr('1000',-amt)]); break;
+      case AT.OINC:  add(d,'Other income received','acct','oinc','op',[drcr('1000',amt),drcr('4900',-amt)]); break;
+      case AT.OPCASH:add(d,'Opening cash & bank — '+p,'acct','opcash','open',[drcr('1000',amt),drcr('3000',-amt,p)]); break;
+      case AT.OPLOAN:add(d,'Opening loan owed — '+lenderName(x),'acct','oploan','open',[drcr('3000',amt,partyName('')),drcr(loanAcctFor(x),-amt)]); break;
+    }
+  });
+  /* --- fiscal-year-end entries: manual adjustments, tax, feed inventory --- */
+  const first = Math.min(acctFirstFY(), sel);
+  for(let fy=first; fy<=sel; fy++){
+    const fe = fyRange(fy)[1], adj = taxAdj(fy), rep = fyReport(fy);
+    add(fe,'Manual depreciation adjustment '+fy+' EFY','adj','dep',null,[drcr('6100',num(adj.depreciation)),drcr('1510',-num(adj.depreciation))]);
+    add(fe,'Manual withholding tax adjustment '+fy+' EFY','adj','adjwht','op',[drcr('1150',num(adj.wht)),drcr('1000',-num(adj.wht))]);
+    add(fe,'Income tax for '+fy+' EFY','tax','tax',null,[drcr('8000',rep.taxDue),drcr('2300',-rep.taxDue)]);
+    const wr = whtRecognised(fy);
+    add(fe,'Withholding tax credit applied '+fy+' EFY','tax','taxcredit',null,[drcr('2300',wr),drcr('1150',-wr)]);
+    add(fe,'Advance tax payments '+fy+' EFY','tax','advtax','op',[drcr('2300',num(adj.advance)),drcr('1000',-num(adj.advance))]);
+    if(inventoryOn()){
+      const delta = feedInventoryValueAsOf(fe) - feedInventoryValueAsOf(fyRange(fy-1)[1]);
+      add(fe,'Change in feed inventory '+fy+' EFY','inv','invchg',null,[drcr('1200',delta),drcr('5100',-delta)]);
+    }
+  }
+  return J.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+}
+
+/* balance of accounts up to and including a date (debit positive) */
+function bal(J, accts, cut, party){
+  let s = 0;
+  J.forEach(e=>{ if(e.date>cut) return; e.lines.forEach(l=>{ if(accts.indexOf(l[0])>=0 && (party===undefined || l[3]===party)) s += (l[1]||0)-(l[2]||0); }); });
+  return s;
+}
+function receivablesSplit(cut){
+  const b = {};
+  state.income.forEach(r=>{ if(!validDate(r.date)||r.date>cut) return; const k=r.customerId||'_anon'; b[k]=(b[k]||0)+incomeBalance(r); });
+  state.payments.forEach(p=>{ if(!validDate(p.date)||p.date>cut) return; const k=p.customerId||'_anon'; b[k]=(b[k]||0)-num(p.amount); });
+  let ar=0, adv=0; Object.keys(b).forEach(k=>{ if(b[k]>=0) ar+=b[k]; else adv+=-b[k]; });
+  return {ar, adv};
+}
+
+function balanceSheet(sel){
+  const J = buildJournal(sel), cc = fyRange(sel)[1], B = a=>bal(J,[a],cc), o = {};
+  o.rawCash = B('1000'); o.cash = Math.max(o.rawCash,0); o.overdraft = Math.max(-o.rawCash,0);
+  const sp = receivablesSplit(cc); o.ar = sp.ar; o.adv = sp.adv;
+  o.wht = B('1150'); o.inv = B('1200');
+  const taxNet = -B('2300'); o.taxPay = Math.max(taxNet,0); o.taxRefund = Math.max(-taxNet,0);
+  o.fixedCost = B('1500'); o.accDep = -B('1510'); o.fixedNet = o.fixedCost - o.accDep;
+  o.ap = -B('2000'); o.apA = -B('2050'); o.loanS = -B('2100'); o.loanL = -B('2150');
+  o.ca = o.cash + o.ar + o.wht + o.taxRefund + o.inv; o.ta = o.ca + o.fixedNet;
+  o.cl = o.overdraft + o.ap + o.apA + o.adv + o.taxPay + o.loanS; o.tl = o.cl + o.loanL;
+  o.capital = -B('3000'); o.profitCum = -bal(J,PL_ACCTS,cc); o.drawCum = B('3100');
+  o.retained = o.profitCum - o.drawCum; o.te = o.capital + o.retained;
+  o.loans = o.loanS + o.loanL; o.check = o.ta - o.tl - o.te; o.J = J;
+  return o;
+}
+
+function cashFlowData(sel){
+  const J = buildJournal(sel), oc = fyRange(sel-1)[1], cc = fyRange(sel)[1];
+  const mv = ac => bal(J,ac,cc) - bal(J,ac,oc), o = {};
+  o.pbt = -mv(PL_PRETAX); o.dep = mv(['6100']); o.loss = mv(['6900']);
+  o.ownerPaid = 0;
+  J.forEach(e=>{ if(e.date>oc && e.date<=cc && e.kind==='ownerPaidExp') e.lines.forEach(l=>{ if(l[0]==='3000') o.ownerPaid += (l[2]-l[1]); }); });
+  o.dAR = -mv(['1100']); o.dWHT = -mv(['1150']); o.dInv = -mv(['1200']); o.dAP = -mv(['2000']);
+  o.generated = o.pbt + o.dep + o.loss + o.ownerPaid + o.dAR + o.dWHT + o.dInv + o.dAP;
+  o.taxPaid = -(mv(['8000']) + mv(['2300']));
+  o.operating = o.generated + o.taxPaid;
+  const byKind = {}, byCf = {op:0, inv:0, fin:0};
+  o.nonCashAssets = 0;
+  J.forEach(e=>{
+    if(!(e.date>oc && e.date<=cc)) return;
+    e.lines.forEach(l=>{ if(l[0]==='1000'){ const v = l[1]-l[2]; byKind[e.kind]=(byKind[e.kind]||0)+v; if(e.cf && byCf[e.cf]!==undefined) byCf[e.cf]+=v; } });
+    if(e.kind==='assetCredit' || e.kind==='assetInKind'){ const l1 = e.lines.find(l=>l[0]==='1500'); if(l1) o.nonCashAssets += (l1[1]-l1[2]); }
+  });
+  o.k = byKind;
+  o.investing = byCf.inv; o.financing = byCf.fin; o.directOperating = byCf.op;
+  o.openCash = bal(J,['1000'],oc); o.closeCash = bal(J,['1000'],cc);
+  o.net = o.operating + o.investing + o.financing;
+  o.check = (o.openCash + o.net) - o.closeCash;
+  o.opCheck = o.operating - o.directOperating;
+  o.plCheck = o.pbt - fyReport(sel).netBefore;
+  return o;
+}
+
+function latestOwnershipPct(p, cc){
+  let best = null;
+  state.acct.forEach(x=>{
+    if(num(x.ownershipPct)>0 && validDate(x.date) && x.date<=cc && partyName(x.party).toLowerCase()===String(p).toLowerCase()){
+      if(!best || x.date>=best.date) best = x;
+    }
+  });
+  return best ? num(best.ownershipPct) : null;
+}
+function equityData(sel){
+  const J = buildJournal(sel), oc = fyRange(sel-1)[1], cc = fyRange(sel)[1], o = {};
+  o.capOpen = -bal(J,['3000'],oc); o.capClose = -bal(J,['3000'],cc);
+  o.reOpen = -bal(J,PL_ACCTS,oc) - bal(J,['3100'],oc);
+  o.profit = -(bal(J,PL_ACCTS,cc) - bal(J,PL_ACCTS,oc));
+  o.draw = bal(J,['3100'],cc) - bal(J,['3100'],oc);
+  o.reClose = o.reOpen + o.profit - o.draw;
+  const cap = {}; const partyFlow = {};
+  J.forEach(e=>{
+    if(!(e.date>oc && e.date<=cc)) return;
+    e.lines.forEach(l=>{
+      if(l[0]==='3000'){
+        cap[e.kind] = (cap[e.kind]||0) + (l[2]-l[1]);
+        const pf = partyFlow[l[3]] || (partyFlow[l[3]] = {contrib:0, transfer:0});
+        if(e.kind==='xfer') pf.transfer += (l[2]-l[1]); else pf.contrib += (l[2]-l[1]);
+      }
+    });
+  });
+  o.cap = cap;
+  o.contribCash = cap.inv||0; o.saleOwn = cap.saleown||0; o.inKind = (cap.assetInKind||0) + (cap.ownerPaidExp||0);
+  o.capCheck = o.capOpen + o.contribCash + o.saleOwn + o.inKind - o.capClose;
+  const parties = new Set();
+  J.forEach(e=>{ if(e.date<=cc) e.lines.forEach(l=>{ if((l[0]==='3000'||l[0]==='3100') && l[3]) parties.add(l[3]); }); });
+  o.owners = Array.from(parties).map(p=>{
+    const pf = partyFlow[p] || {contrib:0, transfer:0};
+    return {name:p, open:-bal(J,['3000'],oc,p), contrib:pf.contrib, transfer:pf.transfer, close:-bal(J,['3000'],cc,p),
+            draw:bal(J,['3100'],cc,p)-bal(J,['3100'],oc,p), pct:latestOwnershipPct(p,cc)};
+  }).filter(r=>Math.abs(r.open)+Math.abs(r.contrib)+Math.abs(r.transfer)+Math.abs(r.close)+Math.abs(r.draw)>0.005);
+  o.J = J;
+  return o;
+}
+
+function loanRegister(cc){
+  const m = {};
+  const get = x => { const k = lenderName(x).toLowerCase(); return m[k] || (m[k] = {name:lenderName(x), term:null, borrowed:0, repaid:0, interest:0, rate:null, due:''}); };
+  state.acct.forEach(x=>{
+    const open = isOpeningType(x.type);
+    if(!open && !(validDate(x.date) && x.date<=cc)) return;
+    if(x.type===AT.LOAN || x.type===AT.OPLOAN){ const g = get(x); g.borrowed += num(x.amount); g.term = loanTermFor(x); if(num(x.interestRate)>0) g.rate = num(x.interestRate); if(x.dueDate) g.due = x.dueDate; }
+    else if(x.type===AT.REPAY){ get(x).repaid += num(x.amount); }
+    else if(x.type===AT.INT && String(x.party||'').trim()){ get(x).interest += num(x.amount); }
+  });
+  return Object.keys(m).map(k=>{ const g = m[k]; if(!g.term) g.term = TERM_LONG; return g; });
+}
+
+function acctValidate(r){
+  const ty = r.type, open = isOpeningType(ty);
+  if(!ty) return 'Choose a transaction type.';
+  if(!(num(r.amount)>0)) return 'Amount must be greater than zero.';
+  if(!open && !validDate(r.date)) return 'Date is required.';
+  if([AT.SALE,AT.XFER,AT.LOAN,AT.REPAY,AT.OPLOAN].includes(ty) && !String(r.party||'').trim()) return 'Please enter the name (partner / investor / lender).';
+  if(ty===AT.XFER){
+    if(!String(r.fromParty||'').trim()) return 'Enter who the share is transferred from.';
+    if(String(r.fromParty).trim().toLowerCase()===String(r.party).trim().toLowerCase()) return 'The two owners must be different people.';
+  }
+  if(ty!==AT.XFER) r.fromParty = '';
+  if(![AT.INV,AT.SALE,AT.XFER].includes(ty)) r.ownershipPct = 0;
+  if(![AT.LOAN,AT.REPAY,AT.OPLOAN].includes(ty)) r.loanTerm = '';
+  if(![AT.LOAN,AT.OPLOAN].includes(ty)){ r.interestRate = 0; r.dueDate = ''; }
+  if(open) r.date = r.date || '';
+  return '';
+}
+
+/* ================= ACCOUNTING TAB ================= */
+function simpleTable(headers, bodyRows){
+  return `<div class="panel"><div class="tablewrap"><table><thead><tr>${headers.map(h=>`<th${h.num?' class="num"':''}>${h.label}</th>`).join('')}</tr></thead><tbody>${bodyRows}</tbody></table></div></div>`;
+}
+function acctDetails(x){
+  const bits = [];
+  if(x.type===AT.LOAN || x.type===AT.OPLOAN || x.type===AT.REPAY){ bits.push(String(loanTermFor(x)).indexOf('Short')===0 ? 'Short-term' : 'Long-term'); }
+  if(num(x.interestRate)>0) bits.push(num(x.interestRate)+'% interest');
+  if(x.dueDate) bits.push('due '+x.dueDate);
+  if(x.type===AT.XFER && x.fromParty) bits.push('from '+x.fromParty);
+  if(num(x.ownershipPct)>0) bits.push(num(x.ownershipPct)+'% ownership');
+  return bits.join(' · ');
+}
+function renderAccounting(){
+  const years = fyList();
+  const efy = years.includes(reportsYear) ? reportsYear : currentEFY();
+  const bs = balanceSheet(efy), eq = equityData(efy), cc = fyRange(efy)[1];
+  const kpi = (label,val,neg)=>`<div class="kpi-card"><div class="kpi-label">${t(label)}</div><div class="kpi-value mono${neg?' neg':''}">${val}</div></div>`;
+  const kpis = [
+    kpi('Cash & bank', fmtMoney(bs.rawCash), bs.rawCash<0),
+    kpi('Loans outstanding', fmtMoney(bs.loans), false),
+    kpi("Owner's capital", fmtMoney(bs.capital), false),
+    kpi("Total owner's equity", fmtMoney(bs.te), bs.te<0),
+    kpi('Receivables', fmtMoney(bs.ar), false),
+    kpi('Payables', fmtMoney(bs.ap+bs.apA), false)
+  ].join('');
+
+  const loanRows = loanRegister(cc).map(g=>`<tr><td>${escHtml(g.name)}</td><td>${String(g.term).indexOf('Short')===0?'Short-term':'Long-term'}</td>
+    <td class="num mono">${fmtMoney(g.borrowed)}</td><td class="num mono">${fmtMoney(g.repaid)}</td>
+    <td class="num mono"><strong>${fmtMoney(g.borrowed-g.repaid)}</strong></td><td class="num mono">${fmtMoney(g.interest)}</td>
+    <td class="num mono">${g.rate!==null?g.rate+'%':'—'}</td><td>${g.due||'—'}</td></tr>`).join('') || emptyRow(8,'No loans recorded yet.');
+  const ownerRows = eq.owners.map(o=>`<tr><td>${escHtml(o.name)}</td><td class="num mono">${fmtMoney(o.open)}</td><td class="num mono">${fmtMoney(o.contrib)}</td>
+    <td class="num mono">${fmtAcc(o.transfer)}</td><td class="num mono"><strong>${fmtMoney(o.close)}</strong></td><td class="num mono">${fmtMoney(o.draw)}</td>
+    <td class="num mono">${o.pct!==null?o.pct+'%':'—'}</td></tr>`).join('') || emptyRow(7,'No owner capital recorded yet.');
+
+  const rows = state.acct.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>`
+    <tr><td>${isOpeningType(x.type)?'Opening':fmtDate(x.date)}</td><td>${escHtml(x.type)}</td><td>${escHtml(x.party)}</td>
+    <td class="num mono"><strong>${fmtMoney(x.amount)}</strong></td><td class="notes-cell">${escHtml(acctDetails(x))}</td>
+    <td class="mono">${escHtml(x.refNo)}</td><td class="notes-cell">${escHtml(x.notes)}</td>${rowActionsHtml('acct', x.id)}</tr>`).join('')
+    || emptyRow(8,'No accounting transactions yet. Start with an opening balance or an owner investment.');
+
+  const inv = inventoryOn();
   return `
-  <div class="pagehead"><div><h1>Reports</h1><p>Profit &amp; Loss — by category, by year, by month, and year-to-date.</p></div></div>
-
-  <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-label">YTD Income</div><div class="kpi-value mono">${fmtMoney(yInc)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">YTD Expenses</div><div class="kpi-value mono">${fmtMoney(yExp)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">YTD Net Profit</div><div class="kpi-value mono${yNet<0?' neg':''}">${fmtMoney(yNet)}</div></div>
+  <div class="pagehead">
+    <div><h1>${t('Accounting')}</h1><p>Loans, owner investment, sale of ownership, drawings and other transactions. Figures below are as at the end of ${efy} EFY (change the year in Reports).</p></div>
+    <button class="btn btn-primary" id="addAcct">+ ${t('Add transaction')}</button>
   </div>
+  <div class="kpi-grid">${kpis}</div>
+  ${Math.abs(bs.check)>0.01 ? `<div class="panel"><div class="panel-pad" style="color:var(--clay);font-weight:600;">⚠ The books are out of balance by ${fmtMoney(bs.check)}. Please report this.</div></div>` : ''}
+  ${bs.rawCash<0 ? `<div class="panel"><div class="panel-pad" style="color:var(--clay);">⚠ Cash is negative. Money must have come from somewhere: record your opening cash, owner investment or loan below (and mark existing assets "Owned before using this app" in the Assets tab).</div></div>` : ''}
 
-  <div class="two-col">
-    <div class="panel"><div class="panel-pad"><div class="section-title" style="margin-top:0">Income by Category</div></div>
-      <div class="tablewrap"><table><thead><tr><th>Category</th><th class="num">Amount</th></tr></thead><tbody>${incRows}
-      <tr><td><strong>Total Income</strong></td><td class="num mono"><strong>${fmtMoney(totalInc)}</strong></td></tr></tbody></table></div>
-    </div>
-    <div class="panel"><div class="panel-pad"><div class="section-title" style="margin-top:0">Expenses by Category</div></div>
-      <div class="tablewrap"><table><thead><tr><th>Category</th><th class="num">Amount</th></tr></thead><tbody>${expRows}
-      <tr><td><strong>Total Expenses</strong></td><td class="num mono"><strong>${fmtMoney(totalExp)}</strong></td></tr></tbody></table></div>
-    </div>
-  </div>
-
-  <div class="panel"><div class="panel-pad" style="display:flex;justify-content:space-between;align-items:center;">
-    <strong style="color:var(--surface)">.</strong>
-    <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--surface)">NET PROFIT / (LOSS)</div>
-    <div class="mono" style="font-weight:700;font-size:17px;color:var(--surface)">${fmtMoney(net)}</div>
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">How to record common situations</div>
+    <ul style="margin:0;padding-left:18px;line-height:1.7;font-size:13px;">
+      <li><strong>Cash / bank you already had when you started</strong> → "Opening balance — cash &amp; bank". Existing bank loan → "Opening balance — loan owed".</li>
+      <li><strong>Owner puts money in</strong> → "Owner investment (cash)". <strong>New partner / investor buys a share</strong> → "Sale of ownership" (money goes into the business, name + ownership %).</li>
+      <li><strong>One owner sells part of their share to another person</strong> → "Ownership transfer" (no cash enters the business).</li>
+      <li><strong>Bank / lender loan</strong> → "Loan received". Each instalment: "Loan repayment (principal)" plus, separately, "Loan interest paid" (interest is an expense).</li>
+      <li><strong>Owner takes money out</strong> → "Owner drawing / profit distribution" (not an expense).</li>
+      <li><strong>Bought equipment / a building</strong> → Assets tab; choose how it was paid. <strong>Bill not yet paid</strong> → Expenses tab, status "Unpaid", then "Payment to supplier" when you pay.</li>
+      <li><strong>Sold an asset</strong> → Assets tab: enter the date disposed and the sale proceeds. <strong>Tax paid to the authority</strong> → "Income tax paid".</li>
+    </ul>
   </div></div>
 
-  <div class="section-title">Yearly Profit &amp; Loss</div>
-  ${tableShell([{label:'Year'},{label:'Income',num:true},{label:'Expenses',num:true},{label:'Net Profit',num:true}], yearlyRows)}
-
-  <div class="pagehead" style="align-items:center;">
-    <div class="section-title" style="margin:0">Monthly Profit &amp; Loss</div>
-    <label style="font-size:12.5px;font-weight:600;color:var(--ink-soft);display:flex;align-items:center;gap:8px;">
-      Year:
-      <select id="reportsYearSelect" style="padding:6px 8px;border-radius:8px;border:1px solid var(--rule);font-family:inherit;">${yearOptions}</select>
+  <div class="panel"><div class="panel-pad">
+    <label class="calc-field" style="max-width:340px;margin-bottom:14px;">Main owner's name (used when a name is left blank, and for assets or expenses the owner contributes)
+      <input type="text" id="acctOwnerName" value="${escHtml((state.setup.acctOpts && state.setup.acctOpts.ownerName) || '')}" placeholder="Owner">
     </label>
-  </div>
-  ${tableShell([{label:'Month'},{label:'Income',num:true},{label:'Expenses',num:true},{label:'Net Profit',num:true}],
-    monthlyRows + `<tr><td><strong>Total</strong></td><td class="num mono"><strong>${fmtMoney(monthlyTotalInc)}</strong></td><td class="num mono"><strong>${fmtMoney(monthlyTotalExp)}</strong></td><td class="num mono"><strong>${fmtMoney(monthlyTotalInc-monthlyTotalExp)}</strong></td></tr>`)}
+    <label style="display:flex;gap:10px;align-items:flex-start;font-size:13px;">
+      <input type="checkbox" id="acctInvToggle" ${inv?'checked':''} style="margin-top:3px;">
+      <span><strong>Show feed stock as inventory (asset)</strong><br>
+      <span class="note" style="margin:0;">Off (default): feed is expensed when bought, exactly as your Expenses tab does now. On: unused feed at year-end (valued at average purchase cost from the Feed tab) is shown as an asset and the cost of production is reduced by the increase in stock. Do not switch on unless every feed purchase is entered in the Feed tab.</span></span>
+    </label>
+  </div></div>
+
+  <div class="section-title">Loans</div>
+  ${simpleTable([{label:'Lender'},{label:'Term'},{label:'Borrowed',num:true},{label:'Repaid',num:true},{label:'Outstanding',num:true},{label:'Interest paid',num:true},{label:'Rate',num:true},{label:'Final due'}], loanRows)}
+
+  <div class="section-title">${t("Owners' capital accounts")}</div>
+  ${simpleTable([{label:'Owner / partner'},{label:'Opening capital',num:true},{label:'Contributed',num:true},{label:'Transfers in / (out)',num:true},{label:'Closing capital',num:true},{label:'Drawings this year',num:true},{label:'Ownership % (as recorded)',num:true}], ownerRows)}
+
+  <div class="section-title">All accounting transactions</div>
+  ${tableShell([{label:'Date'},{label:'Type'},{label:'Name'},{label:'Amount',num:true},{label:'Details'},{label:'Ref No.'},{label:'Notes'}], rows)}
+  <p class="note">Sales, expenses, customer payments and fixed assets already recorded in their own tabs are picked up automatically. Only record here what has no other tab.</p>
   `;
+}
+
+/* ================= STATEMENTS ================= */
+function repLine(label, amt, cls){ return `<tr><td class="${cls||'ind'}">${escHtml(t(label))}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(amt)}</td></tr>`; }
+function repLine2(label, a, b, cls){ return `<tr><td class="${cls||'ind'}">${escHtml(t(label))}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(a)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(b)}</td></tr>`; }
+function repSec(label, cols){ return `<tr><td class="sec" colspan="${cols||2}">${escHtml(t(label))}</td></tr>`; }
+function repHeader(title, efy, asAt){
+  const tx = taxProfile(), rng = fyRange(efy), em = (lang==='am') ? EC_MONTHS_AM : EC_MONTHS_EN;
+  const period = asAt ? `${t('As at')} ${em[9]} 30, ${efy} (${rng[1]})`
+                      : `${em[10]} 1, ${efy-1} – ${em[9]} 30, ${efy} (${rng[0]} → ${rng[1]})`;
+  return `<div class="rep-head"><h2>${t(title)}</h2><div style="color:var(--ink-soft);font-size:12.5px;">${t('Financial Report')}</div></div>
+    <div class="rep-meta">
+      <div><strong>${t('Business name')}:</strong> ${escHtml(tx.businessName)}</div>
+      <div><strong>${t('TIN')}:</strong> ${escHtml(tx.tin)||'—'}</div>
+      <div><strong>${t('Currency')}:</strong> ${t('ETB')}</div>
+      <div><strong>${t('Fiscal year')}:</strong> ${efy} EFY</div>
+      <div style="grid-column:1/-1"><strong>${asAt?t('Position date'):t('Period')}:</strong> ${period}</div>
+    </div>`;
+}
+function repFooter(){ return `<div style="display:flex;justify-content:space-between;margin-top:34px;font-size:12.5px;"><div>${t('Prepared by')}: ____________________</div><div>${t('Signature / stamp')}: ____________________</div></div>`; }
+function repWarn(msg){ return `<div class="no-print" style="background:var(--clay-soft);color:var(--clay);border-radius:8px;padding:9px 12px;margin:0 0 12px;font-size:12.5px;font-weight:600;">⚠ ${msg}</div>`; }
+function repOk(msg){ return `<div class="no-print" style="background:#DCEBDD;color:var(--green-dark);border-radius:8px;padding:9px 12px;margin:0 0 12px;font-size:12.5px;font-weight:600;">✓ ${msg}</div>`; }
+
+function renderBalanceSheet(efy){
+  const c = balanceSheet(efy), p = balanceSheet(efy-1);
+  const rows = [];
+  const R = (label,key,cls)=>{ rows.push(repLine2(label, c[key], p[key], cls)); };
+  const Rif = (label,key)=>{ if(Math.abs(c[key])>0.005 || Math.abs(p[key])>0.005) R(label,key); };
+  rows.push(repSec('ASSETS',3));
+  rows.push(repSec('Current assets',3));
+  R('Cash and bank','cash'); R('Accounts receivable (customers)','ar'); Rif('Withholding tax receivable','wht'); Rif('Income tax refundable','taxRefund'); Rif('Feed inventory','inv');
+  R('Total current assets','ca','tot');
+  rows.push(repSec('Non-current assets',3));
+  R('Fixed assets at cost','fixedCost'); rows.push(repLine2('Less: accumulated depreciation', -c.accDep, -p.accDep));
+  R('Net book value of fixed assets','fixedNet','tot');
+  R('TOTAL ASSETS','ta','tot');
+  rows.push(repSec('LIABILITIES',3));
+  rows.push(repSec('Current liabilities',3));
+  Rif('Bank overdraft (negative cash)','overdraft'); R('Accounts payable (suppliers)','ap'); Rif('Payable to asset suppliers','apA'); Rif('Customer advances / deposits','adv'); Rif('Income tax payable','taxPay'); R('Loans payable — short-term','loanS');
+  R('Total current liabilities','cl','tot');
+  rows.push(repSec('Non-current liabilities',3));
+  R('Loans payable — long-term','loanL');
+  R('TOTAL LIABILITIES','tl','tot');
+  rows.push(repSec("OWNER'S EQUITY",3));
+  R("Owner's capital (contributed)",'capital'); R('Retained earnings (profit after tax, less drawings)','retained');
+  R("TOTAL OWNER'S EQUITY",'te','tot');
+  rows.push(repLine2('TOTAL LIABILITIES + EQUITY', c.tl+c.te, p.tl+p.te, 'tot'));
+  const warns = [];
+  if(Math.abs(c.check)>0.01) warns.push(`The balance sheet is out of balance by ${fmtMoney(c.check)}. Please report this.`);
+  if(c.rawCash<0) warns.push('Cash is negative, which cannot really happen. Record your opening cash balance, owner investment or loans in the Accounting tab, and mark assets you already owned as "Owned before using this app".');
+  const ok = Math.abs(c.check)<=0.01 ? repOk('Balanced: total assets = total liabilities + owner\'s equity') : '';
+  return `
+  ${warns.map(repWarn).join('')}${ok}
+  <div class="rep-sheet">
+    ${repHeader('Balance Sheet (Statement of Financial Position)', efy, true)}
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Description')}</th><th class="num">${efy} EFY</th><th class="num">${efy-1} EFY</th></tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table></div>
+    <p class="note">Fixed assets follow the Assets tab (no part-year depreciation). Customer balances are split into receivables and advances. Feed stock is an asset only if switched on in the Accounting tab.</p>
+    ${repFooter()}
+  </div>`;
+}
+
+function renderCashFlow(efy){
+  const c = cashFlowData(efy), k = c.k;
+  const kv = key => k[key]||0;
+  const rows = [];
+  rows.push(repSec('OPERATING ACTIVITIES'));
+  rows.push(repLine('Net profit / (loss) before tax', c.pbt));
+  rows.push(repLine('Add: depreciation', c.dep));
+  if(Math.abs(c.loss)>0.005) rows.push(repLine('Add: loss / (less: gain) on disposal of assets', c.loss));
+  if(Math.abs(c.ownerPaid)>0.005) rows.push(repLine('Add: expenses paid personally by owner (non-cash)', c.ownerPaid));
+  rows.push(repLine('(Increase) / decrease in receivables (net of customer advances)', c.dAR));
+  if(Math.abs(c.dWHT)>0.005) rows.push(repLine('(Increase) / decrease in withholding tax receivable', c.dWHT));
+  if(Math.abs(c.dInv)>0.005) rows.push(repLine('(Increase) / decrease in feed inventory', c.dInv));
+  rows.push(repLine('Increase / (decrease) in payables', c.dAP));
+  rows.push(repLine('Cash generated from operations', c.generated, 'tot'));
+  rows.push(repLine('Income tax paid (including tax withheld by customers)', c.taxPaid));
+  rows.push(repLine('NET CASH FROM OPERATING ACTIVITIES', c.operating, 'tot'));
+  rows.push(repSec('INVESTING ACTIVITIES'));
+  rows.push(repLine('Purchase of fixed assets (paid in cash)', kv('asset')));
+  if(Math.abs(kv('asupp'))>0.005) rows.push(repLine('Payments to asset suppliers', kv('asupp')));
+  rows.push(repLine('Proceeds from sale of fixed assets', kv('disposal')));
+  rows.push(repLine('NET CASH FROM INVESTING ACTIVITIES', c.investing, 'tot'));
+  rows.push(repSec('FINANCING ACTIVITIES'));
+  rows.push(repLine('Owner investment (cash)', kv('inv')));
+  rows.push(repLine('Sale of ownership (new partners / investors)', kv('saleown')));
+  rows.push(repLine('Loans received', kv('loan')));
+  rows.push(repLine('Loan repayments (principal)', kv('repay')));
+  rows.push(repLine('Owner drawings / profit distributions', kv('draw')));
+  rows.push(repLine('NET CASH FROM FINANCING ACTIVITIES', c.financing, 'tot'));
+  rows.push(repSec('CASH AND BANK'));
+  rows.push(repLine('Net increase / (decrease) in cash', c.net, 'tot'));
+  rows.push(repLine('Cash and bank at beginning of year', c.openCash));
+  rows.push(repLine('CASH AND BANK AT END OF YEAR', c.closeCash, 'tot'));
+  const warns = [];
+  if(Math.abs(c.check)>0.01) warns.push('Cash flow does not agree with the balance sheet cash. Please report this.');
+  if(Math.abs(c.opCheck)>0.01) warns.push('Operating cash flow (indirect) differs from the cash actually recorded by '+fmtMoney(c.opCheck)+'. Please report this.');
+  if(c.closeCash<0) warns.push('Cash is negative — record opening cash, owner investment or loans in the Accounting tab.');
+  const ok = warns.length===0 ? repOk('Cash flow agrees with the balance sheet cash balance') : '';
+  const nc = [];
+  if(c.nonCashAssets>0.005) nc.push('Assets acquired on supplier credit or contributed by the owner: '+fmtMoney(c.nonCashAssets));
+  if(Math.abs(c.ownerPaid)>0.005) nc.push('Expenses paid personally by the owner (treated as capital contribution): '+fmtMoney(c.ownerPaid));
+  return `
+  ${warns.map(repWarn).join('')}${ok}
+  <div class="rep-sheet">
+    ${repHeader('Cash Flow Statement', efy, false)}
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table></div>
+    <p class="note">Indirect method. Interest paid is included in operating activities. Withholding tax deducted by customers is shown as tax paid.</p>
+    ${nc.length ? `<p class="note"><strong>Non-cash transactions (not in the statement above):</strong> ${nc.map(escHtml).join('; ')}.</p>` : ''}
+    ${repFooter()}
+  </div>`;
+}
+
+function renderEquityReport(efy){
+  const e = equityData(efy);
+  const row3 = (label,a,b,cls)=>`<tr><td class="${cls||'ind'}">${escHtml(t(label))}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(a)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(b)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(a+b)}</td></tr>`;
+  const rows = [];
+  rows.push(row3('Balance at beginning of year', e.capOpen, e.reOpen, 'tot'));
+  rows.push(row3('Capital contributed in cash by owners', e.contribCash, 0));
+  rows.push(row3('Sale of ownership (new partners / investors)', e.saleOwn, 0));
+  if(Math.abs(e.inKind)>0.005) rows.push(row3('Assets contributed / expenses paid personally by owner', e.inKind, 0));
+  rows.push(row3('Net profit / (loss) for the year (after tax)', 0, e.profit));
+  rows.push(row3('Owner drawings / profit distributions', 0, -e.draw));
+  rows.push(row3('BALANCE AT END OF YEAR', e.capClose, e.reClose, 'tot'));
+  const ownerRows = e.owners.map(o=>`<tr><td class="ind">${escHtml(o.name)}</td><td class="num mono">${fmtAcc(o.open)}</td><td class="num mono">${fmtAcc(o.contrib)}</td><td class="num mono">${fmtAcc(o.transfer)}</td><td class="num mono"><strong>${fmtAcc(o.close)}</strong></td><td class="num mono">${fmtAcc(o.draw)}</td><td class="num mono">${o.pct!==null?o.pct+'%':'—'}</td></tr>`).join('')
+    || `<tr><td class="ind" colspan="7" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
+  const warns = [];
+  if(Math.abs(e.capCheck)>0.01) warns.push('Owner capital movements do not add up (difference '+fmtMoney(e.capCheck)+'). Please report this.');
+  if(e.capClose===0 && e.saleOwn===0 && e.contribCash===0) warns.push('No owner capital recorded yet. Use Accounting → Add transaction → "Owner investment" or "Opening balance — cash & bank".');
+  return `
+  ${warns.map(repWarn).join('')}
+  <div class="rep-sheet">
+    ${repHeader("Statement of Changes in Owner's Equity", efy, false)}
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Description')}</th><th class="num">${t("Owner's capital")}</th><th class="num">${t('Retained earnings')}</th><th class="num">${t('Total')}</th></tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table></div>
+    <div class="section-title">${t("Capital by owner / partner")}</div>
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Owner / partner')}</th><th class="num">${t('Opening capital')}</th><th class="num">${t('Contributed')}</th><th class="num">${t('Transfers in / (out)')}</th><th class="num">${t('Closing capital')}</th><th class="num">${t('Drawings this year')}</th><th class="num">${t('Ownership % (as recorded)')}</th></tr></thead>
+      <tbody>${ownerRows}</tbody>
+    </table></div>
+    <p class="note">Retained earnings = accumulated profit after tax less owner drawings. Ownership % is the last figure you entered for each person; the app does not compute it from money paid in.</p>
+    ${repFooter()}
+  </div>`;
+}
+
+function renderTrialBalance(efy){
+  const b = balanceSheet(efy), J = b.J, cc = fyRange(efy)[1], oc = fyRange(efy-1)[1], rep = fyReport(efy);
+  let td = 0, tc = 0;
+  const tbRows = Object.keys(ACCT_NAMES).map(a=>{
+    const v = bal(J,[a],cc); if(Math.abs(v)<0.005) return '';
+    if(v>0) td += v; else tc += -v;
+    return `<tr><td class="mono">${a}</td><td class="ind" style="padding-left:10px;">${escHtml(t(ACCT_NAMES[a]))}</td><td class="num mono">${v>0?fmtMoney(v):''}</td><td class="num mono">${v<0?fmtMoney(-v):''}</td></tr>`;
+  }).join('') || `<tr><td colspan="4" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
+  const ledgerProfit = -(bal(J,PL_PRETAX,cc) - bal(J,PL_PRETAX,oc));
+  const diffPL = ledgerProfit - rep.netBefore;
+  const entries = J.filter(e=>e.date>oc && e.date<=cc);
+  const jRows = entries.map(e=>e.lines.map((l,i)=>`<tr><td class="mono">${i===0?escHtml(e.date):''}</td><td>${i===0?escHtml(e.desc):''}</td><td>${l[0]} ${escHtml(t(ACCT_NAMES[l[0]]||''))}${l[3]?' ('+escHtml(l[3])+')':''}</td><td class="num mono">${l[1]?fmtMoney(l[1]):''}</td><td class="num mono">${l[2]?fmtMoney(l[2]):''}</td></tr>`).join('')).join('')
+    || `<tr><td colspan="5" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
+  const warns = [];
+  if(Math.abs(td-tc)>0.01) warns.push('Trial balance does not balance (difference '+fmtMoney(td-tc)+'). Please report this.');
+  if(Math.abs(diffPL)>0.01) warns.push('Ledger profit differs from the Profit & Loss report by '+fmtMoney(diffPL)+'. Please report this.');
+  const ok = warns.length===0 ? repOk('Trial balance balances and the ledger profit agrees with the Profit & Loss report') : '';
+  return `
+  ${warns.map(repWarn).join('')}${ok}
+  <div class="rep-sheet">
+    ${repHeader('Trial Balance (cumulative)', efy, true)}
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Code')}</th><th>${t('Account')}</th><th class="num">${t('Debit')}</th><th class="num">${t('Credit')}</th></tr></thead>
+      <tbody>${tbRows}<tr><td class="tot"></td><td class="tot">${t('Total')}</td><td class="num mono tot">${fmtMoney(td)}</td><td class="num mono tot">${fmtMoney(tc)}</td></tr></tbody>
+    </table></div>
+    <p class="note">Income and expense accounts are cumulative since the first record (they are not closed at year-end in this view).</p>
+    <div class="section-title">${t('General journal')} — ${efy} EFY</div>
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Date')}</th><th>${t('Description')}</th><th>${t('Account')}</th><th class="num">${t('Debit')}</th><th class="num">${t('Credit')}</th></tr></thead>
+      <tbody>${jRows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+/* ================= REPORTS (P&L + statements) ================= */
+let reportView = 'pl';
+function renderReports(){
+  const years = fyList();
+  if(!years.includes(reportsYear)) reportsYear = currentEFY();
+  const efy = reportsYear;
+  const yearOptions = years.map(y=>`<option value="${y}" ${y===efy?'selected':''}>${y}</option>`).join('');
+  const views = [['pl','Profit & Loss'],['bs','Balance Sheet'],['cf','Cash Flow'],['eq',"Owner's Equity"],['tb','Ledger / Trial Balance']];
+  const tabs = views.map(v=>`<button class="toggle-btn${reportView===v[0]?' active':''}" data-repview="${v[0]}">${t(v[1])}</button>`).join('');
+  let body;
+  try{
+    body = reportView==='bs' ? renderBalanceSheet(efy) : reportView==='cf' ? renderCashFlow(efy) : reportView==='eq' ? renderEquityReport(efy) : reportView==='tb' ? renderTrialBalance(efy) : renderPLBody(efy);
+  }catch(err){
+    console.error(err);
+    body = `<div class="panel"><div class="panel-pad" style="color:var(--clay);">⚠ Could not build this report: ${escHtml(err.message)}</div></div>`;
+  }
+  return `
+  <div class="pagehead no-print">
+    <div><h1>${t('Financial Report')}</h1><p>${t('Fiscal year')} ${efy} EFY</p></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="reportsYearSelect" style="padding:8px;border-radius:8px;border:1px solid var(--rule);font-family:inherit;">${yearOptions}</select>
+      <button class="btn btn-primary" id="printReport">🖨 ${t('Print / Save PDF')}</button>
+    </div>
+  </div>
+  <div class="toggle-row no-print" style="flex-wrap:wrap;">${tabs}</div>
+  ${body}`;
+}
+
+function renderPLBody(efy){
+  const tx = taxProfile();
+  const adj = taxAdj(efy), r = fyReport(efy);
+  const rng = fyRange(efy);
+  const isAm = lang==='am';
+  const em = isAm ? EC_MONTHS_AM : EC_MONTHS_EN;
+  const fyText = `${em[10]} 1, ${efy-1} – ${em[9]} 30, ${efy} (${rng[0]} → ${rng[1]})`;
+  const line = (label, amt, cls) => `<tr><td class="${cls||'ind'}">${escHtml(label)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtMoney(amt)}</td></tr>`;
+  const sec = label => `<tr><td class="sec" colspan="2">${t(label)}</td></tr>`;
+  const list = (arr) => arr.length ? arr.map(x=>line(x.cat, x.amt)).join('') : `<tr><td class="ind" colspan="2" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
+  const byType = livestockByType();
+  const stockRows = state.setup.animalTypes.map(a=>`<tr><td class="ind">${escHtml(a)}</td><td class="num mono">${fmtNum(byType[a]||0)}</td></tr>`).join('');
+  const inp = (id, label, val, type) => `<label class="calc-field">${t(label)}<input type="${type||'number'}" step="any" id="${id}" value="${escHtml(val)}"></label>`;
+
+  return `
+  <div class="panel no-print"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">${t('Business & tax details')}</div>
+    <div class="calc-grid">
+      ${inp('taxBusinessName','Business name',tx.businessName,'text')}
+      ${inp('taxTin','TIN',tx.tin,'text')}
+      <label class="calc-field">${t('Taxpayer category')}
+        <select id="taxRegime">
+          <option value="B" ${tx.regime==='B'?'selected':''}>${t('Category B — presumptive tax on gross sales')}</option>
+          <option value="A" ${tx.regime==='A'?'selected':''}>${t('Category A — tax on net profit')}</option>
+        </select>
+      </label>
+      ${inp('taxRatePct','Tax rate (%)',tx.taxRatePct)}
+      ${inp('taxOverride','Tax override (ETB)',tx.taxOverride)}
+    </div>
+    <div class="section-title">${t('Adjustments for this year')} (${efy} EFY)</div>
+    <div class="calc-grid">
+      ${inp('adjDepreciation','Other depreciation (manual)',adj.depreciation)}
+      ${inp('adjNonDeductible','Extra non-deductible expenses (manual)',adj.nonDeductible)}
+      ${inp('adjExempt','Extra exempt income (manual)',adj.exempt)}
+      ${inp('adjWht','Extra withholding tax (manual)',adj.wht)}
+      ${inp('adjAdvance','Less: quarterly advance payments made',adj.advance)}
+    </div>
+  </div></div>
+
+  <div class="rep-sheet">
+    <div class="rep-head"><h2>${t('Profit & Loss Statement')}</h2><div style="color:var(--ink-soft);font-size:12.5px;">${t('Financial Report')}</div></div>
+    <div class="rep-meta">
+      <div><strong>${t('Business name')}:</strong> ${escHtml(tx.businessName)}</div>
+      <div><strong>${t('TIN')}:</strong> ${escHtml(tx.tin)||'—'}</div>
+      <div><strong>${t('Taxpayer category')}:</strong> ${t('Category')} ${tx.regime}</div>
+      <div><strong>${t('Currency')}:</strong> ${t('ETB')}</div>
+      <div style="grid-column:1/-1"><strong>${t('Tax year')}:</strong> ${fyText}</div>
+      <div style="grid-column:1/-1"><strong>${t('Report date')}:</strong> ${ethDateStr(todayISO())} (${todayISO()})</div>
+    </div>
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead>
+      <tbody>
+        ${sec('1. Revenue')}${list(r.revenue)}${line(t('Total revenue'), r.totRev,'tot')}
+        ${sec('2. Cost of production')}${list(r.cop)}${line(t('Total cost of production'), r.totCop,'tot')}
+        ${sec('3. Gross profit')}${line(t('3. Gross profit'), r.gross,'tot')}
+        ${sec('4. Operating expenses')}${list(r.opex)}${line(t('Total operating expenses'), r.totOpex,'tot')}
+        ${sec('5. Depreciation')}${line(t('5. Depreciation'), r.dep)}
+        ${sec('5b. Finance costs and other items')}${line(t('Finance costs (loan interest)'), r.finance)}${line(t('Other income (grants, interest earned)'), r.otherInc)}${line(t('Gain / (loss) on disposal of assets'), r.gainLoss)}
+        ${sec('6. Net profit / (loss) before tax')}${line(t('6. Net profit / (loss) before tax'), r.netBefore,'tot')}
+        ${tx.regime==='A'
+          ? sec('7. Tax adjustments')+line(t('Add: non-deductible expenses'), r.nonDed)+line(t('Less: exempt income'), r.exempt)+sec('8. Taxable income')+line(t('8. Taxable income'), r.taxable,'tot')
+          : sec('Presumptive tax on gross sales')+line(t('Gross sales (tax base)'), r.totRev,'tot')}
+        <tr><td class="ind">${t('Tax rate (%)')}</td><td class="num mono">${num(tx.taxOverride)>0?'—':num(tx.taxRatePct)+'%'}</td></tr>
+        ${line(t('Tax due'), r.taxDue,'tot')}
+        ${line(t('Net profit / (loss) after tax'), r.netAfter,'tot')}
+        ${sec('9. Tax credits')}${line(t('Less: withholding tax already deducted'), r.wht)}${line(t('Less: quarterly advance payments made'), r.advance)}
+        ${line(t('Net tax payable / (refundable)'), r.netPayable,'tot')}
+      </tbody>
+    </table></div>
+
+    <div class="section-title">${t('10. Livestock on hand')}</div>
+    <div class="tablewrap"><table class="rep-table"><thead><tr><th>${t('Animal type')}</th><th class="num">${t('Quantity')}</th></tr></thead><tbody>${stockRows}</tbody></table></div>
+
+    <div style="display:flex;justify-content:space-between;margin-top:34px;font-size:12.5px;">
+      <div>${t('Prepared by')}: ____________________</div><div>${t('Signature / stamp')}: ____________________</div>
+    </div>
+  </div>
+  <p class="note no-print">Fiscal year boundary is fixed at Jul 8 – Jul 7; check entries dated on those days in Ethiopian leap-year cycles. Tax is computed from the rate or override you enter — confirm rates and category with the tax authority or your accountant.</p>
+  `;
+}
+
+function attachReportEvents(){
+  const tx = taxProfile();
+  const bind = (id, fn) => { const el=document.getElementById(id); if(el) el.addEventListener('change', async ()=>{ fn(el.value); await saveSetup(); render(); }); };
+  bind('taxBusinessName', v=>tx.businessName=v);
+  bind('taxTin', v=>tx.tin=v);
+  bind('taxRegime', v=>{ tx.regime=v; tx.category=v; });
+  bind('taxRatePct', v=>tx.taxRatePct=num(v));
+  bind('taxOverride', v=>tx.taxOverride=num(v));
+  bind('adjDepreciation', v=>taxAdj(reportsYear).depreciation=num(v));
+  bind('adjNonDeductible', v=>taxAdj(reportsYear).nonDeductible=num(v));
+  bind('adjExempt', v=>taxAdj(reportsYear).exempt=num(v));
+  bind('adjWht', v=>taxAdj(reportsYear).wht=num(v));
+  bind('adjAdvance', v=>taxAdj(reportsYear).advance=num(v));
+  document.querySelectorAll('[data-repview]').forEach(b=>b.addEventListener('click', ()=>{ reportView = b.dataset.repview; render(); }));
+  const pb = document.getElementById('printReport');
+  if(pb) pb.addEventListener('click', ()=>window.print());
 }
 
 /* Fix NET PROFIT panel styling (it needs a dark background, done via inline class swap) */
@@ -1115,7 +2248,8 @@ const SETUP_LISTS = [
   {key:'feedTypes', label:'Feed Types'},
   {key:'diseases', label:'Diseases'},
   {key:'animalTypes', label:'Animal Types'},
-  {key:'productTypes', label:'Product Types'}
+  {key:'productTypes', label:'Product Types'},
+  {key:'customerTypes', label:'Customer Types'}
 ];
 function renderDriveSyncPanel(){
   const hasClientId = !!driveConfig.clientId;
@@ -1203,6 +2337,10 @@ function renderSetup(){
 function batchOptions(){
   return state.livestock.map(b=>({value:b.batchId, label:`${b.batchId} — ${b.breed} (${b.animalType})`}));
 }
+function customerOptions(){
+  return state.customers.map(c=>({value:c.id, label:`${c.name}${c.phone?' — '+c.phone:''}`}));
+}
+function customerName(id){ const c=state.customers.find(x=>x.id===id); return c ? c.name : ''; }
 function FORM_CONFIGS(){
   return {
     livestock: { title:'Batch / Herd', entity:'livestock', fields:[
@@ -1261,8 +2399,15 @@ function FORM_CONFIGS(){
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'category', label:'Category', type:'select', options:state.setup.incomeCats, required:true},
       {name:'description', label:'Description', type:'text'},
+      {name:'customerId', label:'Customer (optional)', type:'select', options:customerOptions()},
       {name:'qty', label:'Quantity', type:'number', default:1, required:true},
       {name:'unitPrice', label:'Unit Price (ETB)', type:'number', required:true},
+      {name:'paymentStatus', label:'Payment status', type:'select', options:['Paid in full','Partial / Credit'], default:'Paid in full', required:true},
+      {name:'amountPaid', label:'Amount received now (ETB) — only if Partial/Credit', type:'number', default:0},
+      {name:'refNo', label:'Receipt / Invoice No.', type:'text'},
+      {name:'buyer', label:'Buyer name / TIN (if no customer record)', type:'text'},
+      {name:'whtAmount', label:'Withholding tax deducted by buyer (ETB)', type:'number', default:0},
+      {name:'exempt', label:'Tax-exempt income?', type:'select', options:['No','Yes'], default:'No'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
     expenses: { title:'Expense Entry', entity:'expenses', fields:[
@@ -1270,6 +2415,66 @@ function FORM_CONFIGS(){
       {name:'category', label:'Category', type:'select', options:state.setup.expenseCats, required:true},
       {name:'description', label:'Description', type:'text'},
       {name:'amount', label:'Amount (ETB)', type:'number', required:true},
+      {name:'payStatus', label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID, required:true},
+      {name:'refNo', label:'Receipt / Invoice No.', type:'text'},
+      {name:'supplier', label:'Supplier name / TIN', type:'text'},
+      {name:'nonDeductible', label:'Non-deductible for tax?', type:'select', options:['No','Yes'], default:'No'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
+    customers: { title:'Customer', entity:'customers', fields:[
+      {name:'name', label:'Customer name', type:'text', required:true},
+      {name:'phone', label:'Phone', type:'text'},
+      {name:'type', label:'Type', type:'select', options:state.setup.customerTypes, required:true},
+      {name:'address', label:'Location / Address', type:'text'},
+      {name:'tin', label:'TIN', type:'text'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
+    payments: { title:'Payment Received', entity:'payments', fields:[
+      {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
+      {name:'customerId', label:'Customer', type:'select', options:customerOptions(), required:true},
+      {name:'amount', label:'Amount (ETB)', type:'number', required:true},
+      {name:'method', label:'Method', type:'select', options:PAYMENT_METHODS, default:'Cash', required:true},
+      {name:'refNo', label:'Receipt / Ref No.', type:'text'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
+    acct: { title:'Accounting Transaction', entity:'acct', validate:acctValidate, fields:[
+      {name:'date', label:'Date', type:'date', default:todayISO()},
+      {name:'type', label:'Transaction type', type:'select', options:ACCT_TYPE_LIST, required:true, default:AT.INV},
+      {name:'party', label:'Name (owner, partner, investor, lender or supplier)', type:'text', placeholder:'Leave blank = Owner'},
+      {name:'fromParty', label:'Transferred from (owner giving up the share)', type:'text', showFor:[AT.XFER]},
+      {name:'amount', label:'Amount (ETB)', type:'number', required:true},
+      {name:'ownershipPct', label:'Ownership % held by this person after the transaction (optional)', type:'number', showFor:[AT.INV,AT.SALE,AT.XFER]},
+      {name:'loanTerm', label:'Loan term', type:'select', options:[TERM_LONG,TERM_SHORT], default:TERM_LONG, showFor:[AT.LOAN,AT.REPAY,AT.OPLOAN]},
+      {name:'interestRate', label:'Annual interest rate % (information only)', type:'number', showFor:[AT.LOAN,AT.OPLOAN]},
+      {name:'dueDate', label:'Final due date (optional)', type:'date', showFor:[AT.LOAN,AT.OPLOAN]},
+      {name:'refNo', label:'Reference / receipt / agreement No.', type:'text'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
+    comments: { title:'Comment / Interaction', entity:'comments', fields:[
+      {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
+      {name:'customerId', label:'Customer', type:'select', options:customerOptions(), required:true},
+      {name:'comment', label:'Comment', type:'textarea', required:true}
+    ]},
+    inquiries: { title:'Inquiry', entity:'inquiries', fields:[
+      {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
+      {name:'name', label:'Name', type:'text', required:true},
+      {name:'phone', label:'Phone', type:'text'},
+      {name:'interestedIn', label:'Interested in', type:'text', placeholder:'e.g. Eggs, wholesale'},
+      {name:'status', label:'Status', type:'select', options:INQUIRY_STATUSES, default:'New', required:true},
+      {name:'followUpDate', label:'Follow-up date', type:'date'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
+    assets: { title:'Fixed Asset', entity:'assets', fields:[
+      {name:'name', label:'Asset name', type:'text', required:true, placeholder:'e.g. Layer house, feed mixer'},
+      {name:'assetClass', label:'Class', type:'select', options:ASSET_CLASSES, required:true},
+      {name:'dateAcquired', label:'Date acquired', type:'date', required:true, default:todayISO()},
+      {name:'cost', label:'Cost (ETB)', type:'number', required:true},
+      {name:'fundedBy', label:'How was it paid for?', type:'select', options:[FUND_PAID,FUND_CREDIT,FUND_OWNER,FUND_OPEN], default:FUND_PAID, required:true},
+      {name:'method', label:'Depreciation method', type:'select', options:['Straight-line','Declining balance'], default:'Straight-line', required:true},
+      {name:'ratePct', label:'Annual depreciation rate (%) — use the rate allowed for this class', type:'number', required:true},
+      {name:'disposedDate', label:'Date disposed (if sold/lost)', type:'date'},
+      {name:'disposalProceeds', label:'Sale proceeds received on disposal (ETB, 0 if lost/scrapped)', type:'number', default:0},
+      {name:'refNo', label:'Receipt / Invoice No.', type:'text'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
     vaccinations: { title:'Vaccination Entry', entity:'vaccinations', fields:[
@@ -1298,6 +2503,7 @@ function FORM_CONFIGS(){
 function fieldHTML(f, value){
   const val = (value!==undefined && value!==null) ? value : (f.default!==undefined ? f.default : '');
   const req = f.required ? ' required' : '';
+  const dfor = f.showFor ? ` data-for="${escHtml(f.showFor.join('|'))}"` : '';
   if(f.type==='select'){
     const opts = f.options||[];
     const optHtml = opts.map(o=>{
@@ -1305,14 +2511,14 @@ function fieldHTML(f, value){
       const ol = (typeof o==='object') ? o.label : o;
       return `<option value="${escHtml(ov)}" ${String(val)===String(ov)?'selected':''}>${escHtml(ol)}</option>`;
     }).join('');
-    return `<label>${escHtml(f.label)}${f.required?' *':''}<select name="${f.name}"${req}><option value="">-- select --</option>${optHtml}</select></label>`;
+    return `<label${dfor}>${escHtml(f.label)}${f.required?' *':''}<select name="${f.name}"${req}><option value="">-- select --</option>${optHtml}</select></label>`;
   }
   if(f.type==='textarea'){
-    return `<label>${escHtml(f.label)}<textarea name="${f.name}">${escHtml(val)}</textarea></label>`;
+    return `<label${dfor}>${escHtml(f.label)}<textarea name="${f.name}">${escHtml(val)}</textarea></label>`;
   }
   const stepAttr = f.type==='number' ? ' step="any"' : '';
   const placeholder = f.placeholder ? ` placeholder="${escHtml(f.placeholder)}"` : '';
-  return `<label>${escHtml(f.label)}${f.required?' *':''}<input type="${f.type}" name="${f.name}" value="${escHtml(val)}"${stepAttr}${placeholder}${req}></label>`;
+  return `<label${dfor}>${escHtml(f.label)}${f.required?' *':''}<input type="${f.type}" name="${f.name}" value="${escHtml(val)}"${stepAttr}${placeholder}${req}></label>`;
 }
 
 function openForm(formKey, existingId){
@@ -1332,6 +2538,8 @@ function openForm(formKey, existingId){
         </form>
       </div>
     </div>`;
+  translateDom(root);
+  setupConditionalFields(root);
   document.getElementById('cancelForm').addEventListener('click', closeForm);
   document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeForm(); });
   document.getElementById('entityForm').addEventListener('submit', (e)=>{
@@ -1340,6 +2548,13 @@ function openForm(formKey, existingId){
   });
 }
 function closeForm(){ document.getElementById('modalRoot').innerHTML=''; }
+/* show/hide form fields that only apply to some transaction types */
+function setupConditionalFields(root){
+  const sel = root.querySelector('select[name="type"]');
+  if(!sel || !root.querySelector('label[data-for]')) return;
+  const apply = ()=>{ root.querySelectorAll('label[data-for]').forEach(l=>{ const arr = l.getAttribute('data-for').split('|'); l.style.display = (sel.value && arr.indexOf(sel.value)<0) ? 'none' : ''; }); };
+  sel.addEventListener('change', apply); apply();
+}
 
 async function submitForm(formKey, existingId, cfg, formEl){
   const fd = new FormData(formEl);
@@ -1349,6 +2564,7 @@ async function submitForm(formKey, existingId, cfg, formEl){
     if(f.type==='number') v = v===''||v===null ? 0 : parseFloat(v);
     record[f.name] = v;
   });
+  if(cfg.validate){ const msg = cfg.validate(record); if(msg){ say(msg); return; } }
   const arr = state[cfg.entity];
   const idx = arr.findIndex(r=>r.id===record.id);
   if(idx>=0) arr[idx]=record; else arr.push(record);
@@ -1359,7 +2575,7 @@ async function submitForm(formKey, existingId, cfg, formEl){
 }
 
 async function deleteRecord(entityKey, id){
-  if(!confirm('Delete this entry? This cannot be undone.')) return;
+  if(!ask('Delete this entry? This cannot be undone.')) return;
   state[entityKey] = state[entityKey].filter(r=>r.id!==id);
   await saveEntity(entityKey);
   render();
@@ -1407,7 +2623,7 @@ function connectDrive(){
     const val = (input.value||'').trim();
     if(val){ driveConfig.clientId = val; saveDriveConfigLocal(); }
   }
-  if(!driveConfig.clientId){ alert('Paste your Google Client ID first.'); return; }
+  if(!driveConfig.clientId){ say('Paste your Google Client ID first.'); return; }
   if(!ensureGoogleLoaded()){
     showToast('Still loading Google sign-in — try again in a moment');
     return;
@@ -1488,7 +2704,7 @@ async function afterDriveConnected(){
   if(existing){
     driveConfig.fileId = existing.id;
     saveDriveConfigLocal();
-    const wantsDownload = confirm("Found existing farm data on Google Drive.\n\nOK = load it (replaces data on this device)\nCancel = keep this device's data and upload it to Drive instead");
+    const wantsDownload = ask("Found existing farm data on Google Drive. OK = load it (replaces data on this device) Cancel = keep this device's data and upload it to Drive instead");
     if(wantsDownload){
       await driveDownloadIntoState();
       showToast('Loaded data from Google Drive');
@@ -1528,7 +2744,7 @@ function exportBackup(){
   showToast('Backup downloaded');
 }
 
-const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications'];
+const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','assets','customers','payments','comments','inquiries','acct'];
 
 async function importBackupFile(file){
   let data;
@@ -1537,10 +2753,10 @@ async function importBackupFile(file){
     data = JSON.parse(text);
     if(!data || typeof data !== 'object') throw new Error('Not a valid backup file');
   }catch(e){
-    alert('Could not read that file. Make sure it is a Green Horizon Farm backup (.json) file.');
+    say('Could not read that file. Make sure it is a Green Horizon Farm backup (.json) file.');
     return;
   }
-  if(!confirm('Import this backup? This will replace ALL current data in the app with the contents of this file.')) return;
+  if(!ask('Import this backup? This will replace ALL current data in the app with the contents of this file.')) return;
   state.setup = data.setup || state.setup;
   state.calc = data.calc || state.calc;
   ENTITY_KEYS.forEach(k=>{ state[k] = Array.isArray(data[k]) ? data[k] : []; });
@@ -1554,7 +2770,8 @@ function attachTabEvents(){
   const addBtnMap = {
     addLivestock:'livestock', addReductions:'reductions', addProduction:'production',
     addProdReductions:'prodReductions', addFeedPurchases:'feedPurchases', addFeeding:'feeding',
-    addIncome:'income', addExpenses:'expenses', addVaccinations:'vaccinations', addMedications:'medications'
+    addIncome:'income', addExpenses:'expenses', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
+    addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries', addAcct:'acct'
   };
   Object.keys(addBtnMap).forEach(btnId=>{
     const el = document.getElementById(btnId);
@@ -1595,7 +2812,7 @@ function attachTabEvents(){
   document.querySelectorAll('[data-remove-setup]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const key = btn.dataset.removeSetup, val = btn.dataset.value;
-      if(!confirm(`Remove "${val}" from ${key}? Existing records keep this value, but it won't appear as an option anymore.`)) return;
+      if(!ask(`Remove "${val}" from ${key}? Existing records keep this value, but it won't appear as an option anymore.`)) return;
       state.setup[key] = state.setup[key].filter(v=>v!==val);
       await saveSetup();
       render();
@@ -1629,7 +2846,7 @@ function attachTabEvents(){
   });
   const changeIdBtn = document.getElementById('changeDriveClientId');
   if(changeIdBtn) changeIdBtn.addEventListener('click', ()=>{
-    if(!confirm('Change Client ID? You will need to reconnect.')) return;
+    if(!ask('Change Client ID? You will need to reconnect.')) return;
     driveConfig.clientId=''; driveConfig.fileId=null;
     driveRuntime.connected=false; driveRuntime.accessToken=null; driveRuntime.tokenClient=null;
     saveDriveConfigLocal();
@@ -1651,15 +2868,28 @@ function attachTabEvents(){
   // Danger zone
   const clearBtn = document.getElementById('clearAllData');
   if(clearBtn) clearBtn.addEventListener('click', async ()=>{
-    if(!confirm('This will permanently delete ALL livestock, production, feed, income/expense and health records. Continue?')) return;
-    if(!confirm('Are you absolutely sure? This cannot be undone.')) return;
+    if(!ask('This will permanently delete ALL livestock, production, feed, income/expense and health records. Continue?')) return;
+    if(!ask('Are you absolutely sure? This cannot be undone.')) return;
     ENTITY_KEYS.forEach(k=>state[k]=[]);
     await Promise.all(ENTITY_KEYS.map(saveEntity));
     render();
     showToast('All farm data cleared');
   });
 
-  if(currentTab==='reports') styleNetPanel();
+  const ownerInput = document.getElementById('acctOwnerName');
+  if(ownerInput) ownerInput.addEventListener('change', async (e)=>{
+    if(!state.setup.acctOpts) state.setup.acctOpts = {};
+    state.setup.acctOpts.ownerName = e.target.value.trim();
+    await saveSetup(); render();
+  });
+  const invToggle = document.getElementById('acctInvToggle');
+  if(invToggle) invToggle.addEventListener('change', async (e)=>{
+    if(!state.setup.acctOpts) state.setup.acctOpts = {};
+    state.setup.acctOpts.feedInventory = e.target.checked;
+    await saveSetup(); render();
+  });
+
+  if(currentTab==='reports') attachReportEvents();
   if(currentTab==='calculator') attachCalculatorEvents();
 }
 
