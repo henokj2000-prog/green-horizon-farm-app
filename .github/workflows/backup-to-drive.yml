@@ -9,20 +9,33 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Install rclone
         run: curl https://rclone.org/install.sh | sudo bash
 
-      - name: Write rclone config
-        run: |
-          mkdir -p ~/.config/rclone
-          echo "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
-
+      # We exclude the generated zip file from zipping itself
+      # and exclude structural config folders (.git, .github)
+      # to keep the backup lean.
+      # Exclude any other heavy temporary or app-specific directories if needed.
       - name: Zip the repo
         run: |
-          zip -r "backup-$(date +%Y-%m-%d_%H-%M).zip" . -x ".git/*"
+          zip -r "backup-$(date +%Y-%m-%d_%H-%M).zip" . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "backup-*.zip"
 
       - name: Upload to Google Drive
+        env:
+          # Automatically spins up a temporary rclone remote named 'gdrive_service'
+          RCLONE_CONFIG_GDRIVE_SERVICE_TYPE: drive
+          RCLONE_CONFIG_GDRIVE_SERVICE_SCOPE: drive
+          # Pass the raw JSON string from your repository secrets
+          RCLONE_CONFIG_GDRIVE_SERVICE_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          # The target folder variable setup in your secrets
+          TARGET_FOLDER: ${{ secrets.GDRIVE_FOLDER }}
         run: |
-          rclone copy backup-*.zip "gdrive:" --drive-root-folder-id "${{ secrets.GDRIVE_FOLDER }}"
+          # Use 'rclone copy' to drop the generated zip archive directly into your target folder
+          # The suffix :${TARGET_FOLDER} routes it into the shared directory context
+          rclone copy backup-*.zip gdrive_service:${TARGET_FOLDER} -v
