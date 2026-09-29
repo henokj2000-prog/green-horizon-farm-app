@@ -749,7 +749,13 @@ async function initApp(){
   const isFirstRun = livestock === null;
   const seeds = isFirstRun ? seedExamples() : {};
 
-  state.setup = setup || JSON.parse(JSON.stringify(DEFAULT_SETUP));
+  // Merge defaults so older saved setups still get new list keys (e.g. customerTypes)
+  state.setup = Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_SETUP)), setup || {});
+  ['incomeCats','expenseCats','feedTypes','diseases','animalTypes','productTypes','customerTypes'].forEach(k=>{
+    if(!Array.isArray(state.setup[k])) state.setup[k] = JSON.parse(JSON.stringify(DEFAULT_SETUP[k]||[]));
+  });
+  if(!state.setup.tax) state.setup.tax = {businessName:'Green Horizon', tin:'', category:'', taxRatePct:0, taxOverride:0, adj:{}, regime:'B'};
+  if(!state.setup.acctOpts) state.setup.acctOpts = {};
   state.livestock = livestock || seeds.livestock || [];
   state.reductions = reductions || seeds.reductions || [];
   state.production = production || seeds.production || [];
@@ -974,7 +980,12 @@ function render(){
     income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
     reports: renderReports, setup: renderSetup
   };
-  c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
+  try{
+    c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
+  }catch(err){
+    console.error('Render error on tab', currentTab, err);
+    c.innerHTML = '<div class="panel"><div class="panel-pad" style="color:var(--clay);"><strong>Could not open this tab.</strong><br><span class="mono">'+escHtml(err && err.message ? err.message : String(err))+'</span><p class="note">Try Setup → Clear all farm data, or export a backup first. If this is Setup, your saved category lists may be incomplete — reload after this fix.</p></div></div>';
+  }
   translateDom(c);
   attachTabEvents();
 }
@@ -2296,7 +2307,8 @@ function renderDriveSyncPanel(){
 
 function renderSetup(){
   const lists = SETUP_LISTS.map(l=>{
-    const chips = state.setup[l.key].map(v=>`
+    const items = Array.isArray(state.setup[l.key]) ? state.setup[l.key] : [];
+    const chips = items.map(v=>`
       <span class="chip">${escHtml(v)}<button data-remove-setup="${l.key}" data-value="${escHtml(v)}">×</button></span>
     `).join('') || '<span class="note" style="margin:0;">No items yet.</span>';
     return `
@@ -2802,6 +2814,7 @@ function attachTabEvents(){
       const input = document.querySelector(`[data-setup-input="${key}"]`);
       const val = (input.value||'').trim();
       if(!val) return;
+      if(!Array.isArray(state.setup[key])) state.setup[key] = [];
       if(state.setup[key].includes(val)){ showToast('Already in list'); return; }
       state.setup[key].push(val);
       await saveSetup();
@@ -2813,6 +2826,7 @@ function attachTabEvents(){
     btn.addEventListener('click', async ()=>{
       const key = btn.dataset.removeSetup, val = btn.dataset.value;
       if(!ask(`Remove "${val}" from ${key}? Existing records keep this value, but it won't appear as an option anymore.`)) return;
+      if(!Array.isArray(state.setup[key])) state.setup[key] = [];
       state.setup[key] = state.setup[key].filter(v=>v!==val);
       await saveSetup();
       render();
