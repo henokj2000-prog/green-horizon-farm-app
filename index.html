@@ -831,6 +831,17 @@ function computeCalcResults(c){
 /* ---- Sales are recorded once, in Income. They create the stock reductions below automatically. ---- */
 const PRODUCT_SALE_CATS = {'Egg Sales':'Eggs','Honey Sales':'Honey','Milk Sales':'Milk','Wool Sales':'Wool','Manure Sales':'Manure'};
 const LIVESTOCK_SALE_CATS = ['Live Bird Sales','Livestock Sales (Goats/Sheep/Oxen)'];
+const DEFAULT_UNITS = {Eggs:'eggs', Honey:'kg', Milk:'liters', Wool:'kg', Manure:'kg'};
+function productUnit(p){
+  const rec = state.production.slice().reverse().find(x=>x.product===p && x.unit && x.unit!=='count');
+  return rec ? rec.unit : (DEFAULT_UNITS[p] || 'units');
+}
+function stockEffectText(r){
+  const prod = incomeProduct(r);
+  if(prod && num(r.qty)>0) { const u = productUnit(prod); return '− '+fmtNum(r.qty)+' '+u+(u.toLowerCase()===prod.toLowerCase() ? '' : ' of '+prod.toLowerCase()); }
+  if(incomeIsLivestockSale(r) && r.stockBatchId && num(r.qty)>0) return '− '+fmtNum(r.qty)+' head from '+r.stockBatchId;
+  return '';
+}
 function incomeProduct(r){ return PRODUCT_SALE_CATS[r.category] || null; }
 function incomeIsLivestockSale(r){ return LIVESTOCK_SALE_CATS.includes(r.category); }
 function allReductions(){
@@ -966,7 +977,7 @@ const TABS = [
   {key:'feed', label:'Feed', icon:'🌾'},
   {key:'calculator', label:'Price Calc', icon:'🧮'},
   {key:'income', label:'Income', icon:'💰'},
-  {key:'expenses', label:'Expenses', icon:'💸'},
+  {key:'expenses', label:'Expenses & Purchases', icon:'💸'},
   {key:'customers', label:'Customers', icon:'👥'},
   {key:'assets', label:'Assets', icon:'🏗️'},
   {key:'accounting', label:'Accounting', icon:'💼'},
@@ -1434,49 +1445,52 @@ function renderIncome(){
     <td class="num mono"><strong>${fmtMoney(incomeAmount(r))}</strong></td>
     <td class="num mono">${fmtMoney(incomeBalance(r))}</td>
     <td class="num mono">${fmtMoney(r.whtAmount)}</td>
+    <td>${escHtml(stockEffectText(r))}</td>
     <td class="notes-cell">${escHtml(r.notes)}</td>
-    ${rowActionsHtml('income', r.id)}</tr>`).join('') : emptyRow(12,'No income logged yet.');
+    ${rowActionsHtml('income', r.id)}</tr>`).join('') : emptyRow(13,'No income logged yet.');
 
   return `
   <div class="pagehead">
-    <div><h1>Income</h1><p>Enter Quantity × Unit Price (e.g. eggs sold × price/egg). For lump sums, use Qty = 1.</p></div>
+    <div><h1>Income</h1><p>Choose what you are selling — the form adapts (eggs, honey, milk, wool, manure, birds, goats/sheep/oxen) and the stock is reduced automatically. For lump sums use Other Income.</p></div>
     <button class="btn btn-primary" id="addIncome">+ Add income</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Customer'},{label:'Ref No.'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Amount',num:true},{label:'Balance Due',num:true},{label:'WHT',num:true},{label:'Notes'}], body)}
+  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Customer'},{label:'Ref No.'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Amount',num:true},{label:'Balance Due',num:true},{label:'WHT',num:true},{label:'Stock effect'},{label:'Notes'}], body)}
   `;
 }
 
 /* ================= EXPENSES ================= */
 function renderExpenses(){
-  const items = costRows().map(r=>{
+  const items = [];
+  const row = (date, cells, act, cls)=>items.push({date:date||'', html:`<tr${cls?' class="'+cls+'"':''}>${cells}${act}</tr>`});
+  const cell = (r, amount, payment, treat)=>`<td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td>${escHtml(r.description)}</td><td class="mono">${escHtml(r.refNo||'')}</td>
+    <td class="num mono"><strong>${fmtMoney(amount)}</strong></td><td>${payment||''}</td><td>${treat}</td><td>${r.nonDeductible==='Yes'?'Yes':''}</td><td class="notes-cell">${escHtml(r.notes||'')}</td>`;
+  costRows().forEach(r=>{
     const cb = expCapBatch(r);
-    const treat = cb ? `<span class="tag tag-active">Capitalised → ${escHtml(cb.batchId)}</span>` : (r.derived ? 'Expensed' : (r.batchId ? 'Expensed' : ''));
-    const act = r.derived ? `<td class="rowactions"><span class="tag tag-closed">Auto — ${escHtml(r.origin||'')}</span></td>` : rowActionsHtml('expenses', r.id);
-    return {date:r.date||'', html:`
-    <tr${r.derived?' class="auto-row"':''}><td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td>${escHtml(r.description)}</td>
-    <td class="mono">${escHtml(r.refNo)}</td>
-    <td class="num mono"><strong>${fmtMoney(r.amount)}</strong></td>
-    <td>${r.credit==='1200' ? 'From feed stock' : (r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : '')}</td>
-    <td>${treat}</td>
-    <td>${r.nonDeductible==='Yes'?'Yes':''}</td>
-    <td class="notes-cell">${escHtml(r.notes)}</td>
-    ${act}</tr>`};
+    const treat = cb ? `<span class="tag tag-active">Capitalised → ${escHtml(cb.batchId)}</span>` : 'Expensed';
+    const pay = r.credit==='1200' ? 'From feed stock' : (r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : '');
+    row(r.date, cell(r, r.amount, pay, treat), r.derived ? rowActionsHtml(r.srcEntity, r.srcId) : rowActionsHtml('expenses', r.id), r.derived?'auto-row':'');
+  });
+  state.feedPurchases.forEach(f=>{
+    const r = {date:f.date, category:'Feed Purchase', description:'Bought '+fmtNum(f.qty)+' kg '+f.feedType+(f.supplier?' — '+f.supplier:''), notes:f.notes};
+    row(f.date, cell(r, money2(num(f.qty)*num(f.unitCost)), f.payStatus && f.payStatus!==PAY_PAID ? escHtml(f.payStatus) : '', 'Feed stock (expensed when used)'), rowActionsHtml('feedPurchases', f.id), 'auto-row');
+  });
+  state.livestock.filter(b=>isBioBatch(b) && num(b.purchaseCost)>0 && String(b.fundedBy||'').indexOf('Owned before')!==0).forEach(b=>{
+    const r = {date:b.dateAcquired, category:'Livestock Purchase', description:'Bought '+fmtNum(b.initialQty)+' '+(b.breed||b.animalType)+' — batch '+b.batchId, notes:b.notes};
+    row(b.dateAcquired, cell(r, b.purchaseCost, b.fundedBy && b.fundedBy!==FUND_PAID ? escHtml(b.fundedBy) : '', isLayerFlock(b)?'Asset — layer flock':'Asset — livestock'), rowActionsHtml('livestock', b.id), 'auto-row');
   });
   bioCharges().filter(c=>c.kind!=='bioAmort' && c.date<=todayISO()).forEach(c=>{
-    items.push({date:c.date, html:`
-    <tr class="auto-row"><td>${fmtDate(c.date)}</td><td>${escHtml(c.cat)}</td><td>${escHtml(c.desc)}</td><td></td>
-    <td class="num mono"><strong>${fmtMoney(c.amt)}</strong></td><td>Non-cash</td><td>Written off from ${escHtml(c.batchId)}</td><td></td>
-    <td class="notes-cell">Automatic entry from Livestock Reductions / Income</td><td class="rowactions"><span class="tag tag-closed">Auto</span></td></tr>`});
+    row(c.date, `<td>${fmtDate(c.date)}</td><td>${escHtml(c.cat)}</td><td>${escHtml(c.desc)}</td><td></td><td class="num mono"><strong>${fmtMoney(c.amt)}</strong></td><td>Non-cash</td><td>Written off from ${escHtml(c.batchId)}</td><td></td><td class="notes-cell">Automatic — animals that left the batch</td>`,
+      '<td class="rowactions"><span class="tag tag-closed">Auto</span></td>', 'auto-row');
   });
   items.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const body = items.length ? items.map(x=>x.html).join('') : emptyRow(10,'No expenses yet.');
-
+  const body = items.length ? items.map(x=>x.html).join('') : emptyRow(10,'No purchases or expenses yet.');
   return `
   <div class="pagehead">
-    <div><h1>Expenses</h1><p>Type here only costs that have no other home (labor, rent, utilities, transport…). Feed used, vaccines, medication and animals bought appear automatically from their own tabs and cannot be typed twice.</p></div>
-    <button class="btn btn-primary" id="addExpenses">+ Add expense</button>
+    <div><h1>Expenses &amp; Purchases</h1><p>Choose what you are buying — feed, animals, a vaccine, a medication or another cost — and the form shows the matching fields and updates the stock, health log or books automatically.</p></div>
+    <button class="btn btn-primary" id="addExpenses">+ Add purchase / expense</button>
   </div>
   ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Ref No.'},{label:'Amount',num:true},{label:'Payment'},{label:'Treatment'},{label:'Non-deductible'},{label:'Notes'}], body)}
+  <p class="note">Shaded rows come from the Feed, Livestock and Health tabs; use their Edit / Delete buttons to change them. Feed purchases are stock (an asset) and only become a cost when the feed is used.</p>
   `;
 }
 
@@ -1712,12 +1726,12 @@ function payFromFund(fb){ fb = fb || ''; if(fb.indexOf('Supplier credit')===0) r
 function costRows(){
   const rows = state.expenses.map(r=>Object.assign({}, r, {derived:false}));
   const push = r => { r.derived = true; r.isCapitalized = r.capMode==='No' ? false : !!expEligibleBatch(r); rows.push(r); };
-  state.vaccinations.forEach(v=>{ if(num(v.cost)>0) push({id:'vax:'+v.id, date:v.date, category:'Vaccination', description:'Vaccination — '+(v.vaccine||''), amount:num(v.cost), payStatus:v.payStatus||PAY_PAID, batchId:v.batchId, capMode:'Auto', origin:'Health tab'}); });
-  state.medications.forEach(m=>{ if(num(m.cost)>0) push({id:'med:'+m.id, date:m.date, category:'Medication', description:'Medication — '+(m.medication||''), amount:num(m.cost), payStatus:m.payStatus||PAY_PAID, batchId:m.batchId, capMode:'Auto', origin:'Health tab'}); });
+  state.vaccinations.forEach(v=>{ if(num(v.cost)>0) push({id:'vax:'+v.id, srcEntity:'vaccinations', srcId:v.id, date:v.date, category:'Vaccination', description:'Vaccination — '+(v.vaccine||''), amount:num(v.cost), payStatus:v.payStatus||PAY_PAID, batchId:v.batchId, capMode:'Auto', origin:'Health tab'}); });
+  state.medications.forEach(m=>{ if(num(m.cost)>0) push({id:'med:'+m.id, srcEntity:'medications', srcId:m.id, date:m.date, category:'Medication', description:'Medication — '+(m.medication||''), amount:num(m.cost), payStatus:m.payStatus||PAY_PAID, batchId:m.batchId, capMode:'Auto', origin:'Health tab'}); });
   const fs = feedSim();
-  state.feeding.forEach(f=>{ const c = fs.cost[f.id] || 0; if(c>0) push({id:'feed:'+f.id, date:f.date, category:'Feed Used', description:'Feed used — '+f.feedType+' ('+fmtNum(f.qtyUsed)+' kg)', amount:c, credit:'1200', batchId:f.batchId, capMode:'Auto', origin:'Feeding log'}); });
+  state.feeding.forEach(f=>{ const c = fs.cost[f.id] || 0; if(c>0) push({id:'feed:'+f.id, srcEntity:'feeding', srcId:f.id, date:f.date, category:'Feed Used', description:'Feed used — '+f.feedType+' ('+fmtNum(f.qtyUsed)+' kg)', amount:c, credit:'1200', batchId:f.batchId, capMode:'Auto', origin:'Feeding log'}); });
   state.livestock.forEach(b=>{ if(!isBioBatch(b) && num(b.purchaseCost)>0 && validDate(b.dateAcquired) && String(b.fundedBy||'').indexOf('Owned before')!==0)
-    push({id:'buy:'+b.id, date:b.dateAcquired, category:'Livestock Purchase', description:'Purchase of '+(b.batchId||'')+' ('+(b.breed||b.animalType)+')', amount:num(b.purchaseCost), payStatus:payFromFund(b.fundedBy), batchId:'', capMode:'No', origin:'Livestock tab'}); });
+    push({id:'buy:'+b.id, srcEntity:'livestock', srcId:b.id, date:b.dateAcquired, category:'Livestock Purchase', description:'Purchase of '+(b.batchId||'')+' ('+(b.breed||b.animalType)+')', amount:num(b.purchaseCost), payStatus:payFromFund(b.fundedBy), batchId:'', capMode:'No', origin:'Livestock tab'}); });
   return rows;
 }
 
@@ -2688,6 +2702,117 @@ function expenseValidate(r){
   if(!r.batchId) r.capMode = 'Auto';
   return '';
 }
+/* ================= SMART FORMS: the fields follow what is being sold or bought ================= */
+const PURCHASE_KINDS = [
+  {value:'Feed', label:'Feed (adds to feed stock)'},
+  {value:'Livestock', label:'Animals (new batch / herd)'},
+  {value:'Vaccine', label:'Vaccine (health log)'},
+  {value:'Medication', label:'Medication (health log)'},
+  {value:'Other', label:'Other cost (labor, rent, transport…)'}
+];
+function fundFromPay(ps){ ps = ps||''; if(ps.indexOf('Unpaid')===0) return FUND_CREDIT; if(ps.indexOf('Paid personally')===0) return FUND_OWNER; return FUND_PAID; }
+async function submitPurchase(rec){
+  const k = rec.kind;
+  if(!k) return 'Choose what you are buying.';
+  if(!validDate(rec.date)) return 'Date is required.';
+  let msg = '';
+  if(k==='Feed'){
+    const r = {id:uid(), date:rec.date, feedType:rec.f_type, qty:num(rec.f_qty), unitCost:num(rec.f_unit), payStatus:rec.f_pay||PAY_PAID, supplier:rec.f_supplier||'', notes:rec.f_notes||''};
+    if(!r.feedType) return 'Choose the feed type.';
+    msg = feedPurchaseValidate(r); if(msg) return msg;
+    state.feedPurchases.push(r); await saveEntity('feedPurchases');
+  }
+  else if(k==='Livestock'){
+    if(!rec.l_type) return 'Choose the animal type.';
+    if(!String(rec.l_batch||'').trim()) return 'Enter a Batch/Herd ID for the new animals.';
+    const qty = num(rec.l_qty), unit = num(rec.l_unit);
+    if(!(qty>0)) return 'Enter how many animals were bought.';
+    const r = {id:uid(), animalType:rec.l_type, batchId:String(rec.l_batch).trim(), breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
+      purchaseCost:money2(qty*unit), fundedBy:fundFromPay(rec.l_pay), bio:rec.l_type==='Poultry' ? (rec.l_bio||'No') : 'No',
+      ageMonthsAtPurchase:num(rec.l_age), layingAgeMonths:num(rec.l_lay), amortMonths:num(rec.l_amort), amortMonthsOther:num(rec.l_amortO), notes:rec.l_notes||''};
+    msg = livestockValidate(r); if(msg) return msg;
+    state.livestock.push(r); await refreshCapFlags(); await saveEntity('livestock');
+  }
+  else if(k==='Vaccine'){
+    const b = state.livestock.find(x=>x.batchId===rec.v_batch);
+    if(!b) return 'Choose the batch that was vaccinated.';
+    if(!String(rec.v_name||'').trim()) return 'Enter the vaccine name.';
+    state.vaccinations.push({id:uid(), date:rec.date, animalType:b.animalType, batchId:b.batchId, vaccine:rec.v_name, dose:rec.v_dose||'', cost:num(rec.v_cost), payStatus:rec.v_pay||PAY_PAID, administeredBy:rec.v_by||'', notes:rec.v_notes||''});
+    await refreshCapFlags(); await saveEntity('vaccinations');
+  }
+  else if(k==='Medication'){
+    const b = state.livestock.find(x=>x.batchId===rec.m_batch);
+    if(!b) return 'Choose the batch that was treated.';
+    if(!String(rec.m_name||'').trim()) return 'Enter the medication name.';
+    state.medications.push({id:uid(), date:rec.date, animalType:b.animalType, batchId:b.batchId, disease:rec.m_disease||'', medication:rec.m_name, dosage:rec.m_dose||'', cost:num(rec.m_cost), payStatus:rec.m_pay||PAY_PAID, notes:rec.m_notes||''});
+    await refreshCapFlags(); await saveEntity('medications');
+  }
+  else{
+    const r = {id:uid(), date:rec.date, category:rec.o_cat, description:rec.o_desc||'', amount:num(rec.o_amount), payStatus:rec.o_pay||PAY_PAID, refNo:rec.o_ref||'', supplier:rec.o_supplier||'',
+      nonDeductible:rec.o_nonded||'No', batchId:rec.o_batch||'', capMode:rec.o_cap||'Auto', notes:rec.o_notes||''};
+    if(!r.category) return 'Choose the expense category.';
+    if(!(r.amount>0)) return 'Amount must be greater than zero.';
+    msg = expenseValidate(r); if(msg) return msg;
+    state.expenses.push(r); await refreshCapFlags(); await saveEntity('expenses');
+  }
+  return '';
+}
+function purchaseFormHook(root){
+  const q = n=>root.querySelector('[name="'+n+'"]'), v = n=>{ const e = q(n); return e ? e.value : ''; };
+  const hint = document.createElement('div'); hint.className = 'note'; hint.style.cssText = 'font-weight:600;margin:6px 0 10px;';
+  const acts = root.querySelector('.modal-actions'); if(acts) acts.before(hint);
+  const upd = ()=>{
+    const k = v('kind'); let h = '';
+    if(k==='Feed'){
+      const tot = num(v('f_qty'))*num(v('f_unit')), ft = v('f_type');
+      h = 'Total: '+fmtMoney(tot)+'.'+(ft ? ' Feed stock now '+fmtNum(feedStock(ft))+' kg → '+fmtNum(feedStock(ft)+num(v('f_qty')))+' kg.' : '')+' Booked as feed inventory (asset); it becomes a cost when fed out.';
+    }else if(k==='Livestock'){
+      const tot = num(v('l_qty'))*num(v('l_unit')), t = v('l_type');
+      const how = (t==='Poultry' && v('l_bio')==='Yes') ? 'an asset — layer flock (immature layers until laying age, then amortised)' : ASSET_ANIMALS.includes(t) ? 'an asset — livestock, kept at cost' : 'an expense (cost of production)';
+      h = 'Total: '+fmtMoney(tot)+'. Adds '+fmtNum(num(v('l_qty')))+' animals to a new batch. Booked as '+how+'.';
+    }else if(k==='Vaccine' || k==='Medication'){
+      h = 'Booked as an expense now — or capitalised into the flock’s asset if it is a layer flock still under laying age. Cost is logged in the Health tab.';
+    }else if(k==='Other'){
+      h = 'Booked as an expense (or capitalised into a young layer flock if you pick one below).';
+    }
+    hint.textContent = h;
+  };
+  root.querySelectorAll('input,select').forEach(e=>{ e.addEventListener('input', upd); e.addEventListener('change', upd); });
+  upd();
+}
+function incomeFormHook(root, record){
+  const q = n=>root.querySelector('[name="'+n+'"]');
+  const cat = q('category'), qty = q('qty'), price = q('unitPrice'), batch = q('stockBatchId'), desc = q('description');
+  if(!cat || !qty || !price || !batch) return;
+  const setLabel = (el, txt)=>{ const l = el.closest('label'); if(l && l.childNodes[0]) l.childNodes[0].nodeValue = txt; };
+  const hint = document.createElement('div'); hint.className = 'note'; hint.style.cssText = 'font-weight:600;margin:-2px 0 8px;';
+  qty.closest('label').after(hint);
+  const apply = ()=>{
+    const c = cat.value, prod = PRODUCT_SALE_CATS[c], live = LIVESTOCK_SALE_CATS.includes(c);
+    let ql = 'Quantity *', pl = 'Unit Price (ETB) *', h = '';
+    qty.removeAttribute('max');
+    if(prod){
+      const u = productUnit(prod), own = (record && incomeProduct(record)===prod) ? num(record.qty) : 0, avail = productStock(prod) + own;
+      const one = u==='eggs' ? 'egg' : u==='liters' ? 'liter' : u;
+      ql = 'Quantity sold ('+u+') *'; pl = 'Price per '+one+' (ETB) *';
+      h = 'In stock: '+fmtNum(avail)+' '+u+(u.toLowerCase()===prod.toLowerCase() ? '' : ' of '+prod.toLowerCase())+'. This sale reduces the stock automatically.';
+      qty.max = avail;
+      desc.placeholder = 'e.g. '+prod+' sold to …';
+    }else if(live){
+      const poultry = c==='Live Bird Sales', cur = batch.value;
+      const exclude = record ? 'inc:'+record.id : undefined;
+      const opts = state.livestock.filter(b=> poultry ? b.animalType==='Poultry' : b.animalType!=='Poultry');
+      batch.innerHTML = '<option value="">-- select --</option>' + opts.map(b=>`<option value="${escHtml(b.batchId)}">${escHtml(b.batchId+' — '+(b.breed||b.animalType)+' ('+fmtNum(batchCurrentQty(b.batchId, exclude))+' left)')}</option>`).join('');
+      batch.value = cur;
+      ql = (poultry ? 'Number of birds sold' : 'Number of animals sold')+' *'; pl = 'Price per '+(poultry?'bird':'animal')+' (ETB) *';
+      if(batch.value){ const left = batchCurrentQty(batch.value, exclude); qty.max = left; h = 'Left in '+batch.value+': '+fmtNum(left)+'. This sale removes them from the herd and writes off their book value automatically.'; }
+      else h = 'Choose the batch the animals are sold from.';
+    }
+    setLabel(qty, ql); setLabel(price, pl); hint.textContent = h;
+  };
+  cat.addEventListener('change', apply); batch.addEventListener('change', apply); apply();
+}
+
 function batchOptions(){
   return state.livestock.map(b=>({value:b.batchId, label:`${b.batchId} — ${b.breed} (${b.animalType})`}));
 }
@@ -2755,9 +2880,9 @@ function FORM_CONFIGS(){
       {name:'qtyUsed', label:'Quantity Used', type:'number', required:true},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
-    income: { title:'Income Entry', entity:'income', validate:incomeValidate, fields:[
+    income: { title:'Income Entry', entity:'income', validate:incomeValidate, onOpen:incomeFormHook, fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
-      {name:'category', label:'Category', type:'select', options:state.setup.incomeCats, required:true},
+      {name:'category', label:'What are you selling?', type:'select', options:state.setup.incomeCats, required:true},
       {name:'stockBatchId', label:'Which batch / herd are the animals sold from?', type:'select', options:batchOptions(), showWhen:{name:'category',values:LIVESTOCK_SALE_CATS}},
       {name:'description', label:'Description', type:'text'},
       {name:'customerId', label:'Customer (optional)', type:'select', options:customerOptions()},
@@ -2771,6 +2896,62 @@ function FORM_CONFIGS(){
       {name:'exempt', label:'Tax-exempt income?', type:'select', options:['No','Yes'], default:'No'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
+    purchase: { title:'Purchase / Expense', entity:'purchase', custom:submitPurchase, onOpen:purchaseFormHook, fields:(()=>{
+      const W = (k, more)=>[{name:'kind', values:[k]}].concat(more||[]);
+      const PAY = (n,k)=>({name:n, label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID, showWhen:W(k)});
+      return [
+        {name:'date', label:'Date', type:'date', default:todayISO()},
+        {name:'kind', label:'What are you buying / paying for?', type:'select', required:true, options:PURCHASE_KINDS},
+        /* feed -> feed stock */
+        {name:'f_type', label:'Feed type', type:'select', options:state.setup.feedTypes, showWhen:W('Feed')},
+        {name:'f_qty', label:'Quantity bought (kg)', type:'number', showWhen:W('Feed')},
+        {name:'f_unit', label:'Price per kg (ETB)', type:'number', showWhen:W('Feed')},
+        {name:'f_supplier', label:'Supplier', type:'text', showWhen:W('Feed')},
+        PAY('f_pay','Feed'),
+        {name:'f_notes', label:'Notes', type:'textarea', showWhen:W('Feed')},
+        /* animals -> new batch / herd */
+        {name:'l_type', label:'Animal type', type:'select', options:state.setup.animalTypes, showWhen:W('Livestock')},
+        {name:'l_batch', label:'Batch/Herd ID (new)', type:'text', placeholder:'e.g. GT-002', showWhen:W('Livestock')},
+        {name:'l_breed', label:'Breed/Type', type:'text', showWhen:W('Livestock')},
+        {name:'l_source', label:'Bought from', type:'text', showWhen:W('Livestock')},
+        {name:'l_qty', label:'Number of animals bought', type:'number', showWhen:W('Livestock')},
+        {name:'l_unit', label:'Price per animal (ETB)', type:'number', showWhen:W('Livestock')},
+        PAY('l_pay','Livestock'),
+        {name:'l_bio', label:'Buy as a layer flock (biological asset)?', type:'select', options:['No','Yes'], default:'No', showWhen:W('Livestock',[{name:'l_type',values:['Poultry']}])},
+        {name:'l_age', label:'Age of the birds when bought (months)', type:'number', default:0, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
+        {name:'l_lay', label:'Age at onset of laying (months)', type:'number', default:DEFAULT_LAYING_AGE, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
+        {name:'l_amort', label:'Amortise over (months) — 12 to 18 is typical', type:'number', default:DEFAULT_AMORT_MONTHS, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
+        {name:'l_amortO', label:'Amortise over (months) — 0 = keep at cost until sold or lost', type:'number', default:0, showWhen:W('Livestock',[{name:'l_type',values:ASSET_ANIMALS}])},
+        {name:'l_notes', label:'Notes', type:'textarea', showWhen:W('Livestock')},
+        /* vaccine -> health log */
+        {name:'v_batch', label:'Batch/Herd vaccinated', type:'select', options:batchOptions(), showWhen:W('Vaccine')},
+        {name:'v_name', label:'Vaccine name', type:'text', showWhen:W('Vaccine')},
+        {name:'v_dose', label:'Dose/Route', type:'text', showWhen:W('Vaccine')},
+        {name:'v_cost', label:'Cost (ETB)', type:'number', showWhen:W('Vaccine')},
+        {name:'v_by', label:'Administered by', type:'text', showWhen:W('Vaccine')},
+        PAY('v_pay','Vaccine'),
+        {name:'v_notes', label:'Notes', type:'textarea', showWhen:W('Vaccine')},
+        /* medication -> health log */
+        {name:'m_batch', label:'Batch/Herd treated', type:'select', options:batchOptions(), showWhen:W('Medication')},
+        {name:'m_disease', label:'Disease', type:'select', options:state.setup.diseases, showWhen:W('Medication')},
+        {name:'m_name', label:'Medication', type:'text', showWhen:W('Medication')},
+        {name:'m_dose', label:'Dosage', type:'text', showWhen:W('Medication')},
+        {name:'m_cost', label:'Cost (ETB)', type:'number', showWhen:W('Medication')},
+        PAY('m_pay','Medication'),
+        {name:'m_notes', label:'Notes', type:'textarea', showWhen:W('Medication')},
+        /* everything else -> plain expense */
+        {name:'o_cat', label:'Expense category', type:'select', options:state.setup.expenseCats.filter(c=>!AUTO_COST_CATS.includes(c)), showWhen:W('Other')},
+        {name:'o_desc', label:'Description', type:'text', showWhen:W('Other')},
+        {name:'o_amount', label:'Amount (ETB)', type:'number', showWhen:W('Other')},
+        PAY('o_pay','Other'),
+        {name:'o_ref', label:'Receipt / Invoice No.', type:'text', showWhen:W('Other')},
+        {name:'o_supplier', label:'Supplier name / TIN', type:'text', showWhen:W('Other')},
+        {name:'o_nonded', label:'Non-deductible for tax?', type:'select', options:['No','Yes'], default:'No', showWhen:W('Other')},
+        {name:'o_batch', label:'Layer flock this cost belongs to (optional)', type:'select', options:bioBatchOptions(), showWhen:W('Other')},
+        {name:'o_cap', label:'If the flock is under laying age: capitalise as an asset?', type:'select', options:['Auto','No'], default:'Auto', showWhen:W('Other',[{name:'o_batch',nonEmpty:true}])},
+        {name:'o_notes', label:'Notes', type:'textarea', showWhen:W('Other')}
+      ];
+    })()},
     expenses: { title:'Expense Entry', entity:'expenses', validate:expenseValidate, fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'category', label:'Category', type:'select', options:state.setup.expenseCats.filter(c=>!AUTO_COST_CATS.includes(c)), required:true},
@@ -2906,6 +3087,7 @@ function openForm(formKey, existingId){
     </div>`;
   translateDom(root);
   setupConditionalFields(root);
+  if(cfg.onOpen) cfg.onOpen(root, record);
   document.getElementById('cancelForm').addEventListener('click', closeForm);
   document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeForm(); });
   document.getElementById('entityForm').addEventListener('submit', (e)=>{
@@ -2938,6 +3120,7 @@ async function submitForm(formKey, existingId, cfg, formEl){
     if(f.type==='number') v = v===''||v===null ? 0 : parseFloat(v);
     record[f.name] = v;
   });
+  if(cfg.custom){ const msg = await cfg.custom(record); if(msg){ say(msg); return; } closeForm(); render(); showToast('Saved'); return; }
   if(cfg.validate){ const msg = cfg.validate(record); if(msg){ say(msg); return; } }
   const arr = state[cfg.entity];
   const idx = arr.findIndex(r=>r.id===record.id);
@@ -3172,7 +3355,7 @@ function attachTabEvents(){
   const addBtnMap = {
     addLivestock:'livestock', addReductions:'reductions', addProduction:'production',
     addProdReductions:'prodReductions', addFeedPurchases:'feedPurchases', addFeeding:'feeding',
-    addIncome:'income', addExpenses:'expenses', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
+    addIncome:'income', addExpenses:'purchase', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
     addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries', addAcct:'acct'
   };
   Object.keys(addBtnMap).forEach(btnId=>{
