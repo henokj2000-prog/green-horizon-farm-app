@@ -2713,7 +2713,8 @@ balanceSheetData = function(){
   const b=_bs(), o=opening(), efy=b.efy;
   b.cashOnHand=cashBalanceBy('cash'); b.bank=cashBalanceBy('bank');
   b.capital=num(o.capital)+cashInCapital()-cashOutCapital(); b.retained=retainedEarnings(efy);
-  b.currentAssets=b.cashOnHand+b.bank+b.ar+b.feedStock; b.nonCurrentAssets=b.fixedAssetsNBV+b.bioNBV;
+  b.produce=produceValueAt(null); b.totalAssets+=b.produce;
+  b.currentAssets=b.cashOnHand+b.bank+b.ar+b.feedStock+b.produce; b.nonCurrentAssets=b.fixedAssetsNBV+b.bioNBV; b.diff=b.totalAssets-b.totalLandE;
   return b;
 };
 renderBalanceSheetView = function(){
@@ -2737,7 +2738,7 @@ renderBalanceSheetView = function(){
     </div>
     <div class="tablewrap"><table class="rep-table"><thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead><tbody>
       ${S('Assets')}${S('Current assets')}
-      ${L('Cash on hand',b.cashOnHand)}${L('Cash at bank',b.bank)}${L('Accounts receivable (customers)',b.ar)}${L('Feed inventory, at cost',b.feedStock)}
+      ${L('Cash on hand',b.cashOnHand)}${L('Cash at bank',b.bank)}${L('Accounts receivable (customers)',b.ar)}${L('Feed inventory, at cost',b.feedStock)}${L('Agricultural produce inventory (eggs, honey, etc.)',b.produce)}
       ${L('Total current assets',b.currentAssets,'tot')}
       ${S('Non-current assets')}
       ${L('Biological assets, net (livestock)',b.bioNBV)}${L('Fixed assets, net of depreciation',b.fixedAssetsNBV)}
@@ -2755,7 +2756,8 @@ renderBalanceSheetView = function(){
       <li>Basis: accrual; feed inventory at moving-average cost, expensed when consumed.</li>
       <li>Livestock are carried at cost less amortisation (not IAS 41 fair value). Fixed assets are at cost less depreciation.</li>
       <li>Loans are shown in total; the current portion (due within 12 months) is not split out.</li>
-      <li>Unsold produce (eggs, honey, etc.), supplier payables and prepaid withholding tax are not recognised.</li>
+      <li>Unsold produce is valued at the price set on the Prod. Stock tab, or else the average price of recorded sales. The change in its value each year is shown in the Income Statement and is not included in taxable income.</li>
+      <li>Supplier payables and prepaid withholding tax are not recognised.</li>
     </ol>
   </div>`;
 };
@@ -2784,6 +2786,64 @@ const _ate = attachTabEvents;
 attachTabEvents = function(){
   _ate();
   const b=document.getElementById('addTransfers'); if(b) b.addEventListener('click',()=>openForm('transfers',null));
+};
+
+/* 8. Agricultural produce inventory (eggs, honey, milk, wool, manure) */
+const _min = allDataMinEFY;
+allDataMinEFY = function(){
+  let m=_min();
+  state.production.concat(state.prodReductions).forEach(r=>{ if(r.date){ const e=efyOf(r.date); if(e<m) m=e; } });
+  return m;
+};
+function produceStockAt(p,d){
+  const okd = x => !d || x.date<=d;
+  return Math.max(0,
+    state.production.filter(x=>x.product===p&&okd(x)).reduce((s,x)=>s+num(x.qtyProduced)-num(x.waste),0)
+   -state.prodReductions.filter(x=>x.product===p&&okd(x)).reduce((s,x)=>s+num(x.qty),0));
+}
+function produceUnitValue(p){
+  const man=num((state.setup.produceValues||{})[p]);
+  if(man>0) return man;
+  const s=state.prodReductions.filter(x=>x.product===p&&x.reason==='Sale'&&num(x.unitPrice)>0);
+  const q=s.reduce((a,x)=>a+num(x.qty),0);
+  return q? s.reduce((a,x)=>a+num(x.qty)*num(x.unitPrice),0)/q : 0;
+}
+function produceValueAt(d){ return state.setup.productTypes.reduce((s,p)=>s+produceStockAt(p,d)*produceUnitValue(p),0); }
+function produceChangeInFY(efy){ const r=fyRange(efy); return produceValueAt(r[1])-produceValueAt(prevDay(r[0])); }
+
+const _fy2 = fyReport;
+fyReport = function(efy){
+  const r=_fy2(efy), d=produceChangeInFY(efy);
+  r.produceChange=d; r.netBefore+=d; r.netAfterTax+=d;   // not added to taxable income / tax base
+  return r;
+};
+const _ris = renderIncomeStatementView;
+renderIncomeStatementView = function(efy,tx){
+  const h=_ris(efy,tx), r=fyReport(efy);
+  const mk='<tr><td class="sec" colspan="2">'+t('6. Net profit / (loss) before tax')+'</td></tr>';
+  const row='<tr><td class="ind">'+escHtml(t('Change in agricultural produce inventory (unrealised)'))+'</td><td class="num mono">'+fmtMoney(r.produceChange)+'</td></tr>';
+  const i=h.indexOf(mk);
+  return i<0 ? h : h.slice(0,i)+row+h.slice(i);
+};
+const _rps = renderProdStock;
+renderProdStock = function(){
+  const rows=state.setup.productTypes.map(p=>{
+    const st=produceStockAt(p), uv=produceUnitValue(p), man=num((state.setup.produceValues||{})[p]);
+    return `<tr><td>${escHtml(p)}</td><td class="num mono">${fmtNum(st)}</td>
+      <td class="num"><input type="number" step="any" min="0" data-produce-price="${escHtml(p)}" value="${man||''}" placeholder="${uv?uv.toFixed(2):'0'}" style="width:110px;padding:5px 7px;border:1px solid var(--rule);border-radius:6px;text-align:right;"></td>
+      <td class="num mono">${fmtMoney(uv)}</td><td class="num mono"><strong>${fmtMoney(st*uv)}</strong></td></tr>`;}).join('');
+  return _rps()+`<div class="section-title">Stock valuation (shown on the Balance Sheet)</div>
+   ${tableShell([{label:'Product'},{label:'Stock',num:true},{label:'Your price (optional)',num:true},{label:'Price used',num:true},{label:'Stock value',num:true}],rows)}
+   <p class="note">Price used = your price if you enter one, otherwise the average price of recorded sales. Leave it blank for products you never sell.</p>`;
+};
+const _ate2 = attachTabEvents;
+attachTabEvents = function(){
+  _ate2();
+  document.querySelectorAll('[data-produce-price]').forEach(el=>el.addEventListener('change',async()=>{
+    if(!state.setup.produceValues) state.setup.produceValues={};
+    state.setup.produceValues[el.dataset.producePrice]=num(el.value);
+    await saveSetup(); render();
+  }));
 };
 render();
 })();
