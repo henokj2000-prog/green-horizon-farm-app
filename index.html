@@ -590,7 +590,9 @@ function ethDateStr(iso){
 }
 function efyOf(iso){ const y=parseInt(iso.slice(0,4),10); return iso >= y+'-07-08' ? y-7 : y-8; }
 function currentEFY(){ return efyOf(todayISO()); }
+/* Ethiopian government fiscal year: Hamle 1 → Sene 30 (≈ 8 Jul → 7 Jul Gregorian) */
 function fyRange(efy){ return [ (efy+7)+'-07-08', (efy+8)+'-07-07' ]; }
+function fyLabel(efy){ return efy+' EFY (Hamle 1 – Sene 30)'; }
 function inFY(d, efy){ const r=fyRange(efy); return !!d && d>=r[0] && d<=r[1]; }
 function fyList(){
   const s = new Set([currentEFY()-1, currentEFY()]);
@@ -1612,35 +1614,35 @@ function renderIncome(){
 function renderExpenses(){
   const items = [];
   const row = (date, cells, act, cls)=>items.push({date:date||'', html:`<tr${cls?' class="'+cls+'"':''}>${cells}${act}</tr>`});
-  const cell = (r, amount, payment, treat)=>`<td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td>${escHtml(r.description)}</td><td class="mono">${escHtml(r.refNo||'')}</td>
+  const cell = (r, amount, payment, treat)=>`<td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td class="mono">${escHtml(r.batchId||'—')}</td><td>${escHtml(r.description)}</td><td class="mono">${escHtml(r.refNo||'')}</td>
     <td class="num mono"><strong>${fmtMoney(amount)}</strong></td><td>${payment||''}</td><td>${treat}</td><td>${r.nonDeductible==='Yes'?'Yes':''}</td><td class="notes-cell">${escHtml(r.notes||'')}</td>`;
   costRows().forEach(r=>{
     const cb = expCapBatch(r);
-    const treat = cb ? `<span class="tag tag-active">Capitalised → ${escHtml(cb.batchId)}</span>` : 'Expensed';
+    const treat = cb ? `<span class="tag tag-active">Capitalised → ${escHtml(cb.batchId)}</span>` : 'Expensed (P&L)';
     const pay = r.credit==='1200' ? 'From feed stock' : (r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : '');
     row(r.date, cell(r, r.amount, pay, treat), r.derived ? rowActionsHtml(r.srcEntity, r.srcId) : rowActionsHtml('expenses', r.id), r.derived?'auto-row':'');
   });
   state.feedPurchases.forEach(f=>{
-    const r = {date:f.date, category:'Feed Purchase', description:'Bought '+fmtNum(f.qty)+' kg '+f.feedType+(f.supplier?' — '+f.supplier:''), notes:f.notes};
+    const r = {date:f.date, category:'Feed Purchase', batchId:'', description:'Bought '+fmtNum(f.qty)+' kg '+f.feedType+(f.supplier?' — '+f.supplier:''), notes:f.notes};
     row(f.date, cell(r, money2(num(f.qty)*num(f.unitCost)), f.payStatus && f.payStatus!==PAY_PAID ? escHtml(f.payStatus) : '', 'Feed stock (expensed when used)'), rowActionsHtml('feedPurchases', f.id), 'auto-row');
   });
   state.livestock.filter(b=>isBioBatch(b) && num(b.purchaseCost)>0 && String(b.fundedBy||'').indexOf('Owned before')!==0).forEach(b=>{
-    const r = {date:b.dateAcquired, category:'Livestock Purchase', description:'Bought '+fmtNum(b.initialQty)+' '+(b.breed||b.animalType)+' — batch '+b.batchId, notes:b.notes};
+    const r = {date:b.dateAcquired, category:'Livestock Purchase', batchId:b.batchId, description:'Bought '+fmtNum(b.initialQty)+' '+(b.breed||b.animalType), notes:b.notes};
     row(b.dateAcquired, cell(r, b.purchaseCost, b.fundedBy && b.fundedBy!==FUND_PAID ? escHtml(b.fundedBy) : '', isLayerFlock(b)?'Asset — layer flock':'Asset — livestock'), rowActionsHtml('livestock', b.id), 'auto-row');
   });
   bioCharges().filter(c=>c.kind!=='bioAmort' && c.date<=todayISO()).forEach(c=>{
-    row(c.date, `<td>${fmtDate(c.date)}</td><td>${escHtml(c.cat)}</td><td>${escHtml(c.desc)}</td><td></td><td class="num mono"><strong>${fmtMoney(c.amt)}</strong></td><td>Non-cash</td><td>Written off from ${escHtml(c.batchId)}</td><td></td><td class="notes-cell">Automatic — animals that left the batch</td>`,
+    row(c.date, `<td>${fmtDate(c.date)}</td><td>${escHtml(c.cat)}</td><td class="mono">${escHtml(c.batchId||'')}</td><td>${escHtml(c.desc)}</td><td></td><td class="num mono"><strong>${fmtMoney(c.amt)}</strong></td><td>Non-cash</td><td>Written off</td><td></td><td class="notes-cell">Automatic — animals that left the batch</td>`,
       '<td class="rowactions"><span class="tag tag-closed">Auto</span></td>', 'auto-row');
   });
   items.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const body = items.length ? items.map(x=>x.html).join('') : emptyRow(10,'No purchases or expenses yet.');
+  const body = items.length ? items.map(x=>x.html).join('') : emptyRow(11,'No purchases or expenses yet.');
   return `
   <div class="pagehead">
-    <div><h1>Expenses &amp; Purchases</h1><p>Choose what you are buying — feed, animals, a vaccine, a medication or another cost — and the form shows the matching fields and updates the stock, health log or books automatically.</p></div>
+    <div><h1>Expenses &amp; Purchases</h1><p>Choose what you are buying — feed, animals, a vaccine, a medication or another cost. Branch/batch identifies the farm unit; costs default to the P&amp;L (expense).</p></div>
     <button class="btn btn-primary" id="addExpenses">+ Add purchase / expense</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Ref No.'},{label:'Amount',num:true},{label:'Payment'},{label:'Treatment'},{label:'Non-deductible'},{label:'Notes'}], body)}
-  <p class="note">Shaded rows come from the Feed, Livestock and Health tabs; use their Edit / Delete buttons to change them. Feed purchases are stock (an asset) and only become a cost when the feed is used.</p>
+  ${tableShell([{label:'Date'},{label:'Category'},{label:'Branch / batch'},{label:'Description'},{label:'Ref No.'},{label:'Amount',num:true},{label:'Payment'},{label:'Treatment'},{label:'Non-deductible'},{label:'Notes'}], body)}
+  <p class="note">Shaded rows come from the Feed, Livestock and Health tabs. Labor, utilities, rent etc. are always expensed on the P&amp;L. Capitalising into a young layer flock is optional (default No).</p>
   `;
 }
 
@@ -1820,8 +1822,11 @@ function acctFirstFY(){
    Bees and non-layer poultry are expensed at purchase (cost of production). */
 const BIO_YES = 'Yes';
 const ASSET_ANIMALS = ['Goats','Sheep','Oxen'];
-const REARING_CATS = ['Feed Used','Vaccination','Medication','Labor'];
+/* Only these costs may be capitalised into an immature layer flock (when user links a batch + Auto).
+   Labor, Utilities, Rent, Transport etc. are always operating expenses on the P&L. */
+const REARING_CATS = ['Feed Used','Vaccination','Medication'];
 const AUTO_COST_CATS = ['Feed Purchase','Feed Used','Vaccination','Medication','Livestock Purchase'];   // created automatically, never typed into Expenses
+const ALWAYS_OPEX_CATS = ['Labor','Utilities','Equipment','Transport','Rent','Other Expense','Other'];
 const DEFAULT_LAYING_AGE = 5, DEFAULT_AMORT_MONTHS = 18;
 function money2(x){ return Math.round(x*100)/100; }
 function addMonthsISO(iso, m){
@@ -1856,6 +1861,9 @@ function bioParams(b){
 }
 /* Is this cost eligible to be capitalised into a layer flock that is still under laying age? */
 function expEligibleBatch(r){
+  if(!r) return null;
+  if(ALWAYS_OPEX_CATS.includes(r.category)) return null;           // never capitalise pure operating costs
+  if(r.capMode==='No') return null;
   const b = layerBatchById(r.batchId); if(!b) return null;
   if(!REARING_CATS.includes(r.category)) return null;
   if(!validDate(r.date) || !validDate(b.dateAcquired)) return null;
@@ -2596,7 +2604,8 @@ function renderPLBody(efy){
   const rng = fyRange(efy);
   const isAm = lang==='am';
   const em = isAm ? EC_MONTHS_AM : EC_MONTHS_EN;
-  const fyText = `${em[10]} 1, ${efy-1} – ${em[9]} 30, ${efy} (${rng[0]} → ${rng[1]})`;
+  // Hamle 1 (year efy-1 in EC naming on report) → Sene 30 (efy) — budget closes Sene 30
+  const fyText = `${em[10]} 1 – ${em[9]} 30, ${efy} EFY  ·  closes Sene 30 (${rng[0]} → ${rng[1]})`;
   const line = (label, amt, cls) => `<tr><td class="${cls||'ind'}">${escHtml(label)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtMoney(amt)}</td></tr>`;
   const sec = label => `<tr><td class="sec" colspan="2">${t(label)}</td></tr>`;
   const list = (arr) => arr.length ? arr.map(x=>line(x.cat, x.amt)).join('') : `<tr><td class="ind" colspan="2" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
@@ -2678,7 +2687,7 @@ function renderPLBody(efy){
       <div>${t('Prepared by')}: ____________________</div><div>${t('Signature / stamp')}: ____________________</div>
     </div>
   </div>
-  <p class="note no-print">Fiscal year boundary is fixed at Jul 8 – Jul 7; check entries dated on those days in Ethiopian leap-year cycles. Tax is computed from the rate or override you enter — confirm rates and category with the tax authority or your accountant.</p>
+  <p class="note no-print">Ethiopian budget year runs Hamle 1 – Sene 30 (closes Sene 30; ≈ 8 Jul – 7 Jul Gregorian). Tax is computed from the rate or override you enter — confirm with the tax authority or your accountant.</p>
   `;
 }
 
@@ -2801,7 +2810,7 @@ function renderSetup(){
     <p class="note" style="margin:4px 0 12px;">Keep the live app light: download a file of everything up to the end of a fiscal year, then optionally remove those old transactions from this device. Batches, customers and assets stay; livestock quantities are adjusted so current stock stays correct.</p>
     <div class="calc-grid" style="margin-bottom:12px;">
       <label class="calc-field">Archive through end of EFY
-        <select id="archiveEfySelect">${fyList().map(y=>`<option value="${y}" ${y===currentEFY()-1?'selected':''}>${y} EFY (ends ${fyRange(y)[1]})</option>`).join('')}
+        <select id="archiveEfySelect">${fyList().map(y=>`<option value="${y}" ${y===currentEFY()-1?'selected':''}>${fyLabel(y)} · ends Sene 30 (${fyRange(y)[1]})</option>`).join('')}
         </select>
       </label>
     </div>
@@ -2900,8 +2909,12 @@ function incomeValidate(r){
 }
 function expenseValidate(r){
   if(AUTO_COST_CATS.includes(r.category)) return 'This cost is created automatically: feed from the Feed tab, vaccines and medication from the Health tab, animals from the Livestock tab.';
-  if(r.batchId && !layerBatchById(r.batchId)) r.batchId = '';
-  if(!r.batchId) r.capMode = 'Auto';
+  if(!(num(r.amount)>0)) return 'Amount must be greater than zero.';
+  if(!r.category) return 'Choose an expense category.';
+  // batchId = which branch/flock (tracking). Capitalise only if rearing category + Auto.
+  if(r.batchId && !state.livestock.some(b=>b.batchId===r.batchId)) r.batchId = '';
+  if(ALWAYS_OPEX_CATS.includes(r.category)){ r.capMode = 'No'; r.isCapitalized = false; }
+  else if(r.capMode!=='Auto' || !REARING_CATS.includes(r.category) || !r.batchId){ r.capMode = 'No'; }
   return '';
 }
 /* ================= SMART FORMS: the fields follow what is being sold or bought ================= */
@@ -2953,11 +2966,14 @@ async function submitPurchase(rec){
     await refreshCapFlags(); await saveEntity('medications');
   }
   else{
-    const r = {id:uid(), date:rec.date, category:rec.o_cat, description:rec.o_desc||'', amount:num(rec.o_amount), payStatus:rec.o_pay||PAY_PAID, refNo:rec.o_ref||'', supplier:rec.o_supplier||'',
-      nonDeductible:rec.o_nonded||'No', batchId:rec.o_batch||'', capMode:rec.o_cap||'Auto', notes:rec.o_notes||''};
-    if(!r.category) return 'Choose the expense category.';
+    const r = {id:uid(), date:rec.date, category:String(rec.o_cat||'').trim(), description:rec.o_desc||'', amount:num(rec.o_amount), payStatus:rec.o_pay||PAY_PAID, refNo:rec.o_ref||'', supplier:rec.o_supplier||'',
+      nonDeductible:rec.o_nonded||'No', batchId:rec.o_batch||'', capMode:rec.o_cap||'No', notes:rec.o_notes||''};
+    if(!r.category) return 'Choose the expense category (e.g. Labor, Utilities).';
     if(!(r.amount>0)) return 'Amount must be greater than zero.';
+    // batchId kept for branch/flock tracking; capitalisation only for rearing costs when user picks Auto
+    if(ALWAYS_OPEX_CATS.includes(r.category)) r.capMode = 'No';
     msg = expenseValidate(r); if(msg) return msg;
+    r.isCapitalized = (r.capMode==='Auto' && !!expEligibleBatch(r));
     state.expenses.push(r); await refreshCapFlags(); await saveEntity('expenses');
   }
   return '';
@@ -2991,7 +3007,8 @@ function purchaseFormHook(root){
     }else if(k==='Vaccine' || k==='Medication'){
       h = 'Booked as an expense now — or capitalised into the flock’s asset if it is a layer flock still under laying age. Cost is logged in the Health tab.';
     }else if(k==='Other'){
-      h = 'Booked as an expense (or capitalised into a young layer flock if you pick one below).';
+      const cat = v('o_cat'), bat = v('o_batch');
+      h = (cat||'This cost')+(bat?' for '+bat:'')+' is recorded as an expense on the P&L by default. Pick the branch/batch to identify the farm unit. Capitalise only if you explicitly choose Auto for a young layer rearing cost.';
     }
     hint.textContent = h;
   };
@@ -3158,29 +3175,29 @@ function FORM_CONFIGS(){
         PAY('m_pay','Medication'),
         {name:'m_notes', label:'Notes', type:'textarea', showWhen:W('Medication')},
         /* everything else -> plain expense */
-        {name:'o_cat', label:'Expense category', type:'select', options:state.setup.expenseCats.filter(c=>!AUTO_COST_CATS.includes(c)), showWhen:W('Other')},
+        {name:'o_cat', label:'Expense category (Labor, Utilities, Rent…)', type:'select', options:state.setup.expenseCats.filter(c=>!AUTO_COST_CATS.includes(c)), showWhen:W('Other')},
         {name:'o_desc', label:'Description', type:'text', showWhen:W('Other')},
         {name:'o_amount', label:'Amount (ETB)', type:'number', showWhen:W('Other')},
         PAY('o_pay','Other'),
         {name:'o_ref', label:'Receipt / Invoice No.', type:'text', showWhen:W('Other')},
         {name:'o_supplier', label:'Supplier name / TIN', type:'text', showWhen:W('Other')},
         {name:'o_nonded', label:'Non-deductible for tax?', type:'select', options:['No','Yes'], default:'No', showWhen:W('Other')},
-        {name:'o_batch', label:'Layer flock this cost belongs to (optional)', type:'select', options:bioBatchOptions(), showWhen:W('Other')},
-        {name:'o_cap', label:'If the flock is under laying age: capitalise as an asset?', type:'select', options:['Auto','No'], default:'Auto', showWhen:W('Other',[{name:'o_batch',nonEmpty:true}])},
+        {name:'o_batch', label:'Branch / batch / flock (which farm unit this cost belongs to)', type:'select', options:batchOptions(), showWhen:W('Other')},
+        {name:'o_cap', label:'Also capitalise into young layer asset? (default No = expense on P&L)', type:'select', options:['No','Auto'], default:'No', showWhen:W('Other')},
         {name:'o_notes', label:'Notes', type:'textarea', showWhen:W('Other')}
       ];
     })()},
     expenses: { title:'Expense Entry', entity:'expenses', validate:expenseValidate, fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'category', label:'Category', type:'select', options:state.setup.expenseCats.filter(c=>!AUTO_COST_CATS.includes(c)), required:true},
-      {name:'batchId', label:'Layer flock this cost belongs to (optional)', type:'select', options:bioBatchOptions()},
-      {name:'capMode', label:'If the flock is under laying age: capitalise this cost as an asset?', type:'select', options:['Auto','No'], default:'Auto', showWhen:{name:'batchId',nonEmpty:true}},
       {name:'description', label:'Description', type:'text'},
       {name:'amount', label:'Amount (ETB)', type:'number', required:true},
       {name:'payStatus', label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID, required:true},
       {name:'refNo', label:'Receipt / Invoice No.', type:'text'},
       {name:'supplier', label:'Supplier name / TIN', type:'text'},
       {name:'nonDeductible', label:'Non-deductible for tax?', type:'select', options:['No','Yes'], default:'No'},
+      {name:'batchId', label:'Branch / batch / flock (which farm unit)', type:'select', options:batchOptions()},
+      {name:'capMode', label:'Also capitalise into young layer asset? (default No = expense on P&L)', type:'select', options:['No','Auto'], default:'No'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
     customers: { title:'Customer', entity:'customers', fields:[
@@ -3324,7 +3341,12 @@ function setupConditionalFields(root){
   root.querySelectorAll('label[data-sw]').forEach(l=>{
     let conds = []; try{ conds = JSON.parse(l.getAttribute('data-sw')); }catch(e){}
     const check = ()=> conds.every(c=>{ const ctl = root.querySelector('[name="'+c.name+'"]'); if(!ctl) return true; return c.nonEmpty ? !!ctl.value : (c.values||[]).indexOf(ctl.value)>=0; });
-    const apply = ()=>{ l.style.display = check() ? '' : 'none'; };
+    const apply = ()=>{
+      const on = check();
+      l.style.display = on ? '' : 'none';
+      // Disable hidden controls so they are not submitted and cannot block HTML5 validation
+      l.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled = !on; });
+    };
     conds.forEach(c=>{ const ctl = root.querySelector('[name="'+c.name+'"]'); if(ctl) ctl.addEventListener('change', apply); });
     apply();
   });
