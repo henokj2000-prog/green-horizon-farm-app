@@ -128,9 +128,10 @@ a{color:var(--green);}
 
 /* ---------- Tables ---------- */
 .tablewrap{overflow-x:auto;}
+.tablewrap.scroll-y{overflow-y:auto;max-height:min(420px,60vh);border-top:1px solid var(--rule);}
 table{border-collapse:collapse;width:100%;font-size:12.8px;}
 th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--rule);white-space:nowrap;}
-th{background:var(--surface-alt);color:var(--green-dark);font-weight:600;font-family:'Space Grotesk',sans-serif;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0;}
+th{background:var(--surface-alt);color:var(--green-dark);font-weight:600;font-family:'Space Grotesk',sans-serif;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0;z-index:2;box-shadow:0 1px 0 var(--rule);}
 tbody tr:hover{background:#FAFAF4;}
 td.num,th.num{text-align:right;}
 .notes-cell{white-space:normal;max-width:220px;color:var(--ink-soft);}
@@ -139,6 +140,22 @@ td.num,th.num{text-align:right;}
 .tag-active{background:#DCEBDD;color:var(--green-dark);}
 .tag-closed{background:#EEE;color:var(--ink-soft);}
 .rowactions{display:flex;gap:6px;}
+.table-tools{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--rule);background:var(--surface);flex-wrap:wrap;}
+.table-tools input.table-search{flex:1;min-width:140px;max-width:280px;padding:7px 10px;border:1px solid var(--rule);border-radius:8px;font-family:inherit;font-size:13px;background:#fff;}
+.table-tools input.table-search:focus{outline:2px solid var(--gold);border-color:var(--gold);}
+.table-count{font-size:12px;color:var(--ink-soft);white-space:nowrap;}
+.table-more{font-size:12px;font-weight:600;color:var(--green);background:none;border:none;padding:4px 8px;cursor:pointer;}
+.table-more:hover{text-decoration:underline;}
+details.section-fold{margin-bottom:18px;}
+details.section-fold>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 4px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:var(--green-dark);user-select:none;}
+details.section-fold>summary::-webkit-details-marker{display:none;}
+details.section-fold>summary::after{content:'▸'; font-size:14px;color:var(--ink-soft);transition:transform .15s;}
+details.section-fold[open]>summary::after{transform:rotate(90deg);}
+details.section-fold>summary .fold-hint{font-weight:500;font-size:12px;color:var(--ink-soft);font-family:Inter,sans-serif;}
+@media print{
+  .tablewrap.scroll-y{max-height:none!important;overflow:visible!important;}
+  .table-tools{display:none!important;}
+}
 
 /* ---------- Modal ---------- */
 .modal-overlay{position:fixed;inset:0;background:rgba(18,51,37,0.45);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
@@ -1074,17 +1091,78 @@ function render(){
   c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
   translateDom(c);
   attachTabEvents();
+  wireTableTools();
 }
 
 /* ---------------- Shared table helpers ---------------- */
-function tableShell(headers, bodyRows){
-  return `<div class="panel"><div class="tablewrap"><table><thead><tr>${headers.map(h=>`<th${h.num?' class="num"':''}>${h.label}</th>`).join('')}<th></th></tr></thead><tbody>${bodyRows}</tbody></table></div></div>`;
+/** Smart table: horizontal + vertical scroll, sticky header, search, optional row limit with "Show more".
+ *  bodyRows: HTML string of <tr>…</tr> rows (as today).
+ *  opts: { id, scroll=true, search=true, pageSize=50, maxH=420, noActions=false }
+ */
+const _tableShowAll = {};
+function tableShell(headers, bodyRows, opts){
+  opts = opts || {};
+  const scroll = opts.scroll !== false;
+  const search = opts.search !== false;
+  const pageSize = opts.pageSize || 50;
+  const maxH = opts.maxH || 420;
+  const tid = opts.id || ('tbl_'+Math.random().toString(36).slice(2,9));
+  const showAll = !!_tableShowAll[tid];
+  // Split joined body into rows for optional paging
+  let rowList = [];
+  if(typeof bodyRows === 'string' && bodyRows.trim()){
+    // Match each <tr>...</tr> including nested tags inside cells
+    const re = /<tr[\s\S]*?<\/tr>/gi;
+    let m; while((m = re.exec(bodyRows)) !== null) rowList.push(m[0]);
+    if(!rowList.length) rowList = [bodyRows];
+  }else if(Array.isArray(bodyRows)) rowList = bodyRows;
+  const total = rowList.filter(r=>r.indexOf('empty-row')<0).length;
+  const limited = !showAll && total > pageSize;
+  const visible = limited ? rowList.filter(r=>r.indexOf('empty-row')<0).slice(0, pageSize).concat(rowList.filter(r=>r.indexOf('empty-row')>=0)) : rowList;
+  const tools = (search || limited || total>0) ? `<div class="table-tools no-print">
+      ${search ? `<input type="search" class="table-search" data-table="${tid}" placeholder="Search this table…" aria-label="Search table">` : ''}
+      <span class="table-count" data-table-count="${tid}">${total} row${total===1?'':'s'}${limited?' · showing first '+pageSize:''}</span>
+      ${limited ? `<button type="button" class="table-more" data-table-more="${tid}">Show all ${total}</button>` : (showAll && total>pageSize ? `<button type="button" class="table-more" data-table-less="${tid}">Show less</button>` : '')}
+    </div>` : '';
+  const actionCol = opts.noActions ? '' : '<th></th>';
+  return `<div class="panel">${tools}
+    <div class="tablewrap${scroll?' scroll-y':''}" id="${tid}"${scroll?` style="max-height:${maxH}px"`:''}>
+      <table><thead><tr>${headers.map(h=>`<th${h.num?' class="num"':''}>${h.label}</th>`).join('')}${actionCol}</tr></thead>
+      <tbody>${visible.join('')}</tbody></table>
+    </div></div>`;
 }
 function emptyRow(colspan, msg){
   return `<tr class="empty-row"><td colspan="${colspan}">${msg}</td></tr>`;
 }
 function rowActionsHtml(entity, id){
   return `<td class="rowactions"><button class="btn btn-ghost btn-sm" data-edit="${entity}" data-id="${id}">Edit</button><button class="btn btn-danger btn-sm" data-del="${entity}" data-id="${id}">Delete</button></td>`;
+}
+function wireTableTools(){
+  document.querySelectorAll('.table-search').forEach(inp=>{
+    if(inp._wired) return; inp._wired = true;
+    inp.addEventListener('input', ()=>{
+      const tid = inp.dataset.table, q = (inp.value||'').trim().toLowerCase();
+      const wrap = document.getElementById(tid); if(!wrap) return;
+      let n=0, shown=0;
+      wrap.querySelectorAll('tbody tr').forEach(tr=>{
+        if(tr.classList.contains('empty-row')) return;
+        n++;
+        const hit = !q || (tr.textContent||'').toLowerCase().indexOf(q)>=0;
+        tr.style.display = hit ? '' : 'none';
+        if(hit) shown++;
+      });
+      const c = document.querySelector('[data-table-count="'+tid+'"]');
+      if(c) c.textContent = q ? (shown+' of '+n+' match') : (n+' row'+(n===1?'':'s'));
+    });
+  });
+  document.querySelectorAll('[data-table-more]').forEach(btn=>{
+    if(btn._wired) return; btn._wired = true;
+    btn.addEventListener('click', ()=>{ _tableShowAll[btn.dataset.tableMore] = true; render(); });
+  });
+  document.querySelectorAll('[data-table-less]').forEach(btn=>{
+    if(btn._wired) return; btn._wired = true;
+    btn.addEventListener('click', ()=>{ _tableShowAll[btn.dataset.tableLess] = false; render(); });
+  });
 }
 
 /* ================= DASHBOARD ================= */
@@ -1182,7 +1260,7 @@ function renderLivestock(){
     {label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
     {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (Days)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
     {label:'Status'},{label:'Notes'}
-  ], body)}
+  ], body, {id:'tbl_livestock_batches'})}
 
   <div class="pagehead" style="margin-top:28px">
     <div>
@@ -1195,7 +1273,7 @@ function renderLivestock(){
   ${tableShell([
     {label:'Date'},{label:'Animal Type'},{label:'Batch code'},{label:'Reason'},
     {label:'Qty',num:true},{label:'Sale price / unit',num:true},{label:'Sale proceeds',num:true},{label:'Book value written off',num:true},{label:'Notes'}
-  ], redBody)}
+  ], redBody, {id:'tbl_livestock_reductions'})}
   `;
 }
 
