@@ -920,8 +920,10 @@ function livestockComputed(){
   return state.livestock.map(b=>{
     const reduced = allReductions().filter(r=>r.batchId===b.batchId).reduce((s,r)=>s+num(r.qty),0);
     const current = num(b.initialQty)-reduced;
-    const days = b.dateAcquired ? Math.floor((new Date(todayISO())-new Date(b.dateAcquired))/86400000) : '';
-    return Object.assign({}, b, {reduced, current, status: current<=0?'Closed':'Active', ageDays:days});
+    const daysSince = b.dateAcquired ? Math.floor((new Date(todayISO())-new Date(b.dateAcquired))/86400000) : 0;
+    const ageWeeks = Math.max(0, Math.round(weeksAtPurchase(b) + daysSince/7));
+    const ageDays = daysSince;
+    return Object.assign({}, b, {reduced, current, status: current<=0?'Closed':'Active', ageDays, ageWeeks});
   });
 }
 function livestockByType(){
@@ -1230,7 +1232,7 @@ function renderLivestock(){
       <td class="num mono">${fmtNum(r.initialQty)}</td>
       <td class="num mono">${fmtMoney(r.purchaseCost)}</td>
       <td>${isLayerFlock(r)?'Asset — layers':isAssetAnimal(r)?'Asset — livestock':'Expensed'}</td>
-      <td class="num mono">${r.ageDays}</td>
+      <td class="num mono">${r.animalType==='Poultry'?r.ageWeeks:r.ageDays}</td>
       <td class="num mono">${fmtNum(r.reduced)}</td>
       <td class="num mono"><strong>${fmtNum(r.current)}</strong></td>
       <td><span class="tag ${r.status==='Active'?'tag-active':'tag-closed'}">${r.status}</span></td>
@@ -1260,7 +1262,7 @@ function renderLivestock(){
   </div>
   ${tableShell([
     {label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
-    {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (Days)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
+    {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (weeks for poultry / days others)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
     {label:'Status'},{label:'Notes'}
   ], body, {id:'tbl_livestock_batches'})}
 
@@ -1364,13 +1366,14 @@ function renderFeed(){
   const feeding = state.feeding.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const feedingBody = feeding.length ? feeding.map(r=>`
     <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
-    <td>${escHtml(r.feedType)}</td><td class="num mono">${fmtNum(r.qtyUsed)}</td>
+    <td>${escHtml(r.feedType)}</td><td>${escHtml(r.period||'Day')}</td>
+    <td class="num mono">${fmtNum(r.qtyUsed)}</td>
     <td class="num mono">${fmtMoney(feedUseCost(r.id))}</td>
     <td class="notes-cell">${escHtml(r.notes)}</td>
-    ${rowActionsHtml('feeding', r.id)}</tr>`).join('') : emptyRow(8,'No feeding logged yet.');
+    ${rowActionsHtml('feeding', r.id)}</tr>`).join('') : emptyRow(9,'No feeding logged yet.');
 
   return `
-  <div class="pagehead"><div><h1>Feed</h1><p>Buying feed adds stock and inventory value (an asset). Feeding it out removes the stock and expenses its cost at the average price, or capitalises it into a layer flock that is still under laying age.</p></div></div>
+  <div class="pagehead"><div><h1>Feed</h1><p>Buying feed adds stock and inventory value (an asset). Feeding it out removes the stock and expenses its cost at the average price. Record feed used for a day, week, bi-week or month — enter the <strong>total kg for that period</strong>.</p></div></div>
   <div class="section-title" style="margin-top:0">Feed Stock Summary</div>
   ${tableShell([{label:'Feed Type'},{label:'Purchased (kg)',num:true},{label:'Used (kg)',num:true},{label:'Current Stock (kg)',num:true},{label:'Avg Cost/kg',num:true},{label:'Stock Value',num:true}], invRows)}
   <div class="pagehead">
@@ -1382,7 +1385,7 @@ function renderFeed(){
     <div><div class="section-title" style="margin-top:0">Feeding Log</div></div>
     <button class="btn btn-primary" id="addFeeding">+ Add feeding</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Feed Type'},{label:'Qty Used',num:true},{label:'Cost expensed',num:true},{label:'Notes'}], feedingBody)}
+  ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Feed Type'},{label:'Period'},{label:'Qty Used (kg)',num:true},{label:'Cost expensed',num:true},{label:'Notes'}], feedingBody)}
   `;
 }
 
@@ -1827,13 +1830,38 @@ const ASSET_ANIMALS = ['Goats','Sheep','Oxen'];
 const REARING_CATS = ['Feed Used','Vaccination','Medication'];
 const AUTO_COST_CATS = ['Feed Purchase','Feed Used','Vaccination','Medication','Livestock Purchase'];   // created automatically, never typed into Expenses
 const ALWAYS_OPEX_CATS = ['Labor','Utilities','Equipment','Transport','Rent','Other Expense','Other'];
-const DEFAULT_LAYING_AGE = 5, DEFAULT_AMORT_MONTHS = 18;
+const DEFAULT_LAYING_AGE_WEEKS = 22;   // ~5 months — typical onset of lay
+const DEFAULT_AMORT_MONTHS = 18;
+const FEED_PERIODS = [
+  {value:'Day', days:1, label:'Day'},
+  {value:'Week', days:7, label:'Week'},
+  {value:'Bi-week', days:14, label:'Bi-week (2 weeks)'},
+  {value:'Month', days:30, label:'Month'}
+];
+function feedPeriodDays(p){ const x = FEED_PERIODS.find(f=>f.value===p); return x ? x.days : 1; }
 function money2(x){ return Math.round(x*100)/100; }
 function addMonthsISO(iso, m){
   const p = iso.split('-').map(Number), idx = p[0]*12 + (p[1]-1) + m;
   const y = Math.floor(idx/12), mo = idx - y*12;
   const dim = new Date(Date.UTC(y, mo+1, 0)).getUTCDate();
   return String(y).padStart(4,'0')+'-'+String(mo+1).padStart(2,'0')+'-'+String(Math.min(p[2],dim)).padStart(2,'0');
+}
+function addDaysISO(iso, days){
+  const d = new Date(iso+'T12:00:00');
+  d.setDate(d.getDate()+days);
+  const y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+  return String(y).padStart(4,'0')+'-'+String(m).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
+/** Bird age helpers (weeks). Old records stored months — convert ×4.345. */
+function weeksAtPurchase(b){
+  if(num(b.ageWeeksAtPurchase)>0) return Math.round(num(b.ageWeeksAtPurchase));
+  if(num(b.ageMonthsAtPurchase)>0) return Math.round(num(b.ageMonthsAtPurchase)*4.345);
+  return 0;
+}
+function layingAgeWeeksOf(b){
+  if(num(b.layingAgeWeeks)>0) return Math.round(num(b.layingAgeWeeks));
+  if(num(b.layingAgeMonths)>0) return Math.round(num(b.layingAgeMonths)*4.345);
+  return DEFAULT_LAYING_AGE_WEEKS;
 }
 function isLayerFlock(b){ return !!b && b.bio===BIO_YES && b.animalType==='Poultry'; }
 function isAssetAnimal(b){ return !!b && ASSET_ANIMALS.includes(b.animalType); }
@@ -1847,17 +1875,17 @@ function bioAccts(b){
 }
 function bioParams(b){
   if(isLayerFlock(b)){
-    const lay = num(b.layingAgeMonths)>0 ? Math.round(num(b.layingAgeMonths)) : DEFAULT_LAYING_AGE;
+    const layW = layingAgeWeeksOf(b);
     // When policy is 'cost', force amortisation to 0 so statements hold layers at cost until disposal
     let am = num(b.amortMonths)>0 ? Math.round(num(b.amortMonths)) : DEFAULT_AMORT_MONTHS;
     if(bioPolicy==='cost') am = 0;
-    const age0 = Math.max(0, Math.round(num(b.ageMonthsAtPurchase)));
-    const born = validDate(b.dateAcquired) ? addMonthsISO(b.dateAcquired, -age0) : null;
-    return {lay, am, age0, born, mature: born ? addMonthsISO(born, lay) : null};
+    const age0w = Math.max(0, weeksAtPurchase(b));
+    const born = validDate(b.dateAcquired) ? addDaysISO(b.dateAcquired, -age0w*7) : null;
+    return {lay:layW, layW, am, age0:age0w, age0w, born, mature: born ? addDaysISO(born, layW*7) : null};
   }
   let amO = Math.max(0, Math.round(num(b.amortMonthsOther)));
   if(bioPolicy==='cost') amO = 0;
-  return {lay:0, am: amO, age0:0, born:b.dateAcquired, mature: validDate(b.dateAcquired) ? b.dateAcquired : null};
+  return {lay:0, layW:0, am: amO, age0:0, age0w:0, born:b.dateAcquired, mature: validDate(b.dateAcquired) ? b.dateAcquired : null};
 }
 /* Is this cost eligible to be capitalised into a layer flock that is still under laying age? */
 function expEligibleBatch(r){
@@ -2847,7 +2875,7 @@ function livestockValidate(r){
   if(old && old.animalType!==r.animalType && batchReferenced(old.batchId)) return 'This batch already has records. Its animal type cannot be changed.';
   if(r.animalType!=='Poultry') r.bio = 'No';
   if(r.bio===BIO_YES){
-    if(num(r.layingAgeMonths)<=0) r.layingAgeMonths = DEFAULT_LAYING_AGE;
+    if(num(r.layingAgeWeeks)<=0 && num(r.layingAgeMonths)<=0) r.layingAgeWeeks = DEFAULT_LAYING_AGE_WEEKS;
     if(num(r.amortMonths)<=0) r.amortMonths = DEFAULT_AMORT_MONTHS;
   }
   if(!ASSET_ANIMALS.includes(r.animalType)) r.amortMonthsOther = 0;
@@ -2881,6 +2909,7 @@ function feedPurchaseValidate(r){
 }
 function feedingValidate(r){
   if(!(num(r.qtyUsed)>0)) return 'Quantity used must be greater than zero.';
+  if(!r.period || !FEED_PERIODS.some(p=>p.value===r.period)) r.period = 'Day';
   const b = state.livestock.find(x=>x.batchId===r.batchId);
   if(!b) return 'Choose an existing batch.';
   if(validDate(b.dateAcquired) && validDate(r.date) && r.date<b.dateAcquired) return 'The date is before this batch was acquired ('+b.dateAcquired+').';
@@ -2947,7 +2976,7 @@ async function submitPurchase(rec){
     if(!(qty>0)) return 'Enter how many animals were bought.';
     const r = {id:uid(), animalType:rec.l_type, batchId:batchCode, breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
       purchaseCost:money2(qty*unit), fundedBy:fundFromPay(rec.l_pay), bio:rec.l_type==='Poultry' ? (rec.l_bio||'No') : 'No',
-      ageMonthsAtPurchase:num(rec.l_age), layingAgeMonths:num(rec.l_lay), amortMonths:num(rec.l_amort), amortMonthsOther:num(rec.l_amortO), notes:rec.l_notes||''};
+      ageWeeksAtPurchase:num(rec.l_age), layingAgeWeeks:num(rec.l_lay)||DEFAULT_LAYING_AGE_WEEKS, amortMonths:num(rec.l_amort), amortMonthsOther:num(rec.l_amortO), notes:rec.l_notes||''};
     msg = livestockValidate(r); if(msg) return msg;
     state.livestock.push(r); await refreshCapFlags(); await saveEntity('livestock');
   }
@@ -3067,8 +3096,8 @@ function FORM_CONFIGS(){
       {name:'purchaseCost', label:'Total purchase cost (ETB) — enter 0 if not bought (e.g. born on the farm)', type:'number', required:true, default:0},
       {name:'fundedBy', label:'How was it paid for?', type:'select', options:[FUND_PAID,FUND_CREDIT,FUND_OWNER,FUND_OPEN], default:FUND_PAID, required:true},
       {name:'bio', label:'Track as layer flock (biological asset)?', type:'select', options:['No','Yes'], default:'No', showWhen:{name:'animalType',values:['Poultry']}},
-      {name:'ageMonthsAtPurchase', label:'Age of the birds when acquired (months)', type:'number', default:0, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
-      {name:'layingAgeMonths', label:'Age at onset of laying (months)', type:'number', default:DEFAULT_LAYING_AGE, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
+      {name:'ageWeeksAtPurchase', label:'Age of the birds when acquired (weeks)', type:'number', default:0, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
+      {name:'layingAgeWeeks', label:'Age at onset of laying (weeks) — about 20–24 is typical', type:'number', default:DEFAULT_LAYING_AGE_WEEKS, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
       {name:'amortMonths', label:'Amortise the locked cost over (months) — 12 to 18 is typical', type:'number', default:DEFAULT_AMORT_MONTHS, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
       {name:'amortMonthsOther', label:'Amortise over (months) — 0 = keep at cost until sold or lost', type:'number', default:0, showWhen:{name:'animalType',values:ASSET_ANIMALS}},
       {name:'notes', label:'Notes', type:'textarea'}
@@ -3108,11 +3137,12 @@ function FORM_CONFIGS(){
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
     feeding: { title:'Feeding Entry', entity:'feeding', validate:feedingValidate, fields:[
-      {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
+      {name:'date', label:'Date (end of the period, or the day fed)', type:'date', required:true, default:todayISO()},
       {name:'animalType', label:'Animal Type', type:'select', options:state.setup.animalTypes, required:true},
       {name:'batchId', label:'Batch/Herd ID', type:'select', options:batchOptions(), required:true},
       {name:'feedType', label:'Feed Type', type:'select', options:state.setup.feedTypes, required:true},
-      {name:'qtyUsed', label:'Quantity Used', type:'number', required:true},
+      {name:'period', label:'This quantity covers', type:'select', options:FEED_PERIODS.map(p=>p.value), default:'Day', required:true},
+      {name:'qtyUsed', label:'Total quantity used for that period (kg)', type:'number', required:true},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
     income: { title:'Income Entry', entity:'income', validate:incomeValidate, onOpen:incomeFormHook, fields:[
@@ -3153,8 +3183,8 @@ function FORM_CONFIGS(){
         {name:'l_unit', label:'Price per animal (ETB)', type:'number', showWhen:W('Livestock')},
         PAY('l_pay','Livestock'),
         {name:'l_bio', label:'Buy as a layer flock (biological asset)?', type:'select', options:['No','Yes'], default:'No', showWhen:W('Livestock',[{name:'l_type',values:['Poultry']}])},
-        {name:'l_age', label:'Age of the birds when bought (months)', type:'number', default:0, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
-        {name:'l_lay', label:'Age at onset of laying (months)', type:'number', default:DEFAULT_LAYING_AGE, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
+        {name:'l_age', label:'Age of the birds when bought (weeks)', type:'number', default:0, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
+        {name:'l_lay', label:'Age at onset of laying (weeks) — about 20–24 is typical', type:'number', default:DEFAULT_LAYING_AGE_WEEKS, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
         {name:'l_amort', label:'Amortise over (months) — 12 to 18 is typical', type:'number', default:DEFAULT_AMORT_MONTHS, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
         {name:'l_amortO', label:'Amortise over (months) — 0 = keep at cost until sold or lost', type:'number', default:0, showWhen:W('Livestock',[{name:'l_type',values:ASSET_ANIMALS}])},
         {name:'l_notes', label:'Notes', type:'textarea', showWhen:W('Livestock')},
