@@ -2587,6 +2587,98 @@ function renderTrialBalance(efy){
   </div>`;
 }
 
+/* ================= BRANCH / BATCH PROFITABILITY ================= */
+function incomeBranchId(r){
+  return (r.stockBatchId && String(r.stockBatchId).trim()) || (r.batchId && String(r.batchId).trim()) || '';
+}
+/** Contribution-style P&L by branch/batch for one EFY. Costs and sales must be tagged with batchId. */
+function branchProfitData(efy){
+  const map = {};
+  const ensure = (id, meta)=>{
+    if(!map[id]) map[id] = {id, rev:0, feed:0, health:0, opex:0, cop:0, bio:0, purchase:0, qty:0, animalType:'', breed:'', label:id};
+    if(meta){ if(meta.animalType) map[id].animalType = meta.animalType; if(meta.breed!==undefined) map[id].breed = meta.breed; if(meta.qty!==undefined) map[id].qty = meta.qty; if(meta.label) map[id].label = meta.label; }
+    return map[id];
+  };
+  state.livestock.forEach(b=>{
+    ensure(b.batchId, {animalType:b.animalType, breed:b.breed||'', qty:batchCurrentQty(b.batchId), label:b.batchId+' — '+(b.breed||b.animalType)});
+  });
+  ensure('_unallocated', {animalType:'—', breed:'', qty:0, label:'(Not tagged to a branch)'});
+
+  state.income.filter(r=>inFY(r.date, efy)).forEach(r=>{
+    ensure(incomeBranchId(r) || '_unallocated').rev += incomeNet(r);
+  });
+  costRows().filter(r=>inFY(r.date, efy) && !expCapBatch(r)).forEach(r=>{
+    const m = ensure(r.batchId || '_unallocated');
+    const a = num(r.amount);
+    if(r.category==='Feed Used') m.feed += a;
+    else if(r.category==='Vaccination' || r.category==='Medication') m.health += a;
+    else if(COST_OF_PRODUCTION_CATS.includes(r.category)) m.cop += a;
+    else m.opex += a;
+  });
+  bioCharges().filter(c=>inFY(c.date, efy)).forEach(c=>{
+    ensure(c.batchId || '_unallocated').bio += c.amt;
+  });
+  // Non-asset livestock purchases (e.g. broilers expensed) charged to that batch
+  state.livestock.filter(b=>!isBioBatch(b) && num(b.purchaseCost)>0 && inFY(b.dateAcquired, efy)).forEach(b=>{
+    ensure(b.batchId).purchase += num(b.purchaseCost);
+  });
+
+  return Object.keys(map).map(id=>{
+    const m = map[id];
+    m.totalCost = money2(m.feed + m.health + m.opex + m.cop + m.bio + m.purchase);
+    m.rev = money2(m.rev);
+    m.profit = money2(m.rev - m.totalCost);
+    m.margin = m.rev > 0.005 ? (m.profit / m.rev * 100) : null;
+    return m;
+  }).filter(m=> m.id!=='_unallocated' || Math.abs(m.rev)+Math.abs(m.totalCost)>0.005)
+    .sort((a,b)=>{
+      if(a.id==='_unallocated') return 1;
+      if(b.id==='_unallocated') return -1;
+      return b.profit - a.profit;
+    });
+}
+function renderBranchProfit(efy){
+  const rows = branchProfitData(efy);
+  const tot = rows.reduce((s,r)=>({rev:s.rev+r.rev, cost:s.cost+r.totalCost, profit:s.profit+r.profit}), {rev:0,cost:0,profit:0});
+  const body = rows.length ? rows.map(r=>`
+    <tr>
+      <td class="mono">${escHtml(r.label)}</td>
+      <td>${escHtml(r.animalType||'—')}</td>
+      <td class="num mono">${r.id==='_unallocated'?'—':fmtNum(r.qty)}</td>
+      <td class="num mono">${fmtMoney(r.rev)}</td>
+      <td class="num mono">${fmtMoney(r.feed)}</td>
+      <td class="num mono">${fmtMoney(r.health)}</td>
+      <td class="num mono">${fmtMoney(r.opex + r.cop)}</td>
+      <td class="num mono">${fmtMoney(r.bio + r.purchase)}</td>
+      <td class="num mono">${fmtMoney(r.totalCost)}</td>
+      <td class="num mono"><strong style="color:${r.profit>=0?'var(--green-dark)':'var(--clay)'}">${fmtMoney(r.profit)}</strong></td>
+      <td class="num mono">${r.margin===null?'—':r.margin.toFixed(1)+'%'}</td>
+    </tr>`).join('') : emptyRow(11,'No branch-tagged activity in this year. Tag sales and costs with a batch to see profitability.');
+  const totRow = `<tr class="tot"><td colspan="3">Total</td>
+    <td class="num mono tot">${fmtMoney(tot.rev)}</td><td colspan="4"></td>
+    <td class="num mono tot">${fmtMoney(tot.cost)}</td>
+    <td class="num mono tot">${fmtMoney(tot.profit)}</td>
+    <td class="num mono tot">${tot.rev>0.005?(tot.profit/tot.rev*100).toFixed(1)+'%':'—'}</td></tr>`;
+  return `
+  ${repOk('Contribution by branch / batch for '+efy+' EFY (Hamle 1 – Sene 30)')}
+  <div class="rep-sheet">
+    ${repHeader('Branch / batch profitability', efy, true)}
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr>
+        <th>Branch / batch</th><th>Type</th><th class="num">Stock now</th>
+        <th class="num">Revenue</th><th class="num">Feed</th><th class="num">Health</th>
+        <th class="num">Other costs</th><th class="num">Bio / purchase</th>
+        <th class="num">Total cost</th><th class="num">Profit / (loss)</th><th class="num">Margin</th>
+      </tr></thead>
+      <tbody>${body}${rows.length?totRow:''}</tbody>
+    </table></div>
+    <p class="note"><strong>How this works:</strong> Revenue and costs are grouped by the batch/branch you select when recording.
+    Tag <em>Income</em> with “Branch / batch”, tag <em>expenses / labor / utilities</em> with the same batch, and feed/health logs already require a batch.
+    Rows with no tag appear under “(Not tagged to a branch)”. Shared head-office costs stay unallocated unless you assign them.</p>
+    ${repFooter()}
+  </div>`;
+}
+
 /* ================= REPORTS (P&L + statements) ================= */
 let reportView = 'pl';
 function renderReports(){
@@ -2594,11 +2686,16 @@ function renderReports(){
   if(!years.includes(reportsYear)) reportsYear = currentEFY();
   const efy = reportsYear;
   const yearOptions = years.map(y=>`<option value="${y}" ${y===efy?'selected':''}>${y}</option>`).join('');
-  const views = [['pl','Profit & Loss'],['bs','Balance Sheet'],['cf','Cash Flow'],['eq',"Owner's Equity"],['tb','Ledger / Trial Balance']];
+  const views = [['pl','Profit & Loss'],['branch','Branch profitability'],['bs','Balance Sheet'],['cf','Cash Flow'],['eq',"Owner's Equity"],['tb','Ledger / Trial Balance']];
   const tabs = views.map(v=>`<button class="toggle-btn${reportView===v[0]?' active':''}" data-repview="${v[0]}">${t(v[1])}</button>`).join('');
   let body;
   try{
-    body = reportView==='bs' ? renderBalanceSheet(efy) : reportView==='cf' ? renderCashFlow(efy) : reportView==='eq' ? renderEquityReport(efy) : reportView==='tb' ? renderTrialBalance(efy) : renderPLBody(efy);
+    body = reportView==='bs' ? renderBalanceSheet(efy)
+         : reportView==='cf' ? renderCashFlow(efy)
+         : reportView==='eq' ? renderEquityReport(efy)
+         : reportView==='tb' ? renderTrialBalance(efy)
+         : reportView==='branch' ? renderBranchProfit(efy)
+         : renderPLBody(efy);
   }catch(err){
     console.error(err);
     body = `<div class="panel"><div class="panel-pad" style="color:var(--clay);">⚠ Could not build this report: ${escHtml(err.message)}</div></div>`;
@@ -3149,6 +3246,7 @@ function FORM_CONFIGS(){
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'category', label:'What are you selling?', type:'select', options:state.setup.incomeCats, required:true},
       {name:'stockBatchId', label:'Which batch / herd are the animals sold from?', type:'select', options:batchOptions(), showWhen:{name:'category',values:LIVESTOCK_SALE_CATS}},
+      {name:'batchId', label:'Branch / batch this sale belongs to (for profitability)', type:'select', options:batchOptions()},
       {name:'description', label:'Description', type:'text'},
       {name:'customerId', label:'Customer (optional)', type:'select', options:customerOptions()},
       {name:'qty', label:'Quantity (units sold — this reduces stock automatically)', type:'number', default:1, required:true},
