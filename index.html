@@ -632,6 +632,22 @@ function saveDriveConfigLocal(){
 
 /* ---------------- Utilities ---------------- */
 function uid(){ return 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+/* Auto batch codes: Poultry→POU-001, Bees→BEE-001, Goats→GOA-001, Sheep→SHE-001, Oxen→OXE-001 */
+const BATCH_PREFIX = {Poultry:'POU', Bees:'BEE', Goats:'GOA', Sheep:'SHE', Oxen:'OXE'};
+function batchPrefix(animalType){
+  if(BATCH_PREFIX[animalType]) return BATCH_PREFIX[animalType];
+  const s = String(animalType||'').replace(/[^A-Za-z]/g,'').toUpperCase();
+  return (s.slice(0,3) || 'BAT');
+}
+function nextBatchId(animalType){
+  const pref = batchPrefix(animalType);
+  let max = 0;
+  state.livestock.forEach(b=>{
+    const m = String(b.batchId||'').match(new RegExp('^'+pref+'-(\\d+)$','i'));
+    if(m) max = Math.max(max, parseInt(m[1],10));
+  });
+  return pref + '-' + String(max+1).padStart(3,'0');
+}
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function num(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 function fmtMoney(n){ n = num(n); const sign = n<0?'-':''; return sign+'ETB '+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -971,7 +987,6 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 const TABS = [
   {key:'dashboard', label:'Dashboard', icon:'🏠'},
   {key:'livestock', label:'Livestock', icon:'🐔'},
-  {key:'reductions', label:'Reductions', icon:'➖'},
   {key:'production', label:'Production', icon:'🥚'},
   {key:'prodstock', label:'Prod. Stock', icon:'📦'},
   {key:'feed', label:'Feed', icon:'🌾'},
@@ -1001,12 +1016,14 @@ function renderNav(){
 function render(){
   const c = document.getElementById('content');
   const renderers = {
-    dashboard: renderDashboard, livestock: renderLivestock, reductions: renderReductions,
+    dashboard: renderDashboard, livestock: renderLivestock,
     production: renderProduction, prodstock: renderProdStock, feed: renderFeed,
     calculator: renderCalculator,
     income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
     reports: renderReports, setup: renderSetup
   };
+  // Old "reductions" tab redirects into Livestock
+  if(currentTab==='reductions') currentTab = 'livestock';
   c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
   translateDom(c);
   attachTabEvents();
@@ -1073,7 +1090,7 @@ function renderDashboard(){
   `;
 }
 
-/* ================= LIVESTOCK ================= */
+/* ================= LIVESTOCK (batches + reductions in one tab) ================= */
 function renderLivestock(){
   const rows = livestockComputed();
   const body = rows.length ? rows.map(r=>`
@@ -1092,26 +1109,11 @@ function renderLivestock(){
       <td><span class="tag ${r.status==='Active'?'tag-active':'tag-closed'}">${r.status}</span></td>
       <td class="notes-cell">${escHtml(r.notes)}</td>
       ${rowActionsHtml('livestock', r.id)}
-    </tr>`).join('') : emptyRow(14,'No batches/herds yet. Add your first one below.');
+    </tr>`).join('') : emptyRow(14,'No batches yet. Buy animals under Expenses & Purchases → Livestock (batch code is generated automatically).');
 
-  return `
-  <div class="pagehead">
-    <div><h1>Livestock</h1><p>One row per batch, herd, or hive — any species.</p></div>
-    <button class="btn btn-primary" id="addLivestock">+ Add batch/herd</button>
-  </div>
-  ${tableShell([
-    {label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
-    {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (Days)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
-    {label:'Status'},{label:'Notes'}
-  ], body)}
-  `;
-}
-
-/* ================= REDUCTIONS ================= */
-function renderReductions(){
-  const rows = allReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const redRows = allReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const wo = bioWriteOffByReduction();
-  const body = rows.length ? rows.map(r=>`
+  const redBody = redRows.length ? redRows.map(r=>`
     <tr>
       <td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
       <td>${escHtml(r.reason)}</td><td class="num mono">${fmtNum(r.qty)}</td>
@@ -1124,16 +1126,29 @@ function renderReductions(){
 
   return `
   <div class="pagehead">
-    <div><h1>Livestock Reductions</h1>
-      <p>Death, Cull, swarm loss, theft or transfers. <strong>Do not record sales here</strong> — enter them in Income; they appear automatically.</p>
-      <p class="note" style="margin-top:4px">Book value written off is calculated from the original purchase cost (amortised for layer flocks). Death → mortality expense at cost. Sale (via Income) → sale proceeds in Income + book value written off = automatic gain/(loss) on disposal.</p>
+    <div>
+      <h1>Livestock</h1>
+      <p>Batches are created automatically when you buy animals under <strong>Expenses &amp; Purchases</strong>. Batch codes are auto-generated from the animal type (e.g. POU-001, GOA-001).</p>
+    </div>
+  </div>
+  ${tableShell([
+    {label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
+    {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (Days)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
+    {label:'Status'},{label:'Notes'}
+  ], body)}
+
+  <div class="pagehead" style="margin-top:28px">
+    <div>
+      <h1 style="font-size:17px">Reductions (from a batch)</h1>
+      <p>Death, Cull, swarm loss, theft or transfers — choose which batch the animals leave. <strong>Sales are entered only in Income</strong> and appear here automatically.</p>
+      <p class="note" style="margin-top:4px">Book value written off comes from the original purchase cost. Death → mortality expense at cost. Sale (via Income) → sale proceeds + write-off = gain/(loss) on disposal.</p>
     </div>
     <button class="btn btn-primary" id="addReductions">+ Add reduction</button>
   </div>
   ${tableShell([
-    {label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Reason'},
+    {label:'Date'},{label:'Animal Type'},{label:'Batch code'},{label:'Reason'},
     {label:'Qty',num:true},{label:'Sale price / unit',num:true},{label:'Sale proceeds',num:true},{label:'Book value written off',num:true},{label:'Notes'}
-  ], body)}
+  ], redBody)}
   `;
 }
 
@@ -2727,10 +2742,13 @@ async function submitPurchase(rec){
   }
   else if(k==='Livestock'){
     if(!rec.l_type) return 'Choose the animal type.';
-    if(!String(rec.l_batch||'').trim()) return 'Enter a Batch/Herd ID for the new animals.';
+    let batchCode = String(rec.l_batch||'').trim();
+    if(!batchCode) batchCode = nextBatchId(rec.l_type);
+    // Guard against rare collision if two tabs race
+    if(state.livestock.some(b=>b.batchId===batchCode)) batchCode = nextBatchId(rec.l_type);
     const qty = num(rec.l_qty), unit = num(rec.l_unit);
     if(!(qty>0)) return 'Enter how many animals were bought.';
-    const r = {id:uid(), animalType:rec.l_type, batchId:String(rec.l_batch).trim(), breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
+    const r = {id:uid(), animalType:rec.l_type, batchId:batchCode, breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
       purchaseCost:money2(qty*unit), fundedBy:fundFromPay(rec.l_pay), bio:rec.l_type==='Poultry' ? (rec.l_bio||'No') : 'No',
       ageMonthsAtPurchase:num(rec.l_age), layingAgeMonths:num(rec.l_lay), amortMonths:num(rec.l_amort), amortMonthsOther:num(rec.l_amortO), notes:rec.l_notes||''};
     msg = livestockValidate(r); if(msg) return msg;
@@ -2764,15 +2782,28 @@ function purchaseFormHook(root){
   const q = n=>root.querySelector('[name="'+n+'"]'), v = n=>{ const e = q(n); return e ? e.value : ''; };
   const hint = document.createElement('div'); hint.className = 'note'; hint.style.cssText = 'font-weight:600;margin:6px 0 10px;';
   const acts = root.querySelector('.modal-actions'); if(acts) acts.before(hint);
+  const batchEl = q('l_batch');
+  if(batchEl){ batchEl.readOnly = true; batchEl.style.background = 'var(--surface-alt)'; batchEl.placeholder = 'Auto-generated'; }
+  const assignBatch = ()=>{
+    if(!batchEl) return;
+    const t = v('l_type');
+    if(t) batchEl.value = nextBatchId(t);
+    else batchEl.value = '';
+  };
+  const typeEl = q('l_type');
+  if(typeEl) typeEl.addEventListener('change', assignBatch);
+  const kindEl = q('kind');
+  if(kindEl) kindEl.addEventListener('change', ()=>{ if(v('kind')==='Livestock') assignBatch(); });
   const upd = ()=>{
     const k = v('kind'); let h = '';
     if(k==='Feed'){
       const tot = num(v('f_qty'))*num(v('f_unit')), ft = v('f_type');
       h = 'Total: '+fmtMoney(tot)+'.'+(ft ? ' Feed stock now '+fmtNum(feedStock(ft))+' kg → '+fmtNum(feedStock(ft)+num(v('f_qty')))+' kg.' : '')+' Booked as feed inventory (asset); it becomes a cost when fed out.';
     }else if(k==='Livestock'){
+      if(!v('l_batch') && v('l_type')) assignBatch();
       const tot = num(v('l_qty'))*num(v('l_unit')), t = v('l_type');
       const how = (t==='Poultry' && v('l_bio')==='Yes') ? 'an asset — layer flock (immature layers until laying age, then amortised)' : ASSET_ANIMALS.includes(t) ? 'an asset — livestock, kept at cost' : 'an expense (cost of production)';
-      h = 'Total: '+fmtMoney(tot)+'. Adds '+fmtNum(num(v('l_qty')))+' animals to a new batch. Booked as '+how+'.';
+      h = 'Batch code: '+(v('l_batch')||'—')+' (auto). Total: '+fmtMoney(tot)+'. Adds '+fmtNum(num(v('l_qty')))+' animals. Booked as '+how+'.';
     }else if(k==='Vaccine' || k==='Medication'){
       h = 'Booked as an expense now — or capitalised into the flock’s asset if it is a layer flock still under laying age. Cost is logged in the Health tab.';
     }else if(k==='Other'){
@@ -2914,7 +2945,7 @@ function FORM_CONFIGS(){
         {name:'f_notes', label:'Notes', type:'textarea', showWhen:W('Feed')},
         /* animals -> new batch / herd */
         {name:'l_type', label:'Animal type', type:'select', options:state.setup.animalTypes, showWhen:W('Livestock')},
-        {name:'l_batch', label:'Batch/Herd ID (new)', type:'text', placeholder:'e.g. GT-002', showWhen:W('Livestock')},
+        {name:'l_batch', label:'Batch code (auto-generated from animal type)', type:'text', placeholder:'Select animal type first', showWhen:W('Livestock')},
         {name:'l_breed', label:'Breed/Type', type:'text', showWhen:W('Livestock')},
         {name:'l_source', label:'Bought from', type:'text', showWhen:W('Livestock')},
         {name:'l_qty', label:'Number of animals bought', type:'number', showWhen:W('Livestock')},
@@ -3356,7 +3387,7 @@ async function importBackupFile(file){
 /* ---------------- Event wiring per render ---------------- */
 function attachTabEvents(){
   const addBtnMap = {
-    addLivestock:'livestock', addReductions:'reductions', addProduction:'production',
+    addReductions:'reductions', addProduction:'production',
     addProdReductions:'prodReductions', addFeedPurchases:'feedPurchases', addFeeding:'feeding',
     addIncome:'income', addExpenses:'purchase', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
     addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries', addAcct:'acct'
