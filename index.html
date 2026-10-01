@@ -242,7 +242,7 @@ const STORE_KEYS = {
   vaccinations:'gh_vaccinations', medications:'gh_medications',
   calc:'gh_calc', assets:'gh_assets',
   customers:'gh_customers', payments:'gh_payments', comments:'gh_comments', inquiries:'gh_inquiries',
-  acct:'gh_acct'
+  capitalTx:'gh_capitalTx', loans:'gh_loans', loanPayments:'gh_loanPayments'
 };
 
 const FEED_PER_BIRD_KG = 0.112; // 112 g per bird per day — standard layer feed intake assumption
@@ -260,7 +260,7 @@ const DEFAULT_CALC = {
 
 const DEFAULT_SETUP = {
   incomeCats:["Egg Sales","Live Bird Sales","Honey Sales","Milk Sales","Wool Sales","Livestock Sales (Goats/Sheep/Oxen)","Manure Sales","Other Income"],
-  expenseCats:["Labor","Utilities","Equipment","Transport","Rent","Beekeeping Supplies","Shearing/Processing","Other Expense"],
+  expenseCats:["Feed Purchase","Livestock Purchase","Vaccination","Medication","Labor","Utilities","Equipment","Transport","Rent","Beekeeping Supplies","Shearing/Processing","Other Expense"],
   feedTypes:["Starter Feed","Grower Feed","Layer Feed","Broiler Finisher","Hay","Pasture/Grazing","Concentrate/Mineral Mix","Bee Syrup/Pollen Supplement"],
   diseases:["Newcastle Disease","Coccidiosis","Fowl Typhoid","Infectious Bronchitis","Avian Influenza","Fowl Pox","Mastitis","Foot Rot","PPR (Peste des Petits Ruminants)","Foot & Mouth Disease","Bloat","Internal Parasites/Worms","Varroa Mites","Nosema","Anaplasmosis"],
   animalTypes:["Poultry","Bees","Goats","Sheep","Oxen"],
@@ -268,18 +268,62 @@ const DEFAULT_SETUP = {
   customerTypes:["Retail / Walk-in","Wholesale / Shop","Distributor","Institution","Other"]
 };
 
-const REDUCTION_REASONS = ["Death","Cull","Swarm Lost","Transfer Out","Theft/Loss","Other"];   // sales are recorded in Income only
-const PROD_REDUCTION_REASONS = ["Consumption","Spoilage","Given Away","Broken","Other"];   // sales are recorded in Income only
+const REDUCTION_REASONS = ["Death","Sale","Cull","Swarm Lost","Transfer Out","Theft/Loss","Other"];
+const PROD_REDUCTION_REASONS = ["Sale","Consumption","Spoilage","Given Away","Broken","Other"];
+const CAPITAL_TX_TYPES = ["Investment","Drawing"];
 const PAYMENT_METHODS = ["Cash","Bank Transfer","Mobile Money","Other"];
 const INQUIRY_STATUSES = ["New","Contacted","Quoted","Converted","Lost"];
 
-function seedExamples(){ return {}; }   // new version starts with an empty database
+function seedExamples(){
+  return {
+    livestock:[
+      {id:uid(),animalType:"Poultry",batchId:"FL-001",breed:"Bovans Brown (Layers)",dateAcquired:"2026-01-15",source:"Kombolcha Hatchery",initialQty:500,notes:""},
+      {id:uid(),animalType:"Bees",batchId:"BEE-001",breed:"Local Ethiopian Honeybee",dateAcquired:"2026-03-01",source:"Local beekeeper",initialQty:5,notes:""},
+      {id:uid(),animalType:"Goats",batchId:"GT-001",breed:"Boer Cross",dateAcquired:"2026-02-01",source:"Local market",initialQty:20,notes:""},
+      {id:uid(),animalType:"Sheep",batchId:"SH-001",breed:"Menz Sheep",dateAcquired:"2026-02-01",source:"Local market",initialQty:15,notes:""},
+      {id:uid(),animalType:"Oxen",batchId:"OX-001",breed:"Local Zebu",dateAcquired:"2026-01-10",source:"Local market",initialQty:2,notes:""}
+    ],
+    reductions:[
+      {id:uid(),date:"2026-02-10",animalType:"Poultry",batchId:"FL-001",reason:"Death",qty:3,unitPrice:0,notes:"Natural loss - cold weather"}
+    ],
+    production:[
+      {id:uid(),date:"2026-02-10",animalType:"Poultry",batchId:"FL-001",product:"Eggs",qtyProduced:410,waste:6,unit:"count",notes:"Morning + afternoon collection"},
+      {id:uid(),date:"2026-03-15",animalType:"Bees",batchId:"BEE-001",product:"Honey",qtyProduced:12,waste:0,unit:"kg",notes:"Spring harvest"},
+      {id:uid(),date:"2026-02-12",animalType:"Goats",batchId:"GT-001",product:"Milk",qtyProduced:8,waste:0,unit:"liters",notes:"Morning + evening milking"}
+    ],
+    prodReductions:[
+      {id:uid(),date:"2026-02-11",product:"Eggs",reason:"Sale",qty:350,unitPrice:6.5,notes:"Sold to local shop - Legetafo"},
+      {id:uid(),date:"2026-03-16",product:"Honey",reason:"Sale",qty:10,unitPrice:350,notes:"Sold at Shashamane market"}
+    ],
+    feedPurchases:[
+      {id:uid(),date:"2026-01-20",feedType:"Layer Feed",qty:500,unitCost:28.5,supplier:"Oromia Feed Suppliers",notes:"Bulk purchase"},
+      {id:uid(),date:"2026-01-22",feedType:"Hay",qty:200,unitCost:12,supplier:"Legetafo Farmers Co-op",notes:"For goats and sheep"}
+    ],
+    feeding:[
+      {id:uid(),date:"2026-02-10",animalType:"Poultry",batchId:"FL-001",feedType:"Layer Feed",qtyUsed:55,notes:"Morning + evening feeding"},
+      {id:uid(),date:"2026-02-10",animalType:"Goats",batchId:"GT-001",feedType:"Hay",qtyUsed:40,notes:"Free-choice hay"}
+    ],
+    income:[
+      {id:uid(),date:"2026-02-11",category:"Egg Sales",description:"Sale of eggs to local shop",qty:350,unitPrice:6.5,notes:"Legetafo shop"}
+    ],
+    expenses:[
+      {id:uid(),date:"2026-01-20",category:"Feed Purchase",description:"500kg Layer Feed - Oromia Feed Suppliers",amount:14250,notes:"See Feed Purchases log"}
+    ],
+    vaccinations:[
+      {id:uid(),date:"2026-01-25",animalType:"Poultry",batchId:"FL-001",vaccine:"Newcastle (Lasota)",dose:"1 drop/eye, all birds",cost:850,administeredBy:"Dr. Alemu (Vet)",notes:"Routine schedule"}
+    ],
+    medications:[
+      {id:uid(),date:"2026-02-05",animalType:"Poultry",batchId:"FL-001",disease:"Coccidiosis",medication:"Amprolium",dosage:"1g/liter drinking water, 5 days",cost:620,notes:"Improved within 3 days"}
+    ]
+  };
+}
 
 let state = {
   setup: JSON.parse(JSON.stringify(DEFAULT_SETUP)),
   livestock:[], reductions:[], production:[], prodReductions:[],
   feedPurchases:[], feeding:[], income:[], expenses:[], vaccinations:[], medications:[], assets:[],
-  customers:[], payments:[], comments:[], inquiries:[], acct:[],
+  customers:[], payments:[], comments:[], inquiries:[],
+  capitalTx:[], loans:[], loanPayments:[],
   calc: JSON.parse(JSON.stringify(DEFAULT_CALC))
 };
 let currentTab = 'dashboard';
@@ -342,7 +386,7 @@ const AM = {
   /* --- product stock --- */
   'Product Stock':'የምርት ክምችት','Auto-calculated stock, plus the sales/consumption log behind it.':'በራስ-ሰር የሚሰላ ክምችት፣ ከጀርባው ካለው የሽያጭና የፍጆታ መዝገብ ጋር።',
   'Current Stock by Product':'አሁን ያለ ክምችት በምርት','Produced':'የተመረተ','Reduced':'የቀነሰ','Value Sold/Used':'የተሸጠ/የተጠቀመ ዋጋ','Reductions Log':'የቅናሽ መዝገብ',
-  'Consumed, spoiled, broken or given away. Sales are entered in Income and appear here automatically.':'የተሸጠ፣ የተበላ፣ የተበላሸ ወይም በስጦታ የተሰጠ።','No product reductions logged yet.':'እስካሁን ምንም የምርት ቅናሽ አልተመዘገበም።',
+  'Sold, consumed, spoiled, or given away.':'የተሸጠ፣ የተበላ፣ የተበላሸ ወይም በስጦታ የተሰጠ።','No product reductions logged yet.':'እስካሁን ምንም የምርት ቅናሽ አልተመዘገበም።',
   /* --- feed --- */
   'Stock, purchases, and daily feeding — any species.':'ክምችት፣ ግዢና የዕለት መኖ — ማንኛውም የእንስሳት ዓይነት።','Feed Stock Summary':'የመኖ ክምችት ማጠቃለያ','Feed Type':'የመኖ ዓይነት',
   'Purchased (kg)':'የተገዛ (ኪ.ግ)','Used (kg)':'የተጠቀመ (ኪ.ግ)','Current Stock (kg)':'አሁን ያለ ክምችት (ኪ.ግ)','Avg Cost/kg':'አማካይ ዋጋ/ኪ.ግ','Stock Value':'የክምችት ዋጋ',
@@ -387,6 +431,37 @@ const AM = {
   'Balance Due = total invoiced − amount collected at time of sale − payments logged above. Sales already booked at full invoice value in Income and the Financial Report (accrual basis) regardless of payment status.':'የሚቀር ዕዳ = ጠቅላላ የተላከ ደረሰኝ − በሽያጭ ጊዜ የተሰበሰበ − ከላይ የተመዘገቡ ክፍያዎች። ሽያጮች ምንም ይሁን የክፍያ ሁኔታ በገቢና በፋይናንስ ሪፖርት ውስጥ በሙሉ ደረሰኝ ዋጋ ተመዝግበዋል (በክምችት መሠረት)።',
   'Total Receivables':'ጠቅላላ የሚቀር ዕዳ','TIN':'የግብር ከፋይ መለያ ቁጥር (TIN)','Buyer name / TIN (if no customer record)':'የገዢ ስም / TIN (ደንበኛ መዝገብ ከሌለ)',
   'Customer Types':'የደንበኛ ዓይነቶች','Retail / Walk-in':'ችርቻሮ / በቀጥታ የመጣ','Wholesale / Shop':'ጅምላ / ሱቅ','Distributor':'አከፋፋይ','Institution':'ተቋም',
+  /* --- accounting: capital/loans/bio-assets/statements --- */
+  'Capital & Loans':'ካፒታልና ብድር','Add transaction':'ግብይት ጨምር','Add loan':'ብድር ጨምር','Add repayment':'ክፍያ ጨምር',
+  'Investment':'ኢንቨስትመንት','Drawing':'ወጪ (ባለቤት)','Investor/Owner':'ባለሀብት/ባለቤት','Investor / Owner name':'የባለሀብት/ባለቤት ስም',
+  'Ownership %':'የባለቤትነት %','Ownership % (if this changes ownership stake)':'የባለቤትነት % (የባለቤትነት ድርሻ የሚቀይር ከሆነ)',
+  'No owner investments or drawings logged yet.':'እስካሁን ምንም የባለቤት ኢንቨስትመንት ወይም ወጪ አልተመዘገበም።',
+  'Loans Received':'የተገኙ ብድሮች','No loans logged yet.':'እስካሁን ምንም ብድር አልተመዘገበም።','Lender':'አበዳሪ','Principal':'ዋና ገንዘብ',
+  'Principal amount (ETB)':'የዋና ገንዘብ መጠን (ብር)','Interest rate (% per year)':'የወለድ መጠን (% በዓመት)','Term':'ጊዜ','Term (e.g. 24 months)':'ጊዜ (ለምሳሌ 24 ወር)',
+  'Balance Owed':'የሚቀር ዕዳ','Loan':'ብድር','Loan / Contract No.':'የብድር / ውል ቁጥር',
+  'Loan Repayments':'የብድር ክፍያዎች','No loan repayments logged yet.':'እስካሁን ምንም የብድር ክፍያ አልተመዘገበም።','Total Paid':'ጠቅላላ የተከፈለ',
+  "Owner investments and drawings, loans received, and loan repayments.":'የባለቤት ኢንቨስትመንትና ወጪ፣ የተገኙ ብድሮችና የብድር ክፍያዎች።',
+  'Balance Owed = original principal − principal repaid so far. Interest paid appears as an expense on the Financial Report; principal repaid reduces the loan balance on the Balance Sheet, not net income.':'የሚቀር ዕዳ = መጀመሪያ ዋና ገንዘብ − እስካሁን የተከፈለ ዋና ገንዘብ። የተከፈለ ወለድ በፋይናንስ ሪፖርት ላይ እንደ ወጪ ይታያል፤ የተከፈለ ዋና ገንዘብ በሚዛን ሉህ ላይ ያለውን የብድር ዕዳ ይቀንሳል፣ የተጣራ ትርፍን አይደለም።',
+  'Income Statement':'የገቢ መግለጫ','Balance Sheet':'የሚዛን ሉህ','Cash Flow Statement':'የገንዘብ ፍሰት መግለጫ',"Statement of Owner's Equity":'የባለቤት ካፒታል መግለጫ',
+  'Assets':'ንብረቶች','Liabilities':'ዕዳዎች',"Owner's Equity":'የባለቤት ካፒታል',
+  'Cash and cash equivalents':'ጥሬ ገንዘብና ተመጣጣኝ','Accounts receivable (customers)':'ከደንበኞች የሚሰበሰብ ገንዘብ','Feed stock, at cost':'የመኖ ክምችት በዋጋ',
+  'Biological assets, net (livestock)':'የእንስሳት ንብረት (የተጣራ)','Fixed assets, net of depreciation':'ቋሚ ንብረት (ከእርጅና ቅናሽ በኋላ)','Total assets':'ጠቅላላ ንብረት',
+  'Loans payable':'የሚከፈል ብድር','Tax payable (accrued, unpaid)':'የሚከፈል ግብር (ያልተከፈለ)','Total liabilities':'ጠቅላላ ዕዳ',
+  "Owner's capital & retained earnings":'የባለቤት ካፒታልና የተጠራቀመ ትርፍ','Total liabilities & equity':'ጠቅላላ ዕዳና ካፒታል','Difference (should be zero)':'ልዩነት (ዜሮ መሆን አለበት)',
+  'Opening balances (before using this app)':'የመክፈቻ ሂሳቦች (ይህን መተግበሪያ ከመጠቀም በፊት)','As of date':'እስከ ቀን','Opening cash':'የመክፈቻ ጥሬ ገንዘብ',
+  'Opening owner capital / net worth':'የመክፈቻ የባለቤት ካፒታል / ተጣራ ሀብት','As of':'እስከ',
+  'Operating activities':'የሥራ እንቅስቃሴዎች','Investing activities':'የኢንቨስትመንት እንቅስቃሴዎች','Financing activities':'የፋይናንስ እንቅስቃሴዎች',
+  'Cash received from customers':'ከደንበኞች የተሰበሰበ ገንዘብ','Cash paid for operating expenses':'ለሥራ ማስኬጃ ወጪ የተከፈለ ገንዘብ','Cash paid for interest':'ለወለድ የተከፈለ ገንዘብ',
+  'Net cash from operating activities':'ከሥራ እንቅስቃሴ የተገኘ የተጣራ ገንዘብ','Cash paid for fixed assets':'ለቋሚ ንብረት የተከፈለ ገንዘብ','Cash paid for livestock (capitalized)':'ለእንስሳት የተከፈለ ገንዘብ (ካፒታላይዝድ)',
+  'Net cash from investing activities':'ከኢንቨስትመንት እንቅስቃሴ የተገኘ የተጣራ ገንዘብ','Cash from loans received':'ከተገኘ ብድር ገንዘብ','Cash paid for loan principal':'ለብድር ዋና ገንዘብ የተከፈለ',
+  'Cash from owner investments':'ከባለቤት ኢንቨስትመንት ገንዘብ','Cash paid for owner drawings':'ለባለቤት ወጪ የተከፈለ ገንዘብ','Net cash from financing activities':'ከፋይናንስ እንቅስቃሴ የተገኘ የተጣራ ገንዘብ',
+  'Net change in cash':'የገንዘብ ለውጥ','Cash at start of year':'የዓመቱ መጀመሪያ ገንዘብ','Cash at end of year':'የዓመቱ መጨረሻ ገንዘብ',
+  'Opening equity (start of year)':'የመክፈቻ ካፒታል (የዓመቱ መጀመሪያ)','Add: owner investments this year':'ይጨመር: የዚህ ዓመት የባለቤት ኢንቨስትመንት',
+  'Less: owner drawings this year':'ይቀነስ: የዚህ ዓመት የባለቤት ወጪ','Add: net income this year':'ይጨመር: የዚህ ዓመት የተጣራ ትርፍ','Subtotal':'ንዑስ ድምር',
+  'Add: inventory on hand (feed, at cost, today)':'ይጨመር: ያለ ክምችት (መኖ፣ በዋጋ፣ ዛሬ)','Closing equity':'የመዝጊያ ካፒታል',
+  'Interest expense on loans':'በብድር ላይ የወለድ ወጪ','Biological asset expense (amortization, mortality, loss & animals sold)':'የእንስሳት ንብረት ወጪ (እርጅና ቅናሽ፣ ሞት፣ ጉዳትና ሽያጭ)',
+  'Tag to livestock batch (rearing cost, optional)':'ከእንስሳት ቡድን ጋር አገናኝ (የማሳደጊያ ወጪ፣ አማራጭ)','Acquisition cost (ETB) — optional, enables biological-asset accounting':'የግዢ ዋጋ (ብር) — አማራጭ፣ የእንስሳት ንብረት ሂሳብ ያስችላል',
+  'Months to maturity (e.g. laying age)':'እስከ ብስለት ያለው ወር (ለምሳሌ የመጣል ዕድሜ)','Amortize over (months, after maturity)':'የሚከፋፈልበት ጊዜ (ወር፣ ከብስለት በኋላ)',
   /* --- health --- */
   'Vaccinations and medications — any species.':'ክትባትና መድኃኒት — ማንኛውም የእንስሳት ዓይነት።','💉 Vaccinations':'💉 ክትባቶች','💊 Medications':'💊 መድኃኒቶች','+ Add vaccination':'+ ክትባት ጨምር','+ Add medication':'+ መድኃኒት ጨምር',
   'Vaccine':'ክትባት','Dose/Route':'መጠን/መስጫ መንገድ','Administered By':'የሰጠው','Disease':'በሽታ','Dosage':'መጠን','No vaccinations logged yet.':'እስካሁን ምንም ክትባት አልተመዘገበም።','No medications logged yet.':'እስካሁን ምንም መድኃኒት አልተመዘገበም።',
@@ -478,16 +553,6 @@ const AM_PATTERNS = [
   [/^(.+) — (.+) \((Poultry|Bees|Goats|Sheep|Oxen)\)$/, m=>`${m[1]} — ${m[2]} (${AM[m[3]]})`]
 ];
 
-Object.assign(AM, {
-  'Accounting':'ሂሳብ አያያዝ','Add transaction':'ግብይት ጨምር','Balance Sheet':'የሂሳብ ሚዛን መግለጫ','Cash Flow':'የገንዘብ ፍሰት','Profit & Loss':'ትርፍና ኪሳራ',
-  "Owner's Equity":'የባለቤት ካፒታል','Ledger / Trial Balance':'የሂሳብ መዝገብ / የሙከራ ሚዛን','Loan received':'የተቀበለ ብድር','Loan repayment (principal)':'የብድር ክፍያ (ዋና ገንዘብ)',
-  'Loan interest paid':'የተከፈለ የብድር ወለድ','Owner investment (cash)':'የባለቤት ካፒታል መዋጮ (ጥሬ ገንዘብ)','Owner drawing / profit distribution':'የባለቤት ወጪ / የትርፍ ክፍፍል',
-  'Income tax paid':'የተከፈለ የገቢ ግብር','Cash and bank':'ጥሬ ገንዘብና ባንክ','Total assets':'ጠቅላላ ንብረት','TOTAL ASSETS':'ጠቅላላ ንብረት','TOTAL LIABILITIES':'ጠቅላላ ዕዳ',
-  'ASSETS':'ንብረት','LIABILITIES':'ዕዳዎች',"OWNER'S EQUITY":'የባለቤት ካፒታል','Current assets':'የአጭር ጊዜ ንብረት','Non-current assets':'የረጅም ጊዜ ንብረት',
-  'Current liabilities':'የአጭር ጊዜ ዕዳዎች','Non-current liabilities':'የረጅም ጊዜ ዕዳዎች','OPERATING ACTIVITIES':'የሥራ እንቅስቃሴዎች','INVESTING ACTIVITIES':'የኢንቨስትመንት እንቅስቃሴዎች',
-  'FINANCING ACTIVITIES':'የፋይናንስ እንቅስቃሴዎች','As at':'እስከ','Debit':'ዴቢት','Credit':'ክሬዲት','Account':'ሂሳብ','Code':'ኮድ','Total':'ጠቅላላ',
-  'Net profit / (loss) after tax':'የተጣራ ትርፍ / (ኪሳራ) ከግብር በኋላ','Retained earnings':'የተጠራቀመ ትርፍ',"Owner's capital":'የባለቤት ካፒታል','Loans outstanding':'ያልተከፈሉ ብድሮች'
-});
 function trStr(raw){
   if(raw===undefined || raw===null) return null;
   const s = String(raw).replace(/\s+/g,' ').trim();
@@ -566,15 +631,12 @@ function fyRange(efy){ return [ (efy+7)+'-07-08', (efy+8)+'-07-07' ]; }
 function inFY(d, efy){ const r=fyRange(efy); return !!d && d>=r[0] && d<=r[1]; }
 function fyList(){
   const s = new Set([currentEFY()-1, currentEFY()]);
-  state.income.concat(state.expenses).concat(state.acct.filter(x=>!isOpeningType(x.type))).forEach(r=>{ if(validDate(r.date)) s.add(efyOf(r.date)); });
-  state.assets.forEach(a=>{ if(validDate(a.dateAcquired)) s.add(efyOf(a.dateAcquired)); });
-  state.livestock.forEach(b=>{ if(validDate(b.dateAcquired)) s.add(efyOf(b.dateAcquired)); });
-  state.feedPurchases.concat(state.feeding, state.vaccinations, state.medications).forEach(r=>{ if(validDate(r.date)) s.add(efyOf(r.date)); });
+  state.income.concat(state.expenses).forEach(r=>{ if(r.date) s.add(efyOf(r.date)); });
   return Array.from(s).sort((a,b)=>a-b);
 }
 
 /* ---------------- Tax profile (stored inside state.setup so backups/Drive sync include it) ---------------- */
-const COST_OF_PRODUCTION_CATS = ['Feed Used','Livestock Purchase','Vaccination','Medication','Beekeeping Supplies','Shearing/Processing'];
+const COST_OF_PRODUCTION_CATS = ['Feed Purchase','Vaccination','Medication','Beekeeping Supplies','Shearing/Processing'];
 function taxProfile(){
   if(!state.setup.tax) state.setup.tax = {businessName:'Green Horizon', tin:'', category:'', taxRatePct:0, taxOverride:0, adj:{}};
   if(!state.setup.tax.adj) state.setup.tax.adj = {};
@@ -593,27 +655,25 @@ function groupByCat(rows, amountFn){
 function fyReport(efy){
   const tx = taxProfile(), adj = taxAdj(efy);
   const inc = state.income.filter(r=>inFY(r.date,efy));
-  const exp = costRows().filter(r=>inFY(r.date,efy) && !expCapBatch(r));   // capitalised rearing costs are not P&L expenses
+  const exp = state.expenses.filter(r=>inFY(r.date,efy) && !isCapitalizedExpense(r));
   const revenue = groupByCat(inc, incomeAmount);
   const cop = groupByCat(exp.filter(r=>COST_OF_PRODUCTION_CATS.includes(r.category)), r=>num(r.amount));
-  const invChange = 0;   // feed cost is recognised when used, so no year-end inventory adjustment is needed
   const opex = groupByCat(exp.filter(r=>!COST_OF_PRODUCTION_CATS.includes(r.category)), r=>num(r.amount));
   const sum = a => a.reduce((s,x)=>s+x.amt,0);
   const totRev=sum(revenue), totCop=sum(cop), totOpex=sum(opex);
   const gross = totRev-totCop;
   const dep = assetsDepreciation(efy) + num(adj.depreciation);
+  const interestExpense = state.loanPayments.filter(p=>inFY(p.date,efy)).reduce((s,p)=>s+num(p.interestPortion),0);
+  const bioExpense = bioExpenseInFY(efy);
   const nonDed = exp.filter(r=>r.nonDeductible==='Yes').reduce((s,r)=>s+num(r.amount),0) + num(adj.nonDeductible);
   const exempt = inc.filter(r=>r.exempt==='Yes').reduce((s,r)=>s+incomeAmount(r),0) + num(adj.exempt);
   const wht = inc.reduce((s,r)=>s+num(r.whtAmount),0) + num(adj.wht);
-  const finance = acctSum(AT.INT, efy), otherInc = acctSum(AT.OINC, efy);
-  const gainLoss = state.assets.map(assetDisposal).filter(d=>d && d.fy===efy).reduce((s,d)=>s+d.gl,0);
-  const bio = bioFY(efy);
-  const netBefore = gross - totOpex - dep - bio.amort - bio.mort - bio.wo - finance + otherInc + gainLoss;
+  const netBefore = gross - totOpex - dep - interestExpense - bioExpense;
   const taxable = netBefore + nonDed - exempt;
   const base = tx.regime==='A' ? Math.max(0,taxable) : totRev;   // B = presumptive on gross sales, A = net profit
   const taxDue = num(tx.taxOverride)>0 ? num(tx.taxOverride) : base*num(tx.taxRatePct)/100;
   const credits = wht + num(adj.advance);
-  return {bioAmort:bio.amortL,bioAmortO:bio.amortO,bioMort:bio.mortL,bioMortO:bio.mortO,bioWo:bio.woL,bioWoO:bio.woO,revenue,cop,opex,totRev,totCop,totOpex,gross,dep,netBefore,taxable,base,taxDue,nonDed,exempt,wht,advance:num(adj.advance),netPayable:taxDue-credits,finance,otherInc,gainLoss,invChange,netAfter:netBefore-taxDue};
+  return {revenue,cop,opex,totRev,totCop,totOpex,gross,dep,interestExpense,bioExpense,netBefore,netAfterTax:netBefore-taxDue,taxable,base,taxDue,nonDed,exempt,wht,advance:num(adj.advance),netPayable:taxDue-credits};
 }
 
 /* ---------------- Google Drive sync state ---------------- */
@@ -677,29 +737,11 @@ function maybeAutoSync(){
   }
 }
 
-const SCHEMA_VERSION = 'linked-v3';
-function migrateToLinkedSchema(){
-  try{
-    if(localStorage.getItem('gh_schema')===SCHEMA_VERSION) return;
-    const hasOld = Object.keys(STORE_KEYS).some(k=>localStorage.getItem(STORE_KEYS[k])!==null);
-    if(hasOld){
-      if(ask('This version links purchases, sales and stock automatically, so it must start with a clean database. OK = download a backup file of your current data, then erase it. Cancel = keep the current data (it may not add up under the new rules).')){
-        const dump = {}; Object.keys(STORE_KEYS).forEach(k=>{ const raw = localStorage.getItem(STORE_KEYS[k]); if(raw!==null){ try{ dump[k] = JSON.parse(raw); }catch(e){} } });
-        const blob = new Blob([JSON.stringify(dump,null,2)], {type:'application/json'});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'green-horizon-OLD-data-before-linked-version.json';
-        document.body.appendChild(a); a.click(); a.remove();
-        Object.keys(STORE_KEYS).forEach(k=>localStorage.removeItem(STORE_KEYS[k]));
-      }
-    }
-    localStorage.setItem('gh_schema', SCHEMA_VERSION);
-  }catch(e){ console.error(e); }
-}
 async function initApp(){
-  migrateToLinkedSchema();
   loadDriveConfigLocal();
   const [setup, livestock, reductions, production, prodReductions,
          feedPurchases, feeding, income, expenses, vaccinations, medications, calc, assets,
-         customers, payments, comments, inquiries, acct] = await Promise.all([
+         customers, payments, comments, inquiries, capitalTx, loans, loanPayments] = await Promise.all([
     loadKey(STORE_KEYS.setup, null),
     loadKey(STORE_KEYS.livestock, null),
     loadKey(STORE_KEYS.reductions, null),
@@ -717,7 +759,9 @@ async function initApp(){
     loadKey(STORE_KEYS.payments, null),
     loadKey(STORE_KEYS.comments, null),
     loadKey(STORE_KEYS.inquiries, null),
-    loadKey(STORE_KEYS.acct, null)
+    loadKey(STORE_KEYS.capitalTx, null),
+    loadKey(STORE_KEYS.loans, null),
+    loadKey(STORE_KEYS.loanPayments, null)
   ]);
 
   const isFirstRun = livestock === null;
@@ -739,7 +783,9 @@ async function initApp(){
   state.payments = payments || [];
   state.comments = comments || [];
   state.inquiries = inquiries || [];
-  state.acct = acct || seeds.acct || [];
+  state.capitalTx = capitalTx || [];
+  state.loans = loans || [];
+  state.loanPayments = loanPayments || [];
   state.calc = calc || calcAutoDefaults();
 
   if(isFirstRun){
@@ -747,12 +793,11 @@ async function initApp(){
       saveSetup(),
       saveEntity('livestock'), saveEntity('reductions'), saveEntity('production'),
       saveEntity('prodReductions'), saveEntity('feedPurchases'), saveEntity('feeding'),
-      saveEntity('income'), saveEntity('expenses'), saveEntity('vaccinations'), saveEntity('medications'), saveEntity('acct')
+      saveEntity('income'), saveEntity('expenses'), saveEntity('vaccinations'), saveEntity('medications')
     ]);
   }
   if(!calc) await saveCalc();
 
-  await refreshCapFlags();
   applyStaticLang();
   renderNav();
   render();
@@ -828,39 +873,9 @@ function computeCalcResults(c){
 }
 
 /* ---------------- Computed values ---------------- */
-/* ---- Sales are recorded once, in Income. They create the stock reductions below automatically. ---- */
-const PRODUCT_SALE_CATS = {'Egg Sales':'Eggs','Honey Sales':'Honey','Milk Sales':'Milk','Wool Sales':'Wool','Manure Sales':'Manure'};
-const LIVESTOCK_SALE_CATS = ['Live Bird Sales','Livestock Sales (Goats/Sheep/Oxen)'];
-const DEFAULT_UNITS = {Eggs:'eggs', Honey:'kg', Milk:'liters', Wool:'kg', Manure:'kg'};
-function productUnit(p){
-  const rec = state.production.slice().reverse().find(x=>x.product===p && x.unit && x.unit!=='count');
-  return rec ? rec.unit : (DEFAULT_UNITS[p] || 'units');
-}
-function stockEffectText(r){
-  const prod = incomeProduct(r);
-  if(prod && num(r.qty)>0) { const u = productUnit(prod); return '− '+fmtNum(r.qty)+' '+u+(u.toLowerCase()===prod.toLowerCase() ? '' : ' of '+prod.toLowerCase()); }
-  if(incomeIsLivestockSale(r) && r.stockBatchId && num(r.qty)>0) return '− '+fmtNum(r.qty)+' head from '+r.stockBatchId;
-  return '';
-}
-function incomeProduct(r){ return PRODUCT_SALE_CATS[r.category] || null; }
-function incomeIsLivestockSale(r){ return LIVESTOCK_SALE_CATS.includes(r.category); }
-function allReductions(){
-  return state.reductions.concat(state.income.filter(r=>incomeIsLivestockSale(r) && r.stockBatchId && num(r.qty)>0).map(r=>{
-    const b = state.livestock.find(x=>x.batchId===r.stockBatchId);
-    return {id:'inc:'+r.id, date:r.date, animalType:b?b.animalType:'', batchId:r.stockBatchId, reason:'Sale', qty:num(r.qty), unitPrice:num(r.unitPrice), notes:'Automatic — from Income sale', derived:true};
-  }));
-}
-function allProdReductions(){
-  return state.prodReductions.concat(state.income.filter(r=>incomeProduct(r) && num(r.qty)>0).map(r=>
-    ({id:'inc:'+r.id, date:r.date, product:incomeProduct(r), reason:'Sale', qty:num(r.qty), unitPrice:num(r.unitPrice), notes:'Automatic — from Income sale', derived:true})));
-}
-function batchCurrentQty(batchId, excludeRedId){
-  const b = state.livestock.find(x=>x.batchId===batchId); if(!b) return 0;
-  return num(b.initialQty) - allReductions().filter(r=>r.batchId===batchId && r.id!==excludeRedId).reduce((t,r)=>t+num(r.qty),0);
-}
 function livestockComputed(){
   return state.livestock.map(b=>{
-    const reduced = allReductions().filter(r=>r.batchId===b.batchId).reduce((s,r)=>s+num(r.qty),0);
+    const reduced = state.reductions.filter(r=>r.batchId===b.batchId).reduce((s,r)=>s+num(r.qty),0);
     const current = num(b.initialQty)-reduced;
     const days = b.dateAcquired ? Math.floor((new Date(todayISO())-new Date(b.dateAcquired))/86400000) : '';
     return Object.assign({}, b, {reduced, current, status: current<=0?'Closed':'Active', ageDays:days});
@@ -879,10 +894,10 @@ function productGoodOutput(product){
   return state.production.filter(p=>p.product===product).reduce((s,p)=>s+(num(p.qtyProduced)-num(p.waste)),0);
 }
 function productReducedQty(product){
-  return allProdReductions().filter(p=>p.product===product).reduce((s,p)=>s+num(p.qty),0);
+  return state.prodReductions.filter(p=>p.product===product).reduce((s,p)=>s+num(p.qty),0);
 }
 function productValue(product){
-  return allProdReductions().filter(p=>p.product===product).reduce((s,p)=>s+num(p.qty)*num(p.unitPrice),0);
+  return state.prodReductions.filter(p=>p.product===product).reduce((s,p)=>s+num(p.qty)*num(p.unitPrice),0);
 }
 function productStock(product){ return productGoodOutput(product)-productReducedQty(product); }
 
@@ -890,39 +905,12 @@ function feedPurchasedQty(ft){ return state.feedPurchases.filter(f=>f.feedType==
 function feedPurchasedCost(ft){ return state.feedPurchases.filter(f=>f.feedType===ft).reduce((s,f)=>s+num(f.qty)*num(f.unitCost),0); }
 function feedUsedQty(ft){ return state.feeding.filter(f=>f.feedType===ft).reduce((s,f)=>s+num(f.qtyUsed),0); }
 function feedStock(ft){ return feedPurchasedQty(ft)-feedUsedQty(ft); }
-/* Feed is an inventory asset when bought and becomes an expense when used, at the moving-average cost on the day of use. */
-function feedSim(){
-  const ev = [];
-  state.feedPurchases.forEach(f=>{ if(validDate(f.date)) ev.push({date:f.date, pri:0, t:'buy', f}); });
-  state.feeding.forEach(f=>{ if(validDate(f.date)) ev.push({date:f.date, pri:1, t:'use', f}); });
-  ev.sort((a,b)=> a.date<b.date ? -1 : a.date>b.date ? 1 : a.pri-b.pri);
-  const st = {}, cost = {};
-  ev.forEach(e=>{
-    const ft = e.f.feedType, x = st[ft] || (st[ft] = {q:0, v:0});
-    if(e.t==='buy'){ x.q += num(e.f.qty); x.v = money2(x.v + money2(num(e.f.qty)*num(e.f.unitCost))); }
-    else{
-      const use = Math.min(num(e.f.qtyUsed), x.q);
-      const c = (use >= x.q - 1e-9) ? money2(x.v) : money2(use * (x.q>0 ? x.v/x.q : 0));
-      cost[e.f.id] = c; x.q -= use; x.v = money2(x.v - c); if(x.q < 1e-9){ x.q = 0; }
-    }
-  });
-  return {st, cost};
-}
-function feedUseCost(id){ return feedSim().cost[id] || 0; }
-function feedAvgCost(ft){ const x = feedSim().st[ft]; if(x && x.q>0) return x.v/x.q; const p=feedPurchasedQty(ft); return p ? feedPurchasedCost(ft)/p : 0; }
-function feedStockValue(ft){ const x = feedSim().st[ft]; return x ? x.v : 0; }
-function feedStockAsOf(ft, date, excludeUseId){
-  let q = 0;
-  state.feedPurchases.forEach(f=>{ if(f.feedType===ft && validDate(f.date) && f.date<=date) q += num(f.qty); });
-  state.feeding.forEach(f=>{ if(f.feedType===ft && f.id!==excludeUseId && validDate(f.date) && f.date<=date) q -= num(f.qtyUsed); });
-  return q;
-}
+function feedAvgCost(ft){ const p=feedPurchasedQty(ft); return p ? feedPurchasedCost(ft)/p : 0; }
+function feedStockValue(ft){ return feedStock(ft)*feedAvgCost(ft); }
 
 function incomeAmount(r){ return num(r.qty)*num(r.unitPrice); }
 function totalIncomeAll(){ return state.income.reduce((s,r)=>s+incomeAmount(r),0); }
-function expensedList(){ return costRows().filter(r=>!expCapBatch(r)); }   // capitalised rearing costs are assets, not expenses
-function bioChargesSum(pred){ return bioCharges().filter(pred).reduce((s,c)=>s+c.amt,0); }
-function totalExpensesAll(){ const t0 = todayISO(); return expensedList().reduce((s,r)=>s+num(r.amount),0) + bioChargesSum(c=>c.date<=t0); }
+function totalExpensesAll(){ return state.expenses.reduce((s,r)=>s+num(r.amount),0); }
 function netProfitAll(){ return totalIncomeAll()-totalExpensesAll(); }
 function incomeByCategory(){
   const map={}; state.setup.incomeCats.forEach(c=>map[c]=0);
@@ -931,8 +919,7 @@ function incomeByCategory(){
 }
 function expensesByCategory(){
   const map={}; state.setup.expenseCats.forEach(c=>map[c]=0);
-  expensedList().forEach(r=>{ map[r.category]=(map[r.category]||0)+num(r.amount); });
-  bioCharges().filter(c=>c.date<=todayISO()).forEach(c=>{ map[c.cat]=(map[c.cat]||0)+c.amt; });
+  state.expenses.forEach(r=>{ map[r.category]=(map[r.category]||0)+num(r.amount); });
   return map;
 }
 function ytdIncome(){
@@ -941,12 +928,12 @@ function ytdIncome(){
 }
 function ytdExpenses(){
   const y=String(new Date().getFullYear()), t=todayISO();
-  return expensedList().filter(r=>r.date && r.date.slice(0,4)===y && r.date<=t).reduce((s,r)=>s+num(r.amount),0) + bioChargesSum(c=>c.date.slice(0,4)===y && c.date<=t);
+  return state.expenses.filter(r=>r.date && r.date.slice(0,4)===y && r.date<=t).reduce((s,r)=>s+num(r.amount),0);
 }
 function yearlyPL(year){
   const y=String(year);
   const inc = state.income.filter(r=>r.date && r.date.slice(0,4)===y).reduce((s,r)=>s+incomeAmount(r),0);
-  const exp = expensedList().filter(r=>r.date && r.date.slice(0,4)===y).reduce((s,r)=>s+num(r.amount),0) + bioChargesSum(c=>c.date.slice(0,4)===y);
+  const exp = state.expenses.filter(r=>r.date && r.date.slice(0,4)===y).reduce((s,r)=>s+num(r.amount),0);
   return {inc, exp, net: inc-exp};
 }
 function monthlyPL(year){
@@ -954,7 +941,7 @@ function monthlyPL(year){
   return Array.from({length:12},(_,i)=>{
     const mm = String(i+1).padStart(2,'0');
     const inc = state.income.filter(r=>r.date && r.date.slice(0,4)===y && r.date.slice(5,7)===mm).reduce((s,r)=>s+incomeAmount(r),0);
-    const exp = expensedList().filter(r=>r.date && r.date.slice(0,4)===y && r.date.slice(5,7)===mm).reduce((s,r)=>s+num(r.amount),0) + bioChargesSum(c=>c.date.slice(0,4)===y && c.date.slice(5,7)===mm);
+    const exp = state.expenses.filter(r=>r.date && r.date.slice(0,4)===y && r.date.slice(5,7)===mm).reduce((s,r)=>s+num(r.amount),0);
     return {month:i+1, inc, exp, net:inc-exp};
   });
 }
@@ -977,10 +964,10 @@ const TABS = [
   {key:'feed', label:'Feed', icon:'🌾'},
   {key:'calculator', label:'Price Calc', icon:'🧮'},
   {key:'income', label:'Income', icon:'💰'},
-  {key:'expenses', label:'Expenses & Purchases', icon:'💸'},
+  {key:'expenses', label:'Expenses', icon:'💸'},
   {key:'customers', label:'Customers', icon:'👥'},
   {key:'assets', label:'Assets', icon:'🏗️'},
-  {key:'accounting', label:'Accounting', icon:'💼'},
+  {key:'capital', label:'Capital', icon:'🏦'},
   {key:'health', label:'Health', icon:'💊'},
   {key:'reports', label:'Reports', icon:'📊'},
   {key:'setup', label:'Setup', icon:'⚙️'}
@@ -1004,7 +991,7 @@ function render(){
     dashboard: renderDashboard, livestock: renderLivestock, reductions: renderReductions,
     production: renderProduction, prodstock: renderProdStock, feed: renderFeed,
     calculator: renderCalculator,
-    income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
+    income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, capital: renderCapital, health: renderHealth,
     reports: renderReports, setup: renderSetup
   };
   c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
@@ -1041,10 +1028,6 @@ function renderDashboard(){
     ['YTD Net Profit / (Loss)', fmtMoney(yNet), yNet<0],
     ['Total Receivables', fmtMoney(totalReceivables()), totalReceivables()>0]
   ];
-  try{
-    const bsNow = balanceSheet(currentEFY());
-    kpis.push(['Cash & Bank (ledger)', fmtMoney(bsNow.rawCash), bsNow.rawCash<0], ['Loans Outstanding', fmtMoney(bsNow.loans), false], ["Owner's Equity", fmtMoney(bsNow.te), bsNow.te<0]);
-  }catch(err){ console.error(err); }
 
   const kpiHtml = kpis.map(([label,val,neg])=>
     `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value mono${neg?' neg':''}">${val}</div></div>`
@@ -1084,15 +1067,13 @@ function renderLivestock(){
       <td>${fmtDate(r.dateAcquired)}</td>
       <td>${escHtml(r.source)}</td>
       <td class="num mono">${fmtNum(r.initialQty)}</td>
-      <td class="num mono">${fmtMoney(r.purchaseCost)}</td>
-      <td>${isLayerFlock(r)?'Asset — layers':isAssetAnimal(r)?'Asset — livestock':'Expensed'}</td>
       <td class="num mono">${r.ageDays}</td>
       <td class="num mono">${fmtNum(r.reduced)}</td>
       <td class="num mono"><strong>${fmtNum(r.current)}</strong></td>
       <td><span class="tag ${r.status==='Active'?'tag-active':'tag-closed'}">${r.status}</span></td>
       <td class="notes-cell">${escHtml(r.notes)}</td>
       ${rowActionsHtml('livestock', r.id)}
-    </tr>`).join('') : emptyRow(14,'No batches/herds yet. Add your first one below.');
+    </tr>`).join('') : emptyRow(12,'No batches/herds yet. Add your first one below.');
 
   return `
   <div class="pagehead">
@@ -1101,7 +1082,7 @@ function renderLivestock(){
   </div>
   ${tableShell([
     {label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
-    {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (Days)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
+    {label:'Initial Qty',num:true},{label:'Age (Days)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
     {label:'Status'},{label:'Notes'}
   ], body)}
   `;
@@ -1109,27 +1090,25 @@ function renderLivestock(){
 
 /* ================= REDUCTIONS ================= */
 function renderReductions(){
-  const rows = allReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const wo = bioWriteOffByReduction();
+  const rows = state.reductions.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const body = rows.length ? rows.map(r=>`
     <tr>
       <td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
       <td>${escHtml(r.reason)}</td><td class="num mono">${fmtNum(r.qty)}</td>
       <td class="num mono">${fmtMoney(r.unitPrice)}</td>
       <td class="num mono">${fmtMoney(num(r.qty)*num(r.unitPrice))}</td>
-      <td class="num mono">${wo[r.id]!==undefined ? fmtMoney(wo[r.id]) : ''}</td>
       <td class="notes-cell">${escHtml(r.notes)}</td>
-      ${r.derived ? '<td class="rowactions"><span class="tag tag-closed">Auto — edit in Income</span></td>' : rowActionsHtml('reductions', r.id)}
-    </tr>`).join('') : emptyRow(10,'No reductions logged yet.');
+      ${rowActionsHtml('reductions', r.id)}
+    </tr>`).join('') : emptyRow(9,'No reductions logged yet.');
 
   return `
   <div class="pagehead">
-    <div><h1>Livestock Reductions</h1><p>Deaths, culls, swarm loss, theft or transfers — any species. Sales are entered only in Income and appear here automatically. For animals tracked as biological assets, each bird removed also removes its share of the book value (deaths become Poultry Mortality expense).</p></div>
+    <div><h1>Livestock Reductions</h1><p>Deaths, culls, sales, swarm loss, or transfers — any species.</p></div>
     <button class="btn btn-primary" id="addReductions">+ Add reduction</button>
   </div>
   ${tableShell([
     {label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Reason'},
-    {label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Total Value',num:true},{label:'Book value written off',num:true},{label:'Notes'}
+    {label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Total Value',num:true},{label:'Notes'}
   ], body)}
   `;
 }
@@ -1169,14 +1148,14 @@ function renderProdStock(){
     <td class="num mono">${fmtMoney(productValue(p))}</td></tr>`
   ).join('') || emptyRow(5,'No product types configured.');
 
-  const rows = allProdReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const rows = state.prodReductions.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const body = rows.length ? rows.map(r=>`
     <tr>
       <td>${fmtDate(r.date)}</td><td>${escHtml(r.product)}</td><td>${escHtml(r.reason)}</td>
       <td class="num mono">${fmtNum(r.qty)}</td><td class="num mono">${fmtMoney(r.unitPrice)}</td>
       <td class="num mono">${fmtMoney(num(r.qty)*num(r.unitPrice))}</td>
       <td class="notes-cell">${escHtml(r.notes)}</td>
-      ${r.derived ? '<td class="rowactions"><span class="tag tag-closed">Auto — edit in Income</span></td>' : rowActionsHtml('prodReductions', r.id)}
+      ${rowActionsHtml('prodReductions', r.id)}
     </tr>`).join('') : emptyRow(8,'No product reductions logged yet.');
 
   return `
@@ -1184,7 +1163,7 @@ function renderProdStock(){
   <div class="section-title" style="margin-top:0">Current Stock by Product</div>
   ${tableShell([{label:'Product'},{label:'Produced',num:true},{label:'Reduced',num:true},{label:'Current Stock',num:true},{label:'Value Sold/Used',num:true}], invRows)}
   <div class="pagehead" style="margin-top:6px;">
-    <div><div class="section-title" style="margin-top:0">Reductions Log</div><p style="margin:-4px 0 0;color:var(--ink-soft);font-size:12.5px;">Consumed, spoiled, broken or given away. Sales are entered in Income and appear here automatically.</p></div>
+    <div><div class="section-title" style="margin-top:0">Reductions Log</div><p style="margin:-4px 0 0;color:var(--ink-soft);font-size:12.5px;">Sold, consumed, spoiled, or given away.</p></div>
     <button class="btn btn-primary" id="addProdReductions">+ Add reduction</button>
   </div>
   ${tableShell([{label:'Date'},{label:'Product'},{label:'Reason'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Total Value',num:true},{label:'Notes'}], body)}
@@ -1206,31 +1185,30 @@ function renderFeed(){
     <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.feedType)}</td>
     <td class="num mono">${fmtNum(r.qty)}</td><td class="num mono">${fmtMoney(r.unitCost)}</td>
     <td class="num mono">${fmtMoney(num(r.qty)*num(r.unitCost))}</td>
-    <td>${escHtml(r.supplier)}</td><td>${r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : ''}</td><td class="notes-cell">${escHtml(r.notes)}</td>
-    ${rowActionsHtml('feedPurchases', r.id)}</tr>`).join('') : emptyRow(9,'No feed purchases logged yet.');
+    <td>${escHtml(r.supplier)}</td><td class="notes-cell">${escHtml(r.notes)}</td>
+    ${rowActionsHtml('feedPurchases', r.id)}</tr>`).join('') : emptyRow(8,'No feed purchases logged yet.');
 
   const feeding = state.feeding.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const feedingBody = feeding.length ? feeding.map(r=>`
     <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
     <td>${escHtml(r.feedType)}</td><td class="num mono">${fmtNum(r.qtyUsed)}</td>
-    <td class="num mono">${fmtMoney(feedUseCost(r.id))}</td>
     <td class="notes-cell">${escHtml(r.notes)}</td>
-    ${rowActionsHtml('feeding', r.id)}</tr>`).join('') : emptyRow(8,'No feeding logged yet.');
+    ${rowActionsHtml('feeding', r.id)}</tr>`).join('') : emptyRow(7,'No feeding logged yet.');
 
   return `
-  <div class="pagehead"><div><h1>Feed</h1><p>Buying feed adds stock and inventory value (an asset). Feeding it out removes the stock and expenses its cost at the average price, or capitalises it into a layer flock that is still under laying age.</p></div></div>
+  <div class="pagehead"><div><h1>Feed</h1><p>Stock, purchases, and daily feeding — any species.</p></div></div>
   <div class="section-title" style="margin-top:0">Feed Stock Summary</div>
   ${tableShell([{label:'Feed Type'},{label:'Purchased (kg)',num:true},{label:'Used (kg)',num:true},{label:'Current Stock (kg)',num:true},{label:'Avg Cost/kg',num:true},{label:'Stock Value',num:true}], invRows)}
   <div class="pagehead">
     <div><div class="section-title" style="margin-top:0">Feed Purchases</div></div>
     <button class="btn btn-primary" id="addFeedPurchases">+ Add purchase</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Feed Type'},{label:'Qty (kg)',num:true},{label:'Unit Cost',num:true},{label:'Total Cost',num:true},{label:'Supplier'},{label:'Payment'},{label:'Notes'}], purchaseBody)}
+  ${tableShell([{label:'Date'},{label:'Feed Type'},{label:'Qty (kg)',num:true},{label:'Unit Cost',num:true},{label:'Total Cost',num:true},{label:'Supplier'},{label:'Notes'}], purchaseBody)}
   <div class="pagehead">
     <div><div class="section-title" style="margin-top:0">Feeding Log</div></div>
     <button class="btn btn-primary" id="addFeeding">+ Add feeding</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Feed Type'},{label:'Qty Used',num:true},{label:'Cost expensed',num:true},{label:'Notes'}], feedingBody)}
+  ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Feed Type'},{label:'Qty Used',num:true},{label:'Notes'}], feedingBody)}
   `;
 }
 
@@ -1435,6 +1413,192 @@ function renderCustomers(){
   `;
 }
 
+/* ---------------- Biological assets (immature/mature livestock, e.g. layers) ---------------- */
+function bioMaturityDate(batch){
+  const months = num(batch.maturityMonths)||5;
+  const d = new Date(batch.dateAcquired+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+Math.round(months*30));
+  return d.toISOString().slice(0,10);
+}
+function isCapitalizedExpense(e){
+  if(!e.batchId) return false;
+  const batch = state.livestock.find(b=>b.batchId===e.batchId);
+  if(!batch || !num(batch.cost)) return false;
+  return !!e.date && e.date <= bioMaturityDate(batch);
+}
+function bioRearingCostToDate(batch, asOfISO){
+  const cutoff = asOfISO < bioMaturityDate(batch) ? asOfISO : bioMaturityDate(batch);
+  return state.expenses.filter(e=>e.batchId===batch.batchId && e.date && e.date<=cutoff).reduce((s,e)=>s+num(e.amount),0);
+}
+function bioCapitalizedValue(batch){ return num(batch.cost) + bioRearingCostToDate(batch, bioMaturityDate(batch)); }
+function bioAccumAmortAt(batch, asOfISO){
+  if(!num(batch.cost)) return 0;
+  const matDate = bioMaturityDate(batch);
+  if(asOfISO < matDate) return 0;
+  const capValue = bioCapitalizedValue(batch);
+  const amortMonths = num(batch.amortMonths)||12;
+  const monthsSince = (new Date(asOfISO)-new Date(matDate))/(1000*3600*24*30);
+  return capValue*Math.min(1,Math.max(0,monthsSince/amortMonths));
+}
+function bioCapitalizedAdditionsInFY(efy){
+  const livestockCost = state.livestock.filter(b=>num(b.cost) && inFY(b.dateAcquired,efy)).reduce((s,b)=>s+num(b.cost),0);
+  const rearingCost = state.expenses.filter(e=>isCapitalizedExpense(e) && inFY(e.date,efy)).reduce((s,e)=>s+num(e.amount),0);
+  return livestockCost + rearingCost;
+}
+function bioExpenseInFY(efy){
+  // Roll-forward: opening NBV + what was capitalized this year - closing NBV = what was used up
+  // (covers amortization AND mortality/loss/disposal write-offs together, with no risk of double-counting either).
+  const [fs,fe] = fyRange(efy);
+  const nbvStart = bioAssetsTotalNBV(prevDay(fs));
+  const nbvEnd = bioAssetsTotalNBV(fe);
+  return nbvStart + bioCapitalizedAdditionsInFY(efy) - nbvEnd;
+}
+function bioValuePerHead(batch, asOfISO){
+  if(!num(batch.cost) || !batch.dateAcquired || asOfISO < batch.dateAcquired) return 0;
+  const matDate = bioMaturityDate(batch);
+  const totalValue = asOfISO < matDate
+    ? num(batch.cost) + bioRearingCostToDate(batch, asOfISO)
+    : Math.max(0, bioCapitalizedValue(batch) - bioAccumAmortAt(batch, asOfISO));
+  return num(batch.initialQty)>0 ? totalValue/num(batch.initialQty) : 0;
+}
+function bioHeadCountAt(batch, asOfISO){
+  if(!batch.dateAcquired || asOfISO < batch.dateAcquired) return 0;
+  const reduced = state.reductions.filter(r=>r.batchId===batch.batchId && r.date && r.date<asOfISO).reduce((s,r)=>s+num(r.qty),0);
+  return Math.max(0, num(batch.initialQty)-reduced);
+}
+function bioNBVAt(batch, asOfISO){ const perHead=bioValuePerHead(batch,asOfISO); return { nbv: perHead*bioHeadCountAt(batch,asOfISO), perHead }; }
+function bioAssetsTotalNBV(asOf){ return state.livestock.reduce((s,b)=>s+bioNBVAt(b,asOf||todayISO()).nbv,0); }
+
+/* ---------------- Loans / Owner Capital / Cash / Balance Sheet engine ---------------- */
+function opening(){ if(!state.setup.opening) state.setup.opening = {asOfDate:'', cash:0, capital:0}; return state.setup.opening; }
+function loanPrincipalBalance(loanId, cutoff){
+  const l = state.loans.find(x=>x.id===loanId); if(!l) return 0;
+  const repaid = state.loanPayments.filter(p=>p.loanId===loanId && (!cutoff||p.date<=cutoff)).reduce((s,p)=>s+num(p.principalPortion),0);
+  return num(l.principal)-repaid;
+}
+function totalLoansPayable(cutoff){ return state.loans.filter(l=>!cutoff||l.date<=cutoff).reduce((s,l)=>s+loanPrincipalBalance(l.id,cutoff),0); }
+function cashInFromCustomers(cutoff){
+  const inc = state.income.filter(r=>!cutoff||r.date<=cutoff).reduce((s,r)=>s+incomePaidAmt(r),0);
+  const pmt = state.payments.filter(p=>!cutoff||p.date<=cutoff).reduce((s,p)=>s+num(p.amount),0);
+  return inc+pmt;
+}
+function cashOutExpenses(cutoff){ return state.expenses.filter(r=>!cutoff||r.date<=cutoff).reduce((s,r)=>s+num(r.amount),0); }
+function cashOutAssets(cutoff){ return state.assets.filter(a=>!cutoff||a.dateAcquired<=cutoff).reduce((s,a)=>s+num(a.cost),0); }
+function cashOutLivestock(cutoff){ return state.livestock.filter(b=>!cutoff||b.dateAcquired<=cutoff).reduce((s,b)=>s+num(b.cost),0); }
+function cashInLoans(cutoff){ return state.loans.filter(l=>!cutoff||l.date<=cutoff).reduce((s,l)=>s+num(l.principal),0); }
+function cashOutLoanRepay(cutoff){ return state.loanPayments.filter(p=>!cutoff||p.date<=cutoff).reduce((s,p)=>s+num(p.amount),0); }
+function cashInCapital(cutoff){ return state.capitalTx.filter(c=>c.type==='Investment'&&(!cutoff||c.date<=cutoff)).reduce((s,c)=>s+num(c.amount),0); }
+function cashOutCapital(cutoff){ return state.capitalTx.filter(c=>c.type==='Drawing'&&(!cutoff||c.date<=cutoff)).reduce((s,c)=>s+num(c.amount),0); }
+function cashBalance(cutoff){
+  return num(opening().cash) + cashInFromCustomers(cutoff) - cashOutExpenses(cutoff) - cashOutAssets(cutoff) - cashOutLivestock(cutoff)
+    + cashInLoans(cutoff) - cashOutLoanRepay(cutoff) + cashInCapital(cutoff) - cashOutCapital(cutoff);
+}
+function allDataMinEFY(){
+  let min = currentEFY();
+  const dates = [];
+  state.income.forEach(r=>r.date&&dates.push(r.date));
+  state.expenses.forEach(r=>r.date&&dates.push(r.date));
+  state.assets.forEach(a=>a.dateAcquired&&dates.push(a.dateAcquired));
+  state.livestock.forEach(b=>num(b.cost)&&b.dateAcquired&&dates.push(b.dateAcquired));
+  state.loans.forEach(l=>l.date&&dates.push(l.date));
+  dates.forEach(d=>{ const e=efyOf(d); if(e<min) min=e; });
+  return min;
+}
+function retainedEarnings(throughEFY){
+  let sum=0; for(let y=allDataMinEFY(); y<=throughEFY; y++) sum += fyReport(y).netAfterTax;
+  return sum;
+}
+function inventoryOnHandValue(){ return state.setup.feedTypes.reduce((s,ft)=>s+feedStockValue(ft),0); }
+function totalTaxPayable(throughEFY){ let sum=0; for(let y=allDataMinEFY(); y<=throughEFY; y++) sum+=fyReport(y).taxDue; return sum; }
+function ownerEquity(throughEFY, cutoff){
+  return num(opening().capital) + cashInCapital(cutoff) - cashOutCapital(cutoff) + retainedEarnings(throughEFY) + inventoryOnHandValue();
+}
+function prevDay(iso){ const d=new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-1); return d.toISOString().slice(0,10); }
+function balanceSheetData(){
+  const efy = currentEFY();
+  const cash = cashBalance(null);
+  const ar = totalReceivables();
+  const feedStock = inventoryOnHandValue();
+  const fixedAssetsNBV = state.assets.reduce((s,a)=>s+assetDepFor(a,efy).nbv,0);
+  const bioNBV = bioAssetsTotalNBV(fyRange(efy)[1]);   // as of fiscal-year-end, matching assetDepFor's convention
+  const totalAssets = cash+ar+feedStock+fixedAssetsNBV+bioNBV;
+  const loansPayable = totalLoansPayable(null);
+  const taxPayable = totalTaxPayable(efy);
+  const totalLiabilities = loansPayable+taxPayable;
+  const equity = ownerEquity(efy, null);
+  const totalLandE = totalLiabilities+equity;
+  return {efy,cash,ar,feedStock,fixedAssetsNBV,bioNBV,totalAssets,loansPayable,taxPayable,totalLiabilities,equity,totalLandE,diff:totalAssets-totalLandE};
+}
+function cashFlowData(efy){
+  const [fs,fe] = fyRange(efy);
+  const inCust = state.income.filter(r=>inFY(r.date,efy)).reduce((s,r)=>s+incomePaidAmt(r),0);
+  const inPmt = state.payments.filter(p=>inFY(p.date,efy)).reduce((s,p)=>s+num(p.amount),0);
+  const outExp = state.expenses.filter(r=>inFY(r.date,efy)).reduce((s,r)=>s+num(r.amount),0);
+  const outInt = state.loanPayments.filter(p=>inFY(p.date,efy)).reduce((s,p)=>s+num(p.interestPortion),0);
+  const operating = inCust+inPmt-outExp-outInt;
+  const outAssets = state.assets.filter(a=>inFY(a.dateAcquired,efy)).reduce((s,a)=>s+num(a.cost),0);
+  const outLivestock = state.livestock.filter(b=>inFY(b.dateAcquired,efy)).reduce((s,b)=>s+num(b.cost),0);
+  const investing = -(outAssets+outLivestock);
+  const inLoans = state.loans.filter(l=>inFY(l.date,efy)).reduce((s,l)=>s+num(l.principal),0);
+  const outLoanPrin = state.loanPayments.filter(p=>inFY(p.date,efy)).reduce((s,p)=>s+num(p.principalPortion),0);
+  const inCap = state.capitalTx.filter(c=>c.type==='Investment'&&inFY(c.date,efy)).reduce((s,c)=>s+num(c.amount),0);
+  const outCap = state.capitalTx.filter(c=>c.type==='Drawing'&&inFY(c.date,efy)).reduce((s,c)=>s+num(c.amount),0);
+  const financing = inLoans-outLoanPrin+inCap-outCap;
+  const netChange = operating+investing+financing;
+  const beginCash = cashBalance(prevDay(fs));
+  const endCash = cashBalance(fe);
+  return {efy,inCust,inPmt,outExp,outInt,operating,outAssets,outLivestock,investing,inLoans,outLoanPrin,inCap,outCap,financing,netChange,beginCash,endCash,check:endCash-(beginCash+netChange)};
+}
+function equityStatementData(efy){
+  const [fs] = fyRange(efy);
+  const openingBase = num(opening().capital) + cashInCapital(prevDay(fs)) - cashOutCapital(prevDay(fs)) + retainedEarnings(efy-1);
+  const inCap = state.capitalTx.filter(c=>c.type==='Investment'&&inFY(c.date,efy)).reduce((s,c)=>s+num(c.amount),0);
+  const outCap = state.capitalTx.filter(c=>c.type==='Drawing'&&inFY(c.date,efy)).reduce((s,c)=>s+num(c.amount),0);
+  const netIncome = fyReport(efy).netAfterTax;
+  const beforeInventory = openingBase+inCap-outCap+netIncome;
+  const inventoryAdj = inventoryOnHandValue();
+  const closing = beforeInventory+inventoryAdj;
+  return {efy,openingBase,inCap,outCap,netIncome,beforeInventory,inventoryAdj,closing};
+}
+
+/* ---------------- Capital / Loans tab ---------------- */
+function renderCapital(){
+  const capRows = state.capitalTx.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(c=>
+    `<tr><td>${fmtDate(c.date)}</td><td>${escHtml(c.type)}</td><td class="num mono">${fmtMoney(c.amount)}</td>
+     <td>${escHtml(c.partyName)}</td><td class="num mono">${c.ownershipPct?num(c.ownershipPct)+'%':''}</td>
+     <td>${escHtml(c.method)}</td><td class="notes-cell">${escHtml(c.notes)}</td>
+     ${rowActionsHtml('capitalTx', c.id)}</tr>`).join('') || emptyRow(8,'No owner investments or drawings logged yet.');
+
+  const loanRows = state.loans.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(l=>
+    `<tr><td>${fmtDate(l.date)}</td><td>${escHtml(l.lender)}</td><td class="num mono">${fmtMoney(l.principal)}</td>
+     <td class="num mono">${num(l.interestRatePct)}%</td><td>${escHtml(l.termNotes)}</td>
+     <td class="num mono"><strong>${fmtMoney(loanPrincipalBalance(l.id,null))}</strong></td>
+     <td class="mono">${escHtml(l.refNo)}</td>${rowActionsHtml('loans', l.id)}</tr>`).join('') || emptyRow(8,'No loans logged yet.');
+
+  const lpRows = state.loanPayments.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>
+    `<tr><td>${fmtDate(p.date)}</td><td>${escHtml(loanName(p.loanId))}</td>
+     <td class="num mono">${fmtMoney(p.principalPortion)}</td><td class="num mono">${fmtMoney(p.interestPortion)}</td>
+     <td class="num mono">${fmtMoney(num(p.principalPortion)+num(p.interestPortion))}</td>
+     <td class="mono">${escHtml(p.refNo)}</td><td class="notes-cell">${escHtml(p.notes)}</td>
+     ${rowActionsHtml('loanPayments', p.id)}</tr>`).join('') || emptyRow(8,'No loan repayments logged yet.');
+
+  return `
+  <div class="pagehead">
+    <div><h1>${t('Capital & Loans')}</h1><p>Owner investments and drawings, loans received, and loan repayments.</p></div>
+    <button class="btn btn-primary" id="addCapitalTx">+ ${t('Add transaction')}</button>
+  </div>
+  ${tableShell([{label:'Date'},{label:'Type'},{label:'Amount',num:true},{label:'Investor/Owner'},{label:'Ownership %',num:true},{label:'Method'},{label:'Notes'}], capRows)}
+
+  <div class="pagehead"><div><div class="section-title" style="margin-top:0">${t('Loans Received')}</div></div>
+    <button class="btn btn-primary" id="addLoans">+ ${t('Add loan')}</button></div>
+  ${tableShell([{label:'Date'},{label:'Lender'},{label:'Principal',num:true},{label:'Rate',num:true},{label:'Term'},{label:'Balance Owed',num:true},{label:'Ref No.'}], loanRows)}
+
+  <div class="pagehead"><div><div class="section-title" style="margin-top:0">${t('Loan Repayments')}</div></div>
+    <button class="btn btn-primary" id="addLoanPayments">+ ${t('Add repayment')}</button></div>
+  ${tableShell([{label:'Date'},{label:'Loan'},{label:'Principal',num:true},{label:'Interest',num:true},{label:'Total Paid',num:true},{label:'Ref No.'},{label:'Notes'}], lpRows)}
+  <p class="note">Balance Owed = original principal − principal repaid so far. Interest paid appears as an expense on the Financial Report; principal repaid reduces the loan balance on the Balance Sheet, not net income.</p>
+  `;
+}
+
 function renderIncome(){
   const rows = state.income.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const body = rows.length ? rows.map(r=>`
@@ -1445,64 +1609,46 @@ function renderIncome(){
     <td class="num mono"><strong>${fmtMoney(incomeAmount(r))}</strong></td>
     <td class="num mono">${fmtMoney(incomeBalance(r))}</td>
     <td class="num mono">${fmtMoney(r.whtAmount)}</td>
-    <td>${escHtml(stockEffectText(r))}</td>
     <td class="notes-cell">${escHtml(r.notes)}</td>
-    ${rowActionsHtml('income', r.id)}</tr>`).join('') : emptyRow(13,'No income logged yet.');
+    ${rowActionsHtml('income', r.id)}</tr>`).join('') : emptyRow(12,'No income logged yet.');
 
   return `
   <div class="pagehead">
-    <div><h1>Income</h1><p>Choose what you are selling — the form adapts (eggs, honey, milk, wool, manure, birds, goats/sheep/oxen) and the stock is reduced automatically. For lump sums use Other Income.</p></div>
+    <div><h1>Income</h1><p>Enter Quantity × Unit Price (e.g. eggs sold × price/egg). For lump sums, use Qty = 1.</p></div>
     <button class="btn btn-primary" id="addIncome">+ Add income</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Customer'},{label:'Ref No.'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Amount',num:true},{label:'Balance Due',num:true},{label:'WHT',num:true},{label:'Stock effect'},{label:'Notes'}], body)}
+  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Customer'},{label:'Ref No.'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Amount',num:true},{label:'Balance Due',num:true},{label:'WHT',num:true},{label:'Notes'}], body)}
   `;
 }
 
 /* ================= EXPENSES ================= */
 function renderExpenses(){
-  const items = [];
-  const row = (date, cells, act, cls)=>items.push({date:date||'', html:`<tr${cls?' class="'+cls+'"':''}>${cells}${act}</tr>`});
-  const cell = (r, amount, payment, treat)=>`<td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td>${escHtml(r.description)}</td><td class="mono">${escHtml(r.refNo||'')}</td>
-    <td class="num mono"><strong>${fmtMoney(amount)}</strong></td><td>${payment||''}</td><td>${treat}</td><td>${r.nonDeductible==='Yes'?'Yes':''}</td><td class="notes-cell">${escHtml(r.notes||'')}</td>`;
-  costRows().forEach(r=>{
-    const cb = expCapBatch(r);
-    const treat = cb ? `<span class="tag tag-active">Capitalised → ${escHtml(cb.batchId)}</span>` : 'Expensed';
-    const pay = r.credit==='1200' ? 'From feed stock' : (r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : '');
-    row(r.date, cell(r, r.amount, pay, treat), r.derived ? rowActionsHtml(r.srcEntity, r.srcId) : rowActionsHtml('expenses', r.id), r.derived?'auto-row':'');
-  });
-  state.feedPurchases.forEach(f=>{
-    const r = {date:f.date, category:'Feed Purchase', description:'Bought '+fmtNum(f.qty)+' kg '+f.feedType+(f.supplier?' — '+f.supplier:''), notes:f.notes};
-    row(f.date, cell(r, money2(num(f.qty)*num(f.unitCost)), f.payStatus && f.payStatus!==PAY_PAID ? escHtml(f.payStatus) : '', 'Feed stock (expensed when used)'), rowActionsHtml('feedPurchases', f.id), 'auto-row');
-  });
-  state.livestock.filter(b=>isBioBatch(b) && num(b.purchaseCost)>0 && String(b.fundedBy||'').indexOf('Owned before')!==0).forEach(b=>{
-    const r = {date:b.dateAcquired, category:'Livestock Purchase', description:'Bought '+fmtNum(b.initialQty)+' '+(b.breed||b.animalType)+' — batch '+b.batchId, notes:b.notes};
-    row(b.dateAcquired, cell(r, b.purchaseCost, b.fundedBy && b.fundedBy!==FUND_PAID ? escHtml(b.fundedBy) : '', isLayerFlock(b)?'Asset — layer flock':'Asset — livestock'), rowActionsHtml('livestock', b.id), 'auto-row');
-  });
-  bioCharges().filter(c=>c.kind!=='bioAmort' && c.date<=todayISO()).forEach(c=>{
-    row(c.date, `<td>${fmtDate(c.date)}</td><td>${escHtml(c.cat)}</td><td>${escHtml(c.desc)}</td><td></td><td class="num mono"><strong>${fmtMoney(c.amt)}</strong></td><td>Non-cash</td><td>Written off from ${escHtml(c.batchId)}</td><td></td><td class="notes-cell">Automatic — animals that left the batch</td>`,
-      '<td class="rowactions"><span class="tag tag-closed">Auto</span></td>', 'auto-row');
-  });
-  items.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const body = items.length ? items.map(x=>x.html).join('') : emptyRow(10,'No purchases or expenses yet.');
+  const rows = state.expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const body = rows.length ? rows.map(r=>`
+    <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.category)}</td><td>${escHtml(r.description)}</td>
+    <td class="mono">${escHtml(r.refNo)}</td>
+    <td class="num mono"><strong>${fmtMoney(r.amount)}</strong></td>
+    <td>${r.nonDeductible==='Yes'?'Yes':''}</td>
+    <td class="notes-cell">${escHtml(r.notes)}</td>
+    ${rowActionsHtml('expenses', r.id)}</tr>`).join('') : emptyRow(8,'No expenses logged yet.');
+
   return `
   <div class="pagehead">
-    <div><h1>Expenses &amp; Purchases</h1><p>Choose what you are buying — feed, animals, a vaccine, a medication or another cost — and the form shows the matching fields and updates the stock, health log or books automatically.</p></div>
-    <button class="btn btn-primary" id="addExpenses">+ Add purchase / expense</button>
+    <div><h1>Expenses</h1><p>All money out, categorized.</p></div>
+    <button class="btn btn-primary" id="addExpenses">+ Add expense</button>
   </div>
-  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Ref No.'},{label:'Amount',num:true},{label:'Payment'},{label:'Treatment'},{label:'Non-deductible'},{label:'Notes'}], body)}
-  <p class="note">Shaded rows come from the Feed, Livestock and Health tabs; use their Edit / Delete buttons to change them. Feed purchases are stock (an asset) and only become a cost when the feed is used.</p>
+  ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Ref No.'},{label:'Amount',num:true},{label:'Non-deductible'},{label:'Notes'}], body)}
   `;
 }
 
 /* ================= ASSETS (fixed-asset register) ================= */
-const ASSET_CLASSES = ['Buildings / structures','Equipment / machinery','Vehicles','Furniture & fittings','Computers & software','Livestock (breeding stock)','Land','Other'];
+const ASSET_CLASSES = ['Buildings / structures','Equipment / machinery','Vehicles','Furniture & fittings','Computers & software','Other'];
 function assetDepFor(a, efy){
   const cost = num(a.cost), rate = num(a.ratePct)/100;
-  if(!a.dateAcquired) return {dep:0, acc:0, nbv:cost};
+  if(!a.dateAcquired || !cost || !rate) return {dep:0, acc:0, nbv:cost};
   const start = efyOf(a.dateAcquired);
   if(efy < start) return {dep:0, acc:0, nbv:0};                                   // not owned yet
   if(a.disposedDate && efy > efyOf(a.disposedDate)) return {dep:0, acc:0, nbv:0};  // already disposed
-  if(!cost || !rate) return {dep:0, acc:0, nbv:cost};                              // e.g. land: owned, not depreciated
   let nbv = cost, acc = 0, dep = 0;
   for(let y=start; y<=efy; y++){
     dep = (a.method==='Declining balance') ? nbv*rate : Math.min(cost*rate, nbv);
@@ -1530,8 +1676,6 @@ function renderAssets(){
   </div>
   ${tableShell([{label:'Asset'},{label:'Class'},{label:'Acquired'},{label:'Cost',num:true},{label:'Method'},{label:'Rate',num:true},{label:'Dep. '+efy+' EFY',num:true},{label:'Accumulated',num:true},{label:'Net book value',num:true},{label:'Ref No.'}], body)}
   <p class="note">Total depreciation for ${efy} EFY: <strong>${fmtMoney(tot)}</strong>. Depreciation starts in the fiscal year the asset is acquired (no part-year proration). Enter the rate your tax authority allows for each class.</p>
-  <p class="note">Do not also enter an asset purchase in Expenses (e.g. category "Equipment") — it would be counted twice. For land use rate 0%. If you sold an asset, fill in the date disposed and the sale proceeds so the gain or loss is booked.</p>
-  ${renderBioAssets()}
   `;
 }
 
@@ -1549,878 +1693,71 @@ function renderHealth(){
     const body = rows.length ? rows.map(r=>`
       <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
       <td>${escHtml(r.vaccine)}</td><td>${escHtml(r.dose)}</td><td class="num mono">${fmtMoney(r.cost)}</td>
-      <td>${escHtml(r.administeredBy)}</td><td>${r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : ''}</td><td class="notes-cell">${escHtml(r.notes)}</td>
-      ${rowActionsHtml('vaccinations', r.id)}</tr>`).join('') : emptyRow(10,'No vaccinations logged yet.');
+      <td>${escHtml(r.administeredBy)}</td><td class="notes-cell">${escHtml(r.notes)}</td>
+      ${rowActionsHtml('vaccinations', r.id)}</tr>`).join('') : emptyRow(9,'No vaccinations logged yet.');
     return `
     <div class="pagehead">
-      <div><h1>Health</h1><p>Vaccinations and medications — any species. Their cost is booked automatically as an expense (or capitalised into a young layer flock).</p></div>
+      <div><h1>Health</h1><p>Vaccinations and medications — any species.</p></div>
       <button class="btn btn-primary" id="addVaccinations">+ Add vaccination</button>
     </div>
     ${toggle}
-    ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Vaccine'},{label:'Dose/Route'},{label:'Cost',num:true},{label:'Administered By'},{label:'Payment'},{label:'Notes'}], body)}
+    ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Vaccine'},{label:'Dose/Route'},{label:'Cost',num:true},{label:'Administered By'},{label:'Notes'}], body)}
     `;
   }else{
     const rows = state.medications.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     const body = rows.length ? rows.map(r=>`
       <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
       <td>${escHtml(r.disease)}</td><td>${escHtml(r.medication)}</td><td>${escHtml(r.dosage)}</td>
-      <td class="num mono">${fmtMoney(r.cost)}</td><td>${r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : ''}</td><td class="notes-cell">${escHtml(r.notes)}</td>
-      ${rowActionsHtml('medications', r.id)}</tr>`).join('') : emptyRow(10,'No medications logged yet.');
+      <td class="num mono">${fmtMoney(r.cost)}</td><td class="notes-cell">${escHtml(r.notes)}</td>
+      ${rowActionsHtml('medications', r.id)}</tr>`).join('') : emptyRow(9,'No medications logged yet.');
     return `
     <div class="pagehead">
-      <div><h1>Health</h1><p>Vaccinations and medications — any species. Their cost is booked automatically as an expense (or capitalised into a young layer flock).</p></div>
+      <div><h1>Health</h1><p>Vaccinations and medications — any species.</p></div>
       <button class="btn btn-primary" id="addMedications">+ Add medication</button>
     </div>
     ${toggle}
-    ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Disease'},{label:'Medication'},{label:'Dosage'},{label:'Cost',num:true},{label:'Payment'},{label:'Notes'}], body)}
+    ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Disease'},{label:'Medication'},{label:'Dosage'},{label:'Cost',num:true},{label:'Notes'}], body)}
     `;
   }
 }
 
 /* ================= REPORTS (formal financial report) ================= */
-/* ================= ACCOUNTING ENGINE (double-entry ledger built from all records) =================
-   Every sale, expense, asset, payment and accounting transaction is turned into balanced journal
-   entries (debits = credits). The Balance Sheet, Cash Flow, Owner's Equity and Trial Balance are all
-   read from that one ledger, so they always agree with each other and with the Profit & Loss. */
-const AT = {
-  INV:'Owner investment (cash)',
-  SALE:'Sale of ownership (new partner / investor pays in)',
-  XFER:'Ownership transfer between owners (no cash to business)',
-  DRAW:'Owner drawing / profit distribution',
-  LOAN:'Loan received',
-  REPAY:'Loan repayment (principal)',
-  INT:'Loan interest paid',
-  SUPP:'Payment to supplier (settle unpaid expense)',
-  ASUPP:'Payment to asset supplier (settle unpaid asset purchase)',
-  TAX:'Income tax paid',
-  OINC:'Other income received (grant, subsidy, interest earned)',
-  OPCASH:'Opening balance — cash & bank',
-  OPLOAN:'Opening balance — loan owed'
-};
-const ACCT_TYPE_LIST = Object.keys(AT).map(k=>AT[k]);
-const OPEN_DATE = '0000-01-01';   // opening balances always sit before the first fiscal year
-const TERM_LONG = 'Long-term (over 1 year)', TERM_SHORT = 'Short-term (within 1 year)';
-const PAY_PAID = 'Paid (cash / bank)', PAY_UNPAID = 'Unpaid (on credit)', PAY_OWNER = 'Paid personally by owner';
-const FUND_PAID = 'Paid (cash / bank)', FUND_CREDIT = 'Supplier credit (unpaid)', FUND_OWNER = 'Contributed by owner (in kind)', FUND_OPEN = 'Owned before using this app (opening balance)';
-const ACCT_NAMES = {
-  '1000':'Cash and bank', '1100':'Accounts receivable (net of customer advances)', '1150':'Withholding tax receivable', '1200':'Feed inventory',
-  '1500':'Fixed assets — cost', '1510':'Accumulated depreciation',
-  '1600':'Biological assets — immature layers (at cost)', '1610':'Biological assets — mature layers (cost)', '1620':'Accumulated amortisation — mature layers', '1650':'Other livestock (goats, sheep, oxen) — cost', '1660':'Accumulated amortisation — other livestock',
-  '2000':'Accounts payable — suppliers', '2050':'Payable to asset suppliers', '2100':'Loans payable — short-term', '2150':'Loans payable — long-term', '2300':'Income tax payable',
-  '3000':"Owner's capital", '3100':"Owner's drawings",
-  '4000':'Sales revenue', '4900':'Other income', '5000':'Cost of production', '5100':'Change in feed inventory',
-  '6000':'Operating expenses', '6100':'Depreciation', '6110':'Amortisation of mature layers', '6120':'Amortisation of other livestock', '6400':'Poultry mortality expense', '6410':'Carrying value of birds sold / culled / lost', '6420':'Other livestock mortality expense', '6430':'Carrying value of other livestock sold / culled / lost', '6200':'Finance costs (loan interest)', '6900':'Gain / (loss) on disposal of assets', '8000':'Income tax expense'
-};
-const PL_ACCTS = ['4000','4900','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900','8000'];
-const PL_PRETAX = ['4000','4900','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900'];
+let reportView = 'income';
 
-let _canon = {};
-function defaultOwnerName(){ return String((state.setup.acctOpts && state.setup.acctOpts.ownerName) || '').trim() || 'Owner'; }
-function partyName(p){ p = String(p||'').trim() || defaultOwnerName(); const k = p.toLowerCase(); if(!_canon[k]) _canon[k] = p; return _canon[k]; }
-function lenderName(x){ return String(x.party||'').trim() || 'Unnamed lender'; }
-function isOpeningType(ty){ return ty===AT.OPCASH || ty===AT.OPLOAN; }
-function validDate(d){ return typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d); }
-function inventoryOn(){ return true; }   // feed is always an inventory asset until it is used
-function fmtAcc(n){ n = num(n); if(Math.abs(n)<0.005) n = 0; return n<0 ? '('+fmtMoney(-n)+')' : fmtMoney(n); }
-
-function acctSum(type, efy){
-  return state.acct.filter(x=>x.type===type && validDate(x.date) && inFY(x.date,efy)).reduce((s,x)=>s+num(x.amount),0);
-}
-function loanTermFor(x){
-  if(x.type===AT.REPAY){
-    const k = lenderName(x).toLowerCase();
-    const src = state.acct.find(y=>(y.type===AT.LOAN||y.type===AT.OPLOAN) && lenderName(y).toLowerCase()===k);
-    if(src && src.loanTerm) return src.loanTerm;
-  }
-  return x.loanTerm || TERM_LONG;
-}
-function loanAcctFor(x){ return String(loanTermFor(x)).indexOf('Short')===0 ? '2100' : '2150'; }
-
-/* Withholding tax is recognised only to the extent the buyer has actually paid */
-function whtRecognisedOnSale(r){ return Math.min(num(r.whtAmount), Math.max(0, incomePaidAmt(r))); }
-function whtRecognised(efy){
-  return state.income.filter(r=>inFY(r.date,efy)).reduce((s,r)=>s+whtRecognisedOnSale(r),0) + num(taxAdj(efy).wht);
-}
-function assetDisposal(a){
-  if(!a.disposedDate || !a.dateAcquired || !num(a.cost)) return null;
-  const fy = efyOf(a.disposedDate), cost = num(a.cost), acc = assetDepFor(a, fy).acc, proceeds = num(a.disposalProceeds);
-  return {fy, cost, acc, nbv:cost-acc, proceeds, gl:proceeds-(cost-acc)};
-}
-function acctFirstFY(){
-  let m = null;
-  const upd = d => { if(!validDate(d)) return; const y = efyOf(d); if(m===null || y<m) m = y; };
-  state.income.forEach(r=>upd(r.date)); state.expenses.forEach(r=>upd(r.date)); state.payments.forEach(r=>upd(r.date));
-  state.assets.forEach(a=>upd(a.dateAcquired));
-  bioBatches().forEach(b=>upd(b.dateAcquired));
-  state.acct.forEach(x=>{ if(!isOpeningType(x.type)) upd(x.date); });
-  state.feedPurchases.forEach(f=>upd(f.date)); state.feeding.forEach(f=>upd(f.date)); state.vaccinations.forEach(f=>upd(f.date)); state.medications.forEach(f=>upd(f.date)); state.livestock.forEach(b=>upd(b.dateAcquired));
-  return m===null ? currentEFY() : m;
-}
-
-
-/* ================= BIOLOGICAL ASSETS (cost model) =================
-   Layer flocks (Poultry batches switched to "Track as layer flock"):
-     1. Bought before laying age -> 1600 Immature layers (asset, not an expense).
-     2. Feed used, vaccines, medication and labour for the flock while under laying age are capitalised into 1600.
-     3. At laying age the balance of 1600 is locked and moved to 1610 Mature layers.
-     4. It is amortised straight-line over 12-18 months to 6110.
-   Goats, sheep and oxen are assets too (1650, optional amortisation to 6120).
-   Whenever animals leave a batch (any reduction, or a sale recorded in Income) their per-head carrying value is
-   removed: deaths -> mortality expense, other exits -> carrying value written off. Sale proceeds stay in Income.
-   Bees and non-layer poultry are expensed at purchase (cost of production). */
-const BIO_YES = 'Yes';
-const ASSET_ANIMALS = ['Goats','Sheep','Oxen'];
-const REARING_CATS = ['Feed Used','Vaccination','Medication','Labor'];
-const AUTO_COST_CATS = ['Feed Purchase','Feed Used','Vaccination','Medication','Livestock Purchase'];   // created automatically, never typed into Expenses
-const DEFAULT_LAYING_AGE = 5, DEFAULT_AMORT_MONTHS = 18;
-function money2(x){ return Math.round(x*100)/100; }
-function addMonthsISO(iso, m){
-  const p = iso.split('-').map(Number), idx = p[0]*12 + (p[1]-1) + m;
-  const y = Math.floor(idx/12), mo = idx - y*12;
-  const dim = new Date(Date.UTC(y, mo+1, 0)).getUTCDate();
-  return String(y).padStart(4,'0')+'-'+String(mo+1).padStart(2,'0')+'-'+String(Math.min(p[2],dim)).padStart(2,'0');
-}
-function isLayerFlock(b){ return !!b && b.bio===BIO_YES && b.animalType==='Poultry'; }
-function isAssetAnimal(b){ return !!b && ASSET_ANIMALS.includes(b.animalType); }
-function isBioBatch(b){ return isLayerFlock(b) || isAssetAnimal(b); }
-function bioBatches(){ return state.livestock.filter(isBioBatch); }
-function layerBatchById(id){ return id ? (state.livestock.find(b=>b.batchId===id && isLayerFlock(b)) || null) : null; }
-function bioBatchOptions(){ return state.livestock.filter(isLayerFlock).map(b=>({value:b.batchId, label:`${b.batchId} — ${b.breed||b.animalType}`})); }
-function bioAccts(b){
-  return isLayerFlock(b) ? {imm:'1600', cost:'1610', acc:'1620', amort:'6110', mort:'6400', wo:'6410', grp:'L'}
-                         : {imm:'1600', cost:'1650', acc:'1660', amort:'6120', mort:'6420', wo:'6430', grp:'O'};
-}
-function bioParams(b){
-  if(isLayerFlock(b)){
-    const lay = num(b.layingAgeMonths)>0 ? Math.round(num(b.layingAgeMonths)) : DEFAULT_LAYING_AGE;
-    const am  = num(b.amortMonths)>0 ? Math.round(num(b.amortMonths)) : DEFAULT_AMORT_MONTHS;
-    const age0 = Math.max(0, Math.round(num(b.ageMonthsAtPurchase)));
-    const born = validDate(b.dateAcquired) ? addMonthsISO(b.dateAcquired, -age0) : null;
-    return {lay, am, age0, born, mature: born ? addMonthsISO(born, lay) : null};
-  }
-  return {lay:0, am: Math.max(0, Math.round(num(b.amortMonthsOther))), age0:0, born:b.dateAcquired, mature: validDate(b.dateAcquired) ? b.dateAcquired : null};
-}
-/* Is this cost eligible to be capitalised into a layer flock that is still under laying age? */
-function expEligibleBatch(r){
-  const b = layerBatchById(r.batchId); if(!b) return null;
-  if(!REARING_CATS.includes(r.category)) return null;
-  if(!validDate(r.date) || !validDate(b.dateAcquired)) return null;
-  const P = bioParams(b);
-  if(!(P.mature > b.dateAcquired)) return null;                    // flock was already laying when acquired
-  if(r.date < b.dateAcquired || r.date >= P.mature) return null;   // outside the rearing window
-  return b;
-}
-/* The is_capitalized switch: true only while the cost is still eligible, so a stale flag can never strand a balance */
-function expCapBatch(r){ return r.isCapitalized===true ? expEligibleBatch(r) : null; }
-async function refreshCapFlags(){
-  let changed = false;
-  state.expenses.forEach(r=>{
-    const want = r.capMode==='No' ? false : !!expEligibleBatch(r);
-    if(!!r.isCapitalized !== want){ r.isCapitalized = want; changed = true; }
-  });
-  if(changed) await saveEntity('expenses');
-}
-
-/* ---- every cost of the farm as one list: typed expenses + costs created automatically by other records ---- */
-function payFromFund(fb){ fb = fb || ''; if(fb.indexOf('Supplier credit')===0) return PAY_UNPAID; if(fb.indexOf('Contributed')===0) return PAY_OWNER; return PAY_PAID; }
-function costRows(){
-  const rows = state.expenses.map(r=>Object.assign({}, r, {derived:false}));
-  const push = r => { r.derived = true; r.isCapitalized = r.capMode==='No' ? false : !!expEligibleBatch(r); rows.push(r); };
-  state.vaccinations.forEach(v=>{ if(num(v.cost)>0) push({id:'vax:'+v.id, srcEntity:'vaccinations', srcId:v.id, date:v.date, category:'Vaccination', description:'Vaccination — '+(v.vaccine||''), amount:num(v.cost), payStatus:v.payStatus||PAY_PAID, batchId:v.batchId, capMode:'Auto', origin:'Health tab'}); });
-  state.medications.forEach(m=>{ if(num(m.cost)>0) push({id:'med:'+m.id, srcEntity:'medications', srcId:m.id, date:m.date, category:'Medication', description:'Medication — '+(m.medication||''), amount:num(m.cost), payStatus:m.payStatus||PAY_PAID, batchId:m.batchId, capMode:'Auto', origin:'Health tab'}); });
-  const fs = feedSim();
-  state.feeding.forEach(f=>{ const c = fs.cost[f.id] || 0; if(c>0) push({id:'feed:'+f.id, srcEntity:'feeding', srcId:f.id, date:f.date, category:'Feed Used', description:'Feed used — '+f.feedType+' ('+fmtNum(f.qtyUsed)+' kg)', amount:c, credit:'1200', batchId:f.batchId, capMode:'Auto', origin:'Feeding log'}); });
-  state.livestock.forEach(b=>{ if(!isBioBatch(b) && num(b.purchaseCost)>0 && validDate(b.dateAcquired) && String(b.fundedBy||'').indexOf('Owned before')!==0)
-    push({id:'buy:'+b.id, srcEntity:'livestock', srcId:b.id, date:b.dateAcquired, category:'Livestock Purchase', description:'Purchase of '+(b.batchId||'')+' ('+(b.breed||b.animalType)+')', amount:num(b.purchaseCost), payStatus:payFromFund(b.fundedBy), batchId:'', capMode:'No', origin:'Livestock tab'}); });
-  return rows;
-}
-
-/* Replays one batch's life event by event; returns the ledger entries it generates (the rearing costs are booked by buildJournal). */
-function bioSim(b){
-  const P = bioParams(b), AC = bioAccts(b), res = {P, AC, ok:false, entries:[], snaps:[], buy:null, locked:null, matDate:null, immAtBuy:false, final:null};
-  if(!P.mature || !validDate(b.dateAcquired)) return res;
-  const acq = b.dateAcquired, id = b.batchId || '';
-  const immAtBuy = P.mature > acq, matDate = immAtBuy ? P.mature : acq;
-  res.ok = true; res.immAtBuy = immAtBuy; res.matDate = matDate;
-  const cost = money2(num(b.purchaseCost));
-  const ev = [{date:acq, pri:0, type:'buy'}];
-  costRows().forEach(r=>{ if(r.batchId===b.batchId && expCapBatch(r)===b) ev.push({date:r.date, pri:1, type:'cap', amt:money2(num(r.amount))}); });
-  allReductions().forEach(r=>{ if(r.batchId===b.batchId && num(r.qty)>0) ev.push({date:(validDate(r.date)&&r.date>acq)?r.date:acq, pri:2, type:'red', r}); });
-  if(immAtBuy) ev.push({date:matDate, pri:3, type:'mature'});
-  for(let k=1;k<=P.am;k++) ev.push({date:addMonthsISO(matDate,k), pri:4, type:'amort', k});
-  ev.sort((x,y)=> x.date<y.date ? -1 : x.date>y.date ? 1 : x.pri-y.pri);
-
-  let I=0, G=0, A=0, Q=0, mature=!immAtBuy;
-  ev.forEach(e=>{
-    if(e.type==='buy'){
-      Q = num(b.initialQty);
-      if(cost>0){ if(mature) G = money2(G+cost); else I = money2(I+cost); }
-      res.buy = {date:acq, acct: mature?AC.cost:AC.imm, amount:cost};
-      if(mature) res.locked = {date:acq, cost:G};
-    }
-    else if(e.type==='cap'){ I = money2(I+e.amt); }
-    else if(e.type==='red'){
-      const q = Math.min(num(e.r.qty), Q); if(q<=0) return;
-      const death = e.r.reason==='Death', ex = death ? AC.mort : AC.wo;
-      let wo, lines, perHead;
-      if(mature){
-        const gS = money2(G*q/Q), aS = money2(A*q/Q);
-        wo = money2(gS-aS); perHead = (G-A)/Q; G = money2(G-gS); A = money2(A-aS);
-        lines = [[ex,wo],[AC.acc,aS],[AC.cost,-gS]];
-      }else{
-        wo = money2(I*q/Q); perHead = I/Q; I = money2(I-wo);
-        lines = [[ex,wo],[AC.imm,-wo]];
-      }
-      Q -= q;
-      const word = AC.grp==='L' ? 'bird(s)' : 'head';
-      res.entries.push({date:e.date, kind: death?'bioMort':'bioWo', grp:AC.grp, wo, qty:q, redId:e.r.id, lines,
-        desc:(death?'Mortality — ':(e.r.reason==='Sale'?'Sold — ':'Removed ('+String(e.r.reason||'other').toLowerCase()+') — '))+id+': '+q+' '+word+' × '+fmtMoney(perHead)+' carrying value'});
-    }
-    else if(e.type==='mature'){
-      const amt = I;
-      G = money2(G+I); I = 0; mature = true; res.locked = {date:e.date, cost:G};
-      if(amt>0) res.entries.push({date:e.date, kind:'bioMature', grp:AC.grp, lines:[[AC.cost,amt],[AC.imm,-amt]],
-        desc:'Flock '+id+' reached laying age — rearing cost locked and moved to mature layers'});
-    }
-    else if(e.type==='amort'){
-      if(!mature) return;
-      const nbv = money2(G-A), rem = P.am - e.k + 1;
-      const ch = e.k===P.am ? nbv : money2(nbv/rem);
-      if(ch>0){ A = money2(A+ch); res.entries.push({date:e.date, kind:'bioAmort', grp:AC.grp, amt:ch, lines:[[AC.amort,ch],[AC.acc,-ch]],
-        desc:'Amortisation '+e.k+' of '+P.am+' — '+id}); }
-    }
-    res.snaps.push({date:e.date, I, G, A, Q});
-  });
-  res.final = {I, G, A, Q};
-  return res;
-}
-function bioAll(){ return bioBatches().map(b=>({b, s:bioSim(b)})); }
-function bioSnapAt(s, d){ let cur = {I:0, G:0, A:0, Q:0}; s.snaps.forEach(x=>{ if(x.date<=d) cur = x; }); return cur; }
-/* every P&L charge produced by the animals: amortisation, mortality, write-off of animals that left */
-function bioCharges(){
-  const out = [];
-  bioAll().forEach(({b,s})=>s.entries.forEach(e=>{
-    const L = e.grp==='L';
-    if(e.kind==='bioAmort') out.push({date:e.date, kind:e.kind, grp:e.grp, cat:L?'Amortisation of mature layers':'Amortisation of other livestock', amt:e.amt, batchId:b.batchId, desc:e.desc});
-    else if(e.kind==='bioMort' || e.kind==='bioWo') out.push({date:e.date, kind:e.kind, grp:e.grp, cat:e.kind==='bioMort'?(L?'Poultry Mortality':'Livestock Mortality'):(L?'Poultry write-off (sold / culled / lost)':'Livestock write-off (sold / culled / lost)'), amt:e.wo, batchId:b.batchId, desc:e.desc, qty:e.qty, redId:e.redId});
-  }));
-  return out;
-}
-function bioFY(efy){
-  const o = {amortL:0, amortO:0, mortL:0, mortO:0, woL:0, woO:0};
-  bioCharges().forEach(c=>{ if(!inFY(c.date,efy)) return; const k = (c.kind==='bioAmort'?'amort':c.kind==='bioMort'?'mort':'wo')+c.grp; o[k] += c.amt; });
-  o.amort = o.amortL + o.amortO; o.mort = o.mortL + o.mortO; o.wo = o.woL + o.woO;
-  return o;
-}
-function bioWriteOffByReduction(){ const m = {}; bioCharges().forEach(c=>{ if(c.redId) m[c.redId] = (m[c.redId]||0) + c.amt; }); return m; }
-
-function renderBioAssets(){
-  const today = todayISO(), all = bioAll();
-  const body = all.length ? all.map(({b,s})=>{
-    if(!s.ok) return `<tr><td class="mono">${escHtml(b.batchId)}</td><td colspan="10" style="color:var(--clay)">Check this batch: it needs a valid acquisition date.</td></tr>`;
-    const pos = bioSnapAt(s, today), P = s.P, L = s.AC.grp==='L';
-    const done = s.entries.filter(e=>e.kind==='bioAmort' && e.date<=today).length;
-    const isMature = today >= s.matDate;
-    let status;
-    if(!isMature) status = 'Rearing (immature)';
-    else if(P.am===0) status = 'Held at cost';
-    else status = (done>=P.am || ((pos.G-pos.A)<0.005 && done>0)) ? 'Fully amortised' : (L ? 'Laying — amortising' : 'Amortising');
-    const nbv = pos.I + pos.G - pos.A, rem = P.am - done;
-    const next = (isMature && rem>0 && P.am>0) ? money2((pos.G-pos.A)/rem) : 0;
-    return `<tr><td class="mono">${escHtml(b.batchId)}</td><td>${escHtml(b.animalType)}</td><td>${status}</td><td class="num mono">${fmtNum(pos.Q)}</td>
-      <td>${fmtDate(s.matDate)}</td>
-      <td class="num mono">${fmtMoney(pos.I)}</td><td class="num mono">${fmtMoney(pos.G)}</td><td class="num mono">${fmtMoney(-pos.A)}</td>
-      <td class="num mono"><strong>${fmtMoney(nbv)}</strong></td><td class="num mono">${fmtMoney(next)}</td>
-      <td class="num mono">${s.locked ? fmtMoney(s.locked.cost) : '—'}</td></tr>`;
-  }).join('') : emptyRow(11,'No biological assets yet. Add a Poultry batch as a layer flock, or a Goats / Sheep / Oxen batch, in the Livestock tab.');
-  return `
-  <div class="pagehead" style="margin-top:26px"><div><h2 style="margin:0;font-family:'Space Grotesk',sans-serif">Biological assets — layer flocks, goats, sheep, oxen</h2>
-  <p>Purchase price + rearing costs are held as an asset (layers are locked at laying age, then amortised). Figures are as at today (${today}).</p></div></div>
-  <div class="panel"><div class="tablewrap"><table><thead><tr>
-    <th>Batch</th><th>Type</th><th>Status</th><th class="num">Head</th><th>In service from</th>
-    <th class="num">Immature (cost)</th><th class="num">Mature / in-service (cost)</th><th class="num">Accum. amortisation</th>
-    <th class="num">Net book value</th><th class="num">Next monthly charge</th><th class="num">Cost locked</th>
-  </tr></thead><tbody>${body}</tbody></table></div></div>
-  <p class="note">Animals that die, are culled or are sold (recorded in Income) remove their per-head share of this value automatically. Deaths become mortality expense; sales still show their proceeds in Income. Bees and non-layer poultry are expensed when bought.</p>`;
-}
-
-function buildJournal(sel){
-  _canon = {};
-  const J = [], end = fyRange(sel)[1];
-  const drcr = (a,amt,party)=> amt>=0 ? [a,amt,0,party] : [a,0,-amt,party];
-  const add = (date,desc,src,kind,cf,lines)=>{
-    lines = lines.filter(l=>Math.abs(l[1]||0)+Math.abs(l[2]||0)>1e-9);
-    if(lines.length) J.push({date,desc,src,kind,cf,lines});
-  };
-
-  /* --- sales --- */
-  state.income.forEach(r=>{
-    if(!validDate(r.date) || r.date>end) return;
-    const amt = incomeAmount(r), paid = incomePaidAmt(r), w = whtRecognisedOnSale(r);
-    add(r.date, 'Sale: '+(r.description||r.category||''), 'income', 'sale', 'op',
-      [drcr('1000',paid-w), drcr('1150',w), drcr('1100',amt-paid), drcr('4000',-amt)]);
-  });
-  /* --- customer payments --- */
-  state.payments.forEach(p=>{
-    if(!validDate(p.date) || p.date>end) return;
-    add(p.date, 'Customer payment: '+(customerName(p.customerId)||''), 'payment', 'collection', 'op',
-      [drcr('1000',num(p.amount)), drcr('1100',-num(p.amount))]);
-  });
-  /* --- feed purchases: inventory asset until the feed is used --- */
-  state.feedPurchases.forEach(r=>{
-    if(!validDate(r.date) || r.date>end) return;
-    const amt = money2(num(r.qty)*num(r.unitCost)), ps = r.payStatus || PAY_PAID;
-    let credit, kind = 'feedBuy';
-    if(ps.indexOf('Unpaid')===0) credit = drcr('2000',-amt);
-    else if(ps.indexOf('Paid personally')===0){ credit = drcr('3000',-amt,partyName('')); kind = 'ownerPaidExp'; }
-    else credit = drcr('1000',-amt);
-    add(r.date, 'Feed purchased: '+(r.feedType||'')+(r.supplier?' — '+r.supplier:''), 'feed', kind, 'op', [drcr('1200',amt), credit]);
-  });
-  /* --- all costs: typed expenses + vaccinations, medication, feed used, livestock bought for expense --- */
-  costRows().forEach(r=>{
-    if(!validDate(r.date) || r.date>end) return;
-    const amt = num(r.amount), cop = COST_OF_PRODUCTION_CATS.includes(r.category), ps = r.payStatus || PAY_PAID;
-    const cb = expCapBatch(r), ref = r.derived ? 'Auto' : 'Expense';
-    if(r.credit==='1200'){   // feed taken out of inventory
-      if(cb) add(r.date, 'Feed capitalised into flock '+cb.batchId+': '+(r.description||''), 'expense', 'bioCapStock', null, [drcr('1600',amt), drcr('1200',-amt)]);
-      else add(r.date, 'Feed used: '+(r.description||''), 'expense', 'feedUse', 'op', [drcr('5000',amt), drcr('1200',-amt)]);
-      return;
-    }
-    if(cb){   // rearing cost of an immature flock -> asset, not P&L
-      const ca = money2(amt);
-      let cc2, ck = 'bioCap';
-      if(ps.indexOf('Unpaid')===0){ cc2 = drcr('2000',-ca); ck = 'bioCapCredit'; }
-      else if(ps.indexOf('Paid personally')===0){ cc2 = drcr('3000',-ca,partyName('')); ck = 'bioCapOwner'; }
-      else cc2 = drcr('1000',-ca);
-      add(r.date, 'Rearing cost capitalised ('+cb.batchId+'): '+(r.description||r.category||''), 'expense', ck, 'inv', [drcr('1600',ca), cc2]);
-      return;
-    }
-    let credit, kind = 'expense';
-    if(ps.indexOf('Unpaid')===0) credit = drcr('2000',-amt);
-    else if(ps.indexOf('Paid personally')===0){ credit = drcr('3000',-amt,partyName('')); kind = 'ownerPaidExp'; }
-    else credit = drcr('1000',-amt);
-    add(r.date, ref+': '+(r.description||r.category||''), 'expense', kind, 'op', [drcr(cop?'5000':'6000',amt), credit]);
-  });
-  /* --- fixed assets --- */
-  state.assets.forEach(a=>{
-    const cost = num(a.cost);
-    if(!cost || !validDate(a.dateAcquired) || a.dateAcquired>end) return;
-    const fb = a.fundedBy || FUND_PAID, acqFY = efyOf(a.dateAcquired);
-    let credit, date = a.dateAcquired, kind = 'asset';
-    if(fb.indexOf('Supplier credit')===0){ credit = drcr('2050',-cost); kind = 'assetCredit'; }
-    else if(fb.indexOf('Contributed')===0){ credit = drcr('3000',-cost,partyName('')); kind = 'assetInKind'; }
-    else if(fb.indexOf('Owned before')===0){ credit = drcr('3000',-cost,partyName('')); date = OPEN_DATE; kind = 'assetOpen'; }
-    else credit = drcr('1000',-cost);
-    add(date, 'Asset acquired: '+(a.name||''), 'asset', kind, 'inv', [drcr('1500',cost), credit]);
-    const lastFY = a.disposedDate ? Math.min(sel, efyOf(a.disposedDate)) : sel;
-    for(let fy=acqFY; fy<=lastFY; fy++){
-      const d = assetDepFor(a,fy).dep;
-      add(fyRange(fy)[1], 'Depreciation '+fy+' EFY: '+(a.name||''), 'dep', 'dep', null, [drcr('6100',d), drcr('1510',-d)]);
-    }
-    const ds = assetDisposal(a);
-    if(ds && a.disposedDate<=end){
-      add(a.disposedDate, 'Asset disposed: '+(a.name||''), 'disposal', 'disposal', 'inv',
-        [drcr('1000',ds.proceeds), drcr('1510',ds.acc), drcr('1500',-ds.cost), drcr('6900',-ds.gl)]);
-    }
-  });
-  /* --- biological assets: layer flocks --- */
-  bioAll().forEach(({b,s})=>{
-    if(!s.ok) return;
-    const bu = s.buy;
-    if(bu && bu.amount>0 && bu.date<=end){
-      const fb = b.fundedBy || FUND_PAID;
-      let credit, date = bu.date, kind = 'bioBuy';
-      if(fb.indexOf('Supplier credit')===0){ credit = drcr('2050',-bu.amount); kind = 'bioCredit'; }
-      else if(fb.indexOf('Contributed')===0){ credit = drcr('3000',-bu.amount,partyName('')); kind = 'bioInKind'; }
-      else if(fb.indexOf('Owned before')===0){ credit = drcr('3000',-bu.amount,partyName('')); date = OPEN_DATE; kind = 'bioOpen'; }
-      else credit = drcr('1000',-bu.amount);
-      add(date, 'Flock acquired: '+(b.batchId||''), 'bio', kind, 'inv', [drcr(bu.acct,bu.amount), credit]);
-    }
-    s.entries.forEach(e=>{ if(e.date>end) return; add(e.date, e.desc, 'bio', e.kind, null, e.lines.map(l=>drcr(l[0],l[1]))); });
-  });
-  /* --- accounting transactions (loans, capital, drawings ...) --- */
-  state.acct.forEach(x=>{
-    const amt = num(x.amount); if(!amt) return;
-    const open = isOpeningType(x.type);
-    if(!open && (!validDate(x.date) || x.date>end)) return;
-    const d = open ? OPEN_DATE : x.date, p = partyName(x.party);
-    switch(x.type){
-      case AT.INV:   add(d,'Owner investment — '+p,'acct','inv','fin',[drcr('1000',amt),drcr('3000',-amt,p)]); break;
-      case AT.SALE:  add(d,'Sale of ownership to '+p,'acct','saleown','fin',[drcr('1000',amt),drcr('3000',-amt,p)]); break;
-      case AT.XFER:  add(d,'Ownership transfer '+partyName(x.fromParty)+' → '+p,'acct','xfer',null,[drcr('3000',amt,partyName(x.fromParty)),drcr('3000',-amt,p)]); break;
-      case AT.DRAW:  add(d,'Owner drawing — '+p,'acct','draw','fin',[drcr('3100',amt,p),drcr('1000',-amt)]); break;
-      case AT.LOAN:  add(d,'Loan received — '+lenderName(x),'acct','loan','fin',[drcr('1000',amt),drcr(loanAcctFor(x),-amt)]); break;
-      case AT.REPAY: add(d,'Loan repayment — '+lenderName(x),'acct','repay','fin',[drcr(loanAcctFor(x),amt),drcr('1000',-amt)]); break;
-      case AT.INT:   add(d,'Loan interest paid'+(String(x.party||'').trim()?' — '+lenderName(x):''),'acct','int','op',[drcr('6200',amt),drcr('1000',-amt)]); break;
-      case AT.SUPP:  add(d,'Payment to supplier'+(String(x.party||'').trim()?' — '+String(x.party).trim():''),'acct','supp','op',[drcr('2000',amt),drcr('1000',-amt)]); break;
-      case AT.ASUPP: add(d,'Payment to asset supplier'+(String(x.party||'').trim()?' — '+String(x.party).trim():''),'acct','asupp','inv',[drcr('2050',amt),drcr('1000',-amt)]); break;
-      case AT.TAX:   add(d,'Income tax paid','acct','taxpaid','op',[drcr('2300',amt),drcr('1000',-amt)]); break;
-      case AT.OINC:  add(d,'Other income received','acct','oinc','op',[drcr('1000',amt),drcr('4900',-amt)]); break;
-      case AT.OPCASH:add(d,'Opening cash & bank — '+p,'acct','opcash','open',[drcr('1000',amt),drcr('3000',-amt,p)]); break;
-      case AT.OPLOAN:add(d,'Opening loan owed — '+lenderName(x),'acct','oploan','open',[drcr('3000',amt,partyName('')),drcr(loanAcctFor(x),-amt)]); break;
-    }
-  });
-  /* --- fiscal-year-end entries: manual adjustments, tax, feed inventory --- */
-  const first = Math.min(acctFirstFY(), sel);
-  for(let fy=first; fy<=sel; fy++){
-    const fe = fyRange(fy)[1], adj = taxAdj(fy), rep = fyReport(fy);
-    add(fe,'Manual depreciation adjustment '+fy+' EFY','adj','dep',null,[drcr('6100',num(adj.depreciation)),drcr('1510',-num(adj.depreciation))]);
-    add(fe,'Manual withholding tax adjustment '+fy+' EFY','adj','adjwht','op',[drcr('1150',num(adj.wht)),drcr('1000',-num(adj.wht))]);
-    add(fe,'Income tax for '+fy+' EFY','tax','tax',null,[drcr('8000',rep.taxDue),drcr('2300',-rep.taxDue)]);
-    const wr = whtRecognised(fy);
-    add(fe,'Withholding tax credit applied '+fy+' EFY','tax','taxcredit',null,[drcr('2300',wr),drcr('1150',-wr)]);
-    add(fe,'Advance tax payments '+fy+' EFY','tax','advtax','op',[drcr('2300',num(adj.advance)),drcr('1000',-num(adj.advance))]);
-  }
-  return J.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
-}
-
-/* balance of accounts up to and including a date (debit positive) */
-function bal(J, accts, cut, party){
-  let s = 0;
-  J.forEach(e=>{ if(e.date>cut) return; e.lines.forEach(l=>{ if(accts.indexOf(l[0])>=0 && (party===undefined || l[3]===party)) s += (l[1]||0)-(l[2]||0); }); });
-  return s;
-}
-function receivablesSplit(cut){
-  const b = {};
-  state.income.forEach(r=>{ if(!validDate(r.date)||r.date>cut) return; const k=r.customerId||'_anon'; b[k]=(b[k]||0)+incomeBalance(r); });
-  state.payments.forEach(p=>{ if(!validDate(p.date)||p.date>cut) return; const k=p.customerId||'_anon'; b[k]=(b[k]||0)-num(p.amount); });
-  let ar=0, adv=0; Object.keys(b).forEach(k=>{ if(b[k]>=0) ar+=b[k]; else adv+=-b[k]; });
-  return {ar, adv};
-}
-
-function balanceSheet(sel){
-  const J = buildJournal(sel), cc = fyRange(sel)[1], B = a=>bal(J,[a],cc), o = {};
-  o.rawCash = B('1000'); o.cash = Math.max(o.rawCash,0); o.overdraft = Math.max(-o.rawCash,0);
-  const sp = receivablesSplit(cc); o.ar = sp.ar; o.adv = sp.adv;
-  o.wht = B('1150'); o.inv = B('1200');
-  const taxNet = -B('2300'); o.taxPay = Math.max(taxNet,0); o.taxRefund = Math.max(-taxNet,0);
-  o.fixedCost = B('1500'); o.accDep = -B('1510'); o.fixedNet = o.fixedCost - o.accDep;
-  o.ap = -B('2000'); o.apA = -B('2050'); o.loanS = -B('2100'); o.loanL = -B('2150');
-  o.bioImm = B('1600'); o.bioMatCost = B('1610'); o.bioAccAmort = -B('1620'); o.bioMatNet = o.bioMatCost - o.bioAccAmort; o.bioNet = o.bioImm + o.bioMatNet;
-  o.ca = o.cash + o.ar + o.wht + o.taxRefund + o.inv; o.livCost = B('1650'); o.livAcc = -B('1660'); o.livNet = o.livCost - o.livAcc; o.ta = o.ca + o.fixedNet + o.bioNet + o.livNet;
-  o.cl = o.overdraft + o.ap + o.apA + o.adv + o.taxPay + o.loanS; o.tl = o.cl + o.loanL;
-  o.capital = -B('3000'); o.profitCum = -bal(J,PL_ACCTS,cc); o.drawCum = B('3100');
-  o.retained = o.profitCum - o.drawCum; o.te = o.capital + o.retained;
-  o.loans = o.loanS + o.loanL; o.check = o.ta - o.tl - o.te; o.J = J;
-  return o;
-}
-
-function cashFlowData(sel){
-  const J = buildJournal(sel), oc = fyRange(sel-1)[1], cc = fyRange(sel)[1];
-  const mv = ac => bal(J,ac,cc) - bal(J,ac,oc), o = {};
-  o.pbt = -mv(PL_PRETAX); o.dep = mv(['6100']); o.amort = mv(['6110','6120']); o.wo = mv(['6400','6410','6420','6430']); o.loss = mv(['6900']);
-  o.capUnpaid = 0; o.capFeed = 0;
-  J.forEach(e=>{ if(e.date>oc && e.date<=cc && e.kind==='bioCapStock') e.lines.forEach(l=>{ if(l[0]==='1600') o.capFeed += (l[1]-l[2]); }); });
-  J.forEach(e=>{ if(e.date>oc && e.date<=cc && e.kind==='bioCapCredit') e.lines.forEach(l=>{ if(l[0]==='2000') o.capUnpaid += (l[2]-l[1]); }); });
-  o.ownerPaid = 0;
-  J.forEach(e=>{ if(e.date>oc && e.date<=cc && e.kind==='ownerPaidExp') e.lines.forEach(l=>{ if(l[0]==='3000') o.ownerPaid += (l[2]-l[1]); }); });
-  o.dAR = -mv(['1100']); o.dWHT = -mv(['1150']); o.dInv = -mv(['1200']); o.dAP = -mv(['2000']);
-  o.generated = o.pbt + o.dep + o.amort + o.wo + o.loss + o.ownerPaid + o.dAR + o.dWHT + o.dInv + o.dAP - o.capUnpaid - o.capFeed;
-  o.taxPaid = -(mv(['8000']) + mv(['2300']));
-  o.operating = o.generated + o.taxPaid;
-  const byKind = {}, byCf = {op:0, inv:0, fin:0};
-  o.nonCashAssets = 0;
-  J.forEach(e=>{
-    if(!(e.date>oc && e.date<=cc)) return;
-    e.lines.forEach(l=>{ if(l[0]==='1000'){ const v = l[1]-l[2]; byKind[e.kind]=(byKind[e.kind]||0)+v; if(e.cf && byCf[e.cf]!==undefined) byCf[e.cf]+=v; } });
-    if(e.kind==='assetCredit' || e.kind==='assetInKind'){ const l1 = e.lines.find(l=>l[0]==='1500'); if(l1) o.nonCashAssets += (l1[1]-l1[2]); }
-    if(e.kind==='bioCredit' || e.kind==='bioInKind' || e.kind==='bioCapOwner' || e.kind==='bioCapCredit'){ e.lines.forEach(l=>{ if(l[0]==='1600' || l[0]==='1610' || l[0]==='1650') o.nonCashAssets += (l[1]-l[2]); }); }
-  });
-  o.k = byKind;
-  o.investing = byCf.inv; o.financing = byCf.fin; o.directOperating = byCf.op;
-  o.openCash = bal(J,['1000'],oc); o.closeCash = bal(J,['1000'],cc);
-  o.net = o.operating + o.investing + o.financing;
-  o.check = (o.openCash + o.net) - o.closeCash;
-  o.opCheck = o.operating - o.directOperating;
-  o.plCheck = o.pbt - fyReport(sel).netBefore;
-  return o;
-}
-
-function latestOwnershipPct(p, cc){
-  let best = null;
-  state.acct.forEach(x=>{
-    if(num(x.ownershipPct)>0 && validDate(x.date) && x.date<=cc && partyName(x.party).toLowerCase()===String(p).toLowerCase()){
-      if(!best || x.date>=best.date) best = x;
-    }
-  });
-  return best ? num(best.ownershipPct) : null;
-}
-function equityData(sel){
-  const J = buildJournal(sel), oc = fyRange(sel-1)[1], cc = fyRange(sel)[1], o = {};
-  o.capOpen = -bal(J,['3000'],oc); o.capClose = -bal(J,['3000'],cc);
-  o.reOpen = -bal(J,PL_ACCTS,oc) - bal(J,['3100'],oc);
-  o.profit = -(bal(J,PL_ACCTS,cc) - bal(J,PL_ACCTS,oc));
-  o.draw = bal(J,['3100'],cc) - bal(J,['3100'],oc);
-  o.reClose = o.reOpen + o.profit - o.draw;
-  const cap = {}; const partyFlow = {};
-  J.forEach(e=>{
-    if(!(e.date>oc && e.date<=cc)) return;
-    e.lines.forEach(l=>{
-      if(l[0]==='3000'){
-        cap[e.kind] = (cap[e.kind]||0) + (l[2]-l[1]);
-        const pf = partyFlow[l[3]] || (partyFlow[l[3]] = {contrib:0, transfer:0});
-        if(e.kind==='xfer') pf.transfer += (l[2]-l[1]); else pf.contrib += (l[2]-l[1]);
-      }
-    });
-  });
-  o.cap = cap;
-  o.contribCash = cap.inv||0; o.saleOwn = cap.saleown||0; o.inKind = (cap.assetInKind||0) + (cap.ownerPaidExp||0) + (cap.bioInKind||0) + (cap.bioCapOwner||0);
-  o.capCheck = o.capOpen + o.contribCash + o.saleOwn + o.inKind - o.capClose;
-  const parties = new Set();
-  J.forEach(e=>{ if(e.date<=cc) e.lines.forEach(l=>{ if((l[0]==='3000'||l[0]==='3100') && l[3]) parties.add(l[3]); }); });
-  o.owners = Array.from(parties).map(p=>{
-    const pf = partyFlow[p] || {contrib:0, transfer:0};
-    return {name:p, open:-bal(J,['3000'],oc,p), contrib:pf.contrib, transfer:pf.transfer, close:-bal(J,['3000'],cc,p),
-            draw:bal(J,['3100'],cc,p)-bal(J,['3100'],oc,p), pct:latestOwnershipPct(p,cc)};
-  }).filter(r=>Math.abs(r.open)+Math.abs(r.contrib)+Math.abs(r.transfer)+Math.abs(r.close)+Math.abs(r.draw)>0.005);
-  o.J = J;
-  return o;
-}
-
-function loanRegister(cc){
-  const m = {};
-  const get = x => { const k = lenderName(x).toLowerCase(); return m[k] || (m[k] = {name:lenderName(x), term:null, borrowed:0, repaid:0, interest:0, rate:null, due:''}); };
-  state.acct.forEach(x=>{
-    const open = isOpeningType(x.type);
-    if(!open && !(validDate(x.date) && x.date<=cc)) return;
-    if(x.type===AT.LOAN || x.type===AT.OPLOAN){ const g = get(x); g.borrowed += num(x.amount); g.term = loanTermFor(x); if(num(x.interestRate)>0) g.rate = num(x.interestRate); if(x.dueDate) g.due = x.dueDate; }
-    else if(x.type===AT.REPAY){ get(x).repaid += num(x.amount); }
-    else if(x.type===AT.INT && String(x.party||'').trim()){ get(x).interest += num(x.amount); }
-  });
-  return Object.keys(m).map(k=>{ const g = m[k]; if(!g.term) g.term = TERM_LONG; return g; });
-}
-
-function acctValidate(r){
-  const ty = r.type, open = isOpeningType(ty);
-  if(!ty) return 'Choose a transaction type.';
-  if(!(num(r.amount)>0)) return 'Amount must be greater than zero.';
-  if(!open && !validDate(r.date)) return 'Date is required.';
-  if([AT.SALE,AT.XFER,AT.LOAN,AT.REPAY,AT.OPLOAN].includes(ty) && !String(r.party||'').trim()) return 'Please enter the name (partner / investor / lender).';
-  if(ty===AT.XFER){
-    if(!String(r.fromParty||'').trim()) return 'Enter who the share is transferred from.';
-    if(String(r.fromParty).trim().toLowerCase()===String(r.party).trim().toLowerCase()) return 'The two owners must be different people.';
-  }
-  if(ty!==AT.XFER) r.fromParty = '';
-  if(![AT.INV,AT.SALE,AT.XFER].includes(ty)) r.ownershipPct = 0;
-  if(![AT.LOAN,AT.REPAY,AT.OPLOAN].includes(ty)) r.loanTerm = '';
-  if(![AT.LOAN,AT.OPLOAN].includes(ty)){ r.interestRate = 0; r.dueDate = ''; }
-  if(open) r.date = r.date || '';
-  return '';
-}
-
-/* ================= ACCOUNTING TAB ================= */
-function simpleTable(headers, bodyRows){
-  return `<div class="panel"><div class="tablewrap"><table><thead><tr>${headers.map(h=>`<th${h.num?' class="num"':''}>${h.label}</th>`).join('')}</tr></thead><tbody>${bodyRows}</tbody></table></div></div>`;
-}
-function acctDetails(x){
-  const bits = [];
-  if(x.type===AT.LOAN || x.type===AT.OPLOAN || x.type===AT.REPAY){ bits.push(String(loanTermFor(x)).indexOf('Short')===0 ? 'Short-term' : 'Long-term'); }
-  if(num(x.interestRate)>0) bits.push(num(x.interestRate)+'% interest');
-  if(x.dueDate) bits.push('due '+x.dueDate);
-  if(x.type===AT.XFER && x.fromParty) bits.push('from '+x.fromParty);
-  if(num(x.ownershipPct)>0) bits.push(num(x.ownershipPct)+'% ownership');
-  return bits.join(' · ');
-}
-function renderAccounting(){
-  const years = fyList();
-  const efy = years.includes(reportsYear) ? reportsYear : currentEFY();
-  const bs = balanceSheet(efy), eq = equityData(efy), cc = fyRange(efy)[1];
-  const kpi = (label,val,neg)=>`<div class="kpi-card"><div class="kpi-label">${t(label)}</div><div class="kpi-value mono${neg?' neg':''}">${val}</div></div>`;
-  const kpis = [
-    kpi('Cash & bank', fmtMoney(bs.rawCash), bs.rawCash<0),
-    kpi('Loans outstanding', fmtMoney(bs.loans), false),
-    kpi("Owner's capital", fmtMoney(bs.capital), false),
-    kpi("Total owner's equity", fmtMoney(bs.te), bs.te<0),
-    kpi('Receivables', fmtMoney(bs.ar), false),
-    kpi('Payables', fmtMoney(bs.ap+bs.apA), false)
-  ].join('');
-
-  const loanRows = loanRegister(cc).map(g=>`<tr><td>${escHtml(g.name)}</td><td>${String(g.term).indexOf('Short')===0?'Short-term':'Long-term'}</td>
-    <td class="num mono">${fmtMoney(g.borrowed)}</td><td class="num mono">${fmtMoney(g.repaid)}</td>
-    <td class="num mono"><strong>${fmtMoney(g.borrowed-g.repaid)}</strong></td><td class="num mono">${fmtMoney(g.interest)}</td>
-    <td class="num mono">${g.rate!==null?g.rate+'%':'—'}</td><td>${g.due||'—'}</td></tr>`).join('') || emptyRow(8,'No loans recorded yet.');
-  const ownerRows = eq.owners.map(o=>`<tr><td>${escHtml(o.name)}</td><td class="num mono">${fmtMoney(o.open)}</td><td class="num mono">${fmtMoney(o.contrib)}</td>
-    <td class="num mono">${fmtAcc(o.transfer)}</td><td class="num mono"><strong>${fmtMoney(o.close)}</strong></td><td class="num mono">${fmtMoney(o.draw)}</td>
-    <td class="num mono">${o.pct!==null?o.pct+'%':'—'}</td></tr>`).join('') || emptyRow(7,'No owner capital recorded yet.');
-
-  const rows = state.acct.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>`
-    <tr><td>${isOpeningType(x.type)?'Opening':fmtDate(x.date)}</td><td>${escHtml(x.type)}</td><td>${escHtml(x.party)}</td>
-    <td class="num mono"><strong>${fmtMoney(x.amount)}</strong></td><td class="notes-cell">${escHtml(acctDetails(x))}</td>
-    <td class="mono">${escHtml(x.refNo)}</td><td class="notes-cell">${escHtml(x.notes)}</td>${rowActionsHtml('acct', x.id)}</tr>`).join('')
-    || emptyRow(8,'No accounting transactions yet. Start with an opening balance or an owner investment.');
-
-  const inv = inventoryOn();
-  return `
-  <div class="pagehead">
-    <div><h1>${t('Accounting')}</h1><p>Loans, owner investment, sale of ownership, drawings and other transactions. Figures below are as at the end of ${efy} EFY (change the year in Reports).</p></div>
-    <button class="btn btn-primary" id="addAcct">+ ${t('Add transaction')}</button>
-  </div>
-  <div class="kpi-grid">${kpis}</div>
-  ${Math.abs(bs.check)>0.01 ? `<div class="panel"><div class="panel-pad" style="color:var(--clay);font-weight:600;">⚠ The books are out of balance by ${fmtMoney(bs.check)}. Please report this.</div></div>` : ''}
-  ${bs.rawCash<0 ? `<div class="panel"><div class="panel-pad" style="color:var(--clay);">⚠ Cash is negative. Money must have come from somewhere: record your opening cash, owner investment or loan below (and mark existing assets "Owned before using this app" in the Assets tab).</div></div>` : ''}
-
-  <div class="panel"><div class="panel-pad">
-    <div class="section-title" style="margin-top:0">How to record common situations</div>
-    <ul style="margin:0;padding-left:18px;line-height:1.7;font-size:13px;">
-      <li><strong>Cash / bank you already had when you started</strong> → "Opening balance — cash &amp; bank". Existing bank loan → "Opening balance — loan owed".</li>
-      <li><strong>Owner puts money in</strong> → "Owner investment (cash)". <strong>New partner / investor buys a share</strong> → "Sale of ownership" (money goes into the business, name + ownership %).</li>
-      <li><strong>One owner sells part of their share to another person</strong> → "Ownership transfer" (no cash enters the business).</li>
-      <li><strong>Bank / lender loan</strong> → "Loan received". Each instalment: "Loan repayment (principal)" plus, separately, "Loan interest paid" (interest is an expense).</li>
-      <li><strong>Owner takes money out</strong> → "Owner drawing / profit distribution" (not an expense).</li>
-      <li><strong>Bought equipment / a building</strong> → Assets tab; choose how it was paid. <strong>Bill not yet paid</strong> → Expenses tab, status "Unpaid", then "Payment to supplier" when you pay.</li>
-      <li><strong>Sold an asset</strong> → Assets tab: enter the date disposed and the sale proceeds. <strong>Tax paid to the authority</strong> → "Income tax paid".</li>
-    </ul>
-  </div></div>
-
-  <div class="panel"><div class="panel-pad">
-    <label class="calc-field" style="max-width:340px;margin-bottom:14px;">Main owner's name (used when a name is left blank, and for assets or expenses the owner contributes)
-      <input type="text" id="acctOwnerName" value="${escHtml((state.setup.acctOpts && state.setup.acctOpts.ownerName) || '')}" placeholder="Owner">
-    </label>
-    <p class="note" style="margin:0;"><strong>Feed inventory:</strong> feed you buy is an asset (Feed tab). It becomes a cost of production only when it is used in the Feeding Log, valued at the average cost of the stock on that day.</p>
-  </div></div>
-
-  <div class="section-title">Loans</div>
-  ${simpleTable([{label:'Lender'},{label:'Term'},{label:'Borrowed',num:true},{label:'Repaid',num:true},{label:'Outstanding',num:true},{label:'Interest paid',num:true},{label:'Rate',num:true},{label:'Final due'}], loanRows)}
-
-  <div class="section-title">${t("Owners' capital accounts")}</div>
-  ${simpleTable([{label:'Owner / partner'},{label:'Opening capital',num:true},{label:'Contributed',num:true},{label:'Transfers in / (out)',num:true},{label:'Closing capital',num:true},{label:'Drawings this year',num:true},{label:'Ownership % (as recorded)',num:true}], ownerRows)}
-
-  <div class="section-title">All accounting transactions</div>
-  ${tableShell([{label:'Date'},{label:'Type'},{label:'Name'},{label:'Amount',num:true},{label:'Details'},{label:'Ref No.'},{label:'Notes'}], rows)}
-  <p class="note">Sales, expenses, customer payments and fixed assets already recorded in their own tabs are picked up automatically. Only record here what has no other tab.</p>
-  `;
-}
-
-/* ================= STATEMENTS ================= */
-function repLine(label, amt, cls){ return `<tr><td class="${cls||'ind'}">${escHtml(t(label))}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(amt)}</td></tr>`; }
-function repLine2(label, a, b, cls){ return `<tr><td class="${cls||'ind'}">${escHtml(t(label))}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(a)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(b)}</td></tr>`; }
-function repSec(label, cols){ return `<tr><td class="sec" colspan="${cols||2}">${escHtml(t(label))}</td></tr>`; }
-function repHeader(title, efy, asAt){
-  const tx = taxProfile(), rng = fyRange(efy), em = (lang==='am') ? EC_MONTHS_AM : EC_MONTHS_EN;
-  const period = asAt ? `${t('As at')} ${em[9]} 30, ${efy} (${rng[1]})`
-                      : `${em[10]} 1, ${efy-1} – ${em[9]} 30, ${efy} (${rng[0]} → ${rng[1]})`;
-  return `<div class="rep-head"><h2>${t(title)}</h2><div style="color:var(--ink-soft);font-size:12.5px;">${t('Financial Report')}</div></div>
-    <div class="rep-meta">
-      <div><strong>${t('Business name')}:</strong> ${escHtml(tx.businessName)}</div>
-      <div><strong>${t('TIN')}:</strong> ${escHtml(tx.tin)||'—'}</div>
-      <div><strong>${t('Currency')}:</strong> ${t('ETB')}</div>
-      <div><strong>${t('Fiscal year')}:</strong> ${efy} EFY</div>
-      <div style="grid-column:1/-1"><strong>${asAt?t('Position date'):t('Period')}:</strong> ${period}</div>
-    </div>`;
-}
-function repFooter(){ return `<div style="display:flex;justify-content:space-between;margin-top:34px;font-size:12.5px;"><div>${t('Prepared by')}: ____________________</div><div>${t('Signature / stamp')}: ____________________</div></div>`; }
-function repWarn(msg){ return `<div class="no-print" style="background:var(--clay-soft);color:var(--clay);border-radius:8px;padding:9px 12px;margin:0 0 12px;font-size:12.5px;font-weight:600;">⚠ ${msg}</div>`; }
-function repOk(msg){ return `<div class="no-print" style="background:#DCEBDD;color:var(--green-dark);border-radius:8px;padding:9px 12px;margin:0 0 12px;font-size:12.5px;font-weight:600;">✓ ${msg}</div>`; }
-
-function renderBalanceSheet(efy){
-  const c = balanceSheet(efy), p = balanceSheet(efy-1);
-  const rows = [];
-  const R = (label,key,cls)=>{ rows.push(repLine2(label, c[key], p[key], cls)); };
-  const Rif = (label,key)=>{ if(Math.abs(c[key])>0.005 || Math.abs(p[key])>0.005) R(label,key); };
-  rows.push(repSec('ASSETS',3));
-  rows.push(repSec('Current assets',3));
-  R('Cash and bank','cash'); R('Accounts receivable (customers)','ar'); Rif('Withholding tax receivable','wht'); Rif('Income tax refundable','taxRefund'); Rif('Feed inventory','inv');
-  R('Total current assets','ca','tot');
-  rows.push(repSec('Non-current assets',3));
-  R('Fixed assets at cost','fixedCost'); rows.push(repLine2('Less: accumulated depreciation', -c.accDep, -p.accDep));
-  R('Net book value of fixed assets','fixedNet','tot');
-  if(Math.abs(c.bioNet)>0.005 || Math.abs(p.bioNet)>0.005 || Math.abs(c.bioMatCost)>0.005 || Math.abs(p.bioMatCost)>0.005){
-    Rif('Biological assets — immature layers (at cost)','bioImm'); Rif('Biological assets — mature layers (cost)','bioMatCost');
-    if(Math.abs(c.bioAccAmort)>0.005 || Math.abs(p.bioAccAmort)>0.005) rows.push(repLine2('Less: accumulated amortisation — mature layers', -c.bioAccAmort, -p.bioAccAmort));
-    R('Total biological assets','bioNet','tot');
-  }
-  if(Math.abs(c.livNet)>0.005 || Math.abs(p.livNet)>0.005 || Math.abs(c.livCost)>0.005 || Math.abs(p.livCost)>0.005){
-    Rif('Other livestock — goats, sheep, oxen (cost)','livCost');
-    if(Math.abs(c.livAcc)>0.005 || Math.abs(p.livAcc)>0.005) rows.push(repLine2('Less: accumulated amortisation — other livestock', -c.livAcc, -p.livAcc));
-    R('Total other livestock','livNet','tot');
-  }
-  R('TOTAL ASSETS','ta','tot');
-  rows.push(repSec('LIABILITIES',3));
-  rows.push(repSec('Current liabilities',3));
-  Rif('Bank overdraft (negative cash)','overdraft'); R('Accounts payable (suppliers)','ap'); Rif('Payable to asset suppliers','apA'); Rif('Customer advances / deposits','adv'); Rif('Income tax payable','taxPay'); R('Loans payable — short-term','loanS');
-  R('Total current liabilities','cl','tot');
-  rows.push(repSec('Non-current liabilities',3));
-  R('Loans payable — long-term','loanL');
-  R('TOTAL LIABILITIES','tl','tot');
-  rows.push(repSec("OWNER'S EQUITY",3));
-  R("Owner's capital (contributed)",'capital'); R('Retained earnings (profit after tax, less drawings)','retained');
-  R("TOTAL OWNER'S EQUITY",'te','tot');
-  rows.push(repLine2('TOTAL LIABILITIES + EQUITY', c.tl+c.te, p.tl+p.te, 'tot'));
-  const warns = [];
-  if(Math.abs(c.check)>0.01) warns.push(`The balance sheet is out of balance by ${fmtMoney(c.check)}. Please report this.`);
-  if(c.rawCash<0) warns.push('Cash is negative, which cannot really happen. Record your opening cash balance, owner investment or loans in the Accounting tab, and mark assets you already owned as "Owned before using this app".');
-  const ok = Math.abs(c.check)<=0.01 ? repOk('Balanced: total assets = total liabilities + owner\'s equity') : '';
-  return `
-  ${warns.map(repWarn).join('')}${ok}
-  <div class="rep-sheet">
-    ${repHeader('Balance Sheet (Statement of Financial Position)', efy, true)}
-    <div class="tablewrap"><table class="rep-table">
-      <thead><tr><th>${t('Description')}</th><th class="num">${efy} EFY</th><th class="num">${efy-1} EFY</th></tr></thead>
-      <tbody>${rows.join('')}</tbody>
-    </table></div>
-    <p class="note">Fixed assets follow the Assets tab (no part-year depreciation). Customer balances are split into receivables and advances. Feed stock is an asset only if switched on in the Accounting tab.</p>
-    ${repFooter()}
-  </div>`;
-}
-
-function renderCashFlow(efy){
-  const c = cashFlowData(efy), k = c.k;
-  const kv = key => k[key]||0;
-  const rows = [];
-  rows.push(repSec('OPERATING ACTIVITIES'));
-  rows.push(repLine('Net profit / (loss) before tax', c.pbt));
-  rows.push(repLine('Add: depreciation', c.dep));
-  if(Math.abs(c.amort)>0.005) rows.push(repLine('Add: amortisation of mature layers', c.amort));
-  if(Math.abs(c.wo)>0.005) rows.push(repLine('Add: layers written off — deaths, culls, losses (non-cash)', c.wo));
-  if(Math.abs(c.capUnpaid)>0.005) rows.push(repLine('Less: rearing costs capitalised on credit (investing, not operating)', -c.capUnpaid));
-  if(Math.abs(c.capFeed)>0.005) rows.push(repLine('Less: feed from stock capitalised into immature flocks (non-cash)', -c.capFeed));
-  if(Math.abs(c.loss)>0.005) rows.push(repLine('Add: loss / (less: gain) on disposal of assets', c.loss));
-  if(Math.abs(c.ownerPaid)>0.005) rows.push(repLine('Add: expenses paid personally by owner (non-cash)', c.ownerPaid));
-  rows.push(repLine('(Increase) / decrease in receivables (net of customer advances)', c.dAR));
-  if(Math.abs(c.dWHT)>0.005) rows.push(repLine('(Increase) / decrease in withholding tax receivable', c.dWHT));
-  if(Math.abs(c.dInv)>0.005) rows.push(repLine('(Increase) / decrease in feed inventory', c.dInv));
-  rows.push(repLine('Increase / (decrease) in payables', c.dAP));
-  rows.push(repLine('Cash generated from operations', c.generated, 'tot'));
-  rows.push(repLine('Income tax paid (including tax withheld by customers)', c.taxPaid));
-  rows.push(repLine('NET CASH FROM OPERATING ACTIVITIES', c.operating, 'tot'));
-  rows.push(repSec('INVESTING ACTIVITIES'));
-  rows.push(repLine('Purchase of fixed assets (paid in cash)', kv('asset')));
-  if(Math.abs(kv('asupp'))>0.005) rows.push(repLine('Payments to asset suppliers', kv('asupp')));
-  if(Math.abs(kv('bioBuy'))>0.005) rows.push(repLine('Purchase of layer flocks, goats, sheep and oxen (paid in cash)', kv('bioBuy')));
-  if(Math.abs(kv('bioCap'))>0.005) rows.push(repLine('Rearing costs capitalised into biological assets (paid in cash)', kv('bioCap')));
-  rows.push(repLine('Proceeds from sale of fixed assets', kv('disposal')));
-  rows.push(repLine('NET CASH FROM INVESTING ACTIVITIES', c.investing, 'tot'));
-  rows.push(repSec('FINANCING ACTIVITIES'));
-  rows.push(repLine('Owner investment (cash)', kv('inv')));
-  rows.push(repLine('Sale of ownership (new partners / investors)', kv('saleown')));
-  rows.push(repLine('Loans received', kv('loan')));
-  rows.push(repLine('Loan repayments (principal)', kv('repay')));
-  rows.push(repLine('Owner drawings / profit distributions', kv('draw')));
-  rows.push(repLine('NET CASH FROM FINANCING ACTIVITIES', c.financing, 'tot'));
-  rows.push(repSec('CASH AND BANK'));
-  rows.push(repLine('Net increase / (decrease) in cash', c.net, 'tot'));
-  rows.push(repLine('Cash and bank at beginning of year', c.openCash));
-  rows.push(repLine('CASH AND BANK AT END OF YEAR', c.closeCash, 'tot'));
-  const warns = [];
-  if(Math.abs(c.check)>0.01) warns.push('Cash flow does not agree with the balance sheet cash. Please report this.');
-  if(Math.abs(c.opCheck)>0.01) warns.push('Operating cash flow (indirect) differs from the cash actually recorded by '+fmtMoney(c.opCheck)+'. Please report this.');
-  if(c.closeCash<0) warns.push('Cash is negative — record opening cash, owner investment or loans in the Accounting tab.');
-  const ok = warns.length===0 ? repOk('Cash flow agrees with the balance sheet cash balance') : '';
-  const nc = [];
-  if(c.nonCashAssets>0.005) nc.push('Assets acquired on supplier credit or contributed by the owner: '+fmtMoney(c.nonCashAssets));
-  if(Math.abs(c.ownerPaid)>0.005) nc.push('Expenses paid personally by the owner (treated as capital contribution): '+fmtMoney(c.ownerPaid));
-  return `
-  ${warns.map(repWarn).join('')}${ok}
-  <div class="rep-sheet">
-    ${repHeader('Cash Flow Statement', efy, false)}
-    <div class="tablewrap"><table class="rep-table">
-      <thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead>
-      <tbody>${rows.join('')}</tbody>
-    </table></div>
-    <p class="note">Indirect method. Interest paid is included in operating activities. Withholding tax deducted by customers is shown as tax paid.</p>
-    ${nc.length ? `<p class="note"><strong>Non-cash transactions (not in the statement above):</strong> ${nc.map(escHtml).join('; ')}.</p>` : ''}
-    ${repFooter()}
-  </div>`;
-}
-
-function renderEquityReport(efy){
-  const e = equityData(efy);
-  const row3 = (label,a,b,cls)=>`<tr><td class="${cls||'ind'}">${escHtml(t(label))}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(a)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(b)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtAcc(a+b)}</td></tr>`;
-  const rows = [];
-  rows.push(row3('Balance at beginning of year', e.capOpen, e.reOpen, 'tot'));
-  rows.push(row3('Capital contributed in cash by owners', e.contribCash, 0));
-  rows.push(row3('Sale of ownership (new partners / investors)', e.saleOwn, 0));
-  if(Math.abs(e.inKind)>0.005) rows.push(row3('Assets contributed / expenses paid personally by owner', e.inKind, 0));
-  rows.push(row3('Net profit / (loss) for the year (after tax)', 0, e.profit));
-  rows.push(row3('Owner drawings / profit distributions', 0, -e.draw));
-  rows.push(row3('BALANCE AT END OF YEAR', e.capClose, e.reClose, 'tot'));
-  const ownerRows = e.owners.map(o=>`<tr><td class="ind">${escHtml(o.name)}</td><td class="num mono">${fmtAcc(o.open)}</td><td class="num mono">${fmtAcc(o.contrib)}</td><td class="num mono">${fmtAcc(o.transfer)}</td><td class="num mono"><strong>${fmtAcc(o.close)}</strong></td><td class="num mono">${fmtAcc(o.draw)}</td><td class="num mono">${o.pct!==null?o.pct+'%':'—'}</td></tr>`).join('')
-    || `<tr><td class="ind" colspan="7" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
-  const warns = [];
-  if(Math.abs(e.capCheck)>0.01) warns.push('Owner capital movements do not add up (difference '+fmtMoney(e.capCheck)+'). Please report this.');
-  if(e.capClose===0 && e.saleOwn===0 && e.contribCash===0) warns.push('No owner capital recorded yet. Use Accounting → Add transaction → "Owner investment" or "Opening balance — cash & bank".');
-  return `
-  ${warns.map(repWarn).join('')}
-  <div class="rep-sheet">
-    ${repHeader("Statement of Changes in Owner's Equity", efy, false)}
-    <div class="tablewrap"><table class="rep-table">
-      <thead><tr><th>${t('Description')}</th><th class="num">${t("Owner's capital")}</th><th class="num">${t('Retained earnings')}</th><th class="num">${t('Total')}</th></tr></thead>
-      <tbody>${rows.join('')}</tbody>
-    </table></div>
-    <div class="section-title">${t("Capital by owner / partner")}</div>
-    <div class="tablewrap"><table class="rep-table">
-      <thead><tr><th>${t('Owner / partner')}</th><th class="num">${t('Opening capital')}</th><th class="num">${t('Contributed')}</th><th class="num">${t('Transfers in / (out)')}</th><th class="num">${t('Closing capital')}</th><th class="num">${t('Drawings this year')}</th><th class="num">${t('Ownership % (as recorded)')}</th></tr></thead>
-      <tbody>${ownerRows}</tbody>
-    </table></div>
-    <p class="note">Retained earnings = accumulated profit after tax less owner drawings. Ownership % is the last figure you entered for each person; the app does not compute it from money paid in.</p>
-    ${repFooter()}
-  </div>`;
-}
-
-function renderTrialBalance(efy){
-  const b = balanceSheet(efy), J = b.J, cc = fyRange(efy)[1], oc = fyRange(efy-1)[1], rep = fyReport(efy);
-  let td = 0, tc = 0;
-  const tbRows = Object.keys(ACCT_NAMES).map(a=>{
-    const v = bal(J,[a],cc); if(Math.abs(v)<0.005) return '';
-    if(v>0) td += v; else tc += -v;
-    return `<tr><td class="mono">${a}</td><td class="ind" style="padding-left:10px;">${escHtml(t(ACCT_NAMES[a]))}</td><td class="num mono">${v>0?fmtMoney(v):''}</td><td class="num mono">${v<0?fmtMoney(-v):''}</td></tr>`;
-  }).join('') || `<tr><td colspan="4" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
-  const ledgerProfit = -(bal(J,PL_PRETAX,cc) - bal(J,PL_PRETAX,oc));
-  const diffPL = ledgerProfit - rep.netBefore;
-  const entries = J.filter(e=>e.date>oc && e.date<=cc);
-  const jRows = entries.map(e=>e.lines.map((l,i)=>`<tr><td class="mono">${i===0?escHtml(e.date):''}</td><td>${i===0?escHtml(e.desc):''}</td><td>${l[0]} ${escHtml(t(ACCT_NAMES[l[0]]||''))}${l[3]?' ('+escHtml(l[3])+')':''}</td><td class="num mono">${l[1]?fmtMoney(l[1]):''}</td><td class="num mono">${l[2]?fmtMoney(l[2]):''}</td></tr>`).join('')).join('')
-    || `<tr><td colspan="5" style="color:var(--ink-soft);font-style:italic;">${t('No entries')}</td></tr>`;
-  const warns = [];
-  if(Math.abs(td-tc)>0.01) warns.push('Trial balance does not balance (difference '+fmtMoney(td-tc)+'). Please report this.');
-  if(Math.abs(diffPL)>0.01) warns.push('Ledger profit differs from the Profit & Loss report by '+fmtMoney(diffPL)+'. Please report this.');
-  const ok = warns.length===0 ? repOk('Trial balance balances and the ledger profit agrees with the Profit & Loss report') : '';
-  return `
-  ${warns.map(repWarn).join('')}${ok}
-  <div class="rep-sheet">
-    ${repHeader('Trial Balance (cumulative)', efy, true)}
-    <div class="tablewrap"><table class="rep-table">
-      <thead><tr><th>${t('Code')}</th><th>${t('Account')}</th><th class="num">${t('Debit')}</th><th class="num">${t('Credit')}</th></tr></thead>
-      <tbody>${tbRows}<tr><td class="tot"></td><td class="tot">${t('Total')}</td><td class="num mono tot">${fmtMoney(td)}</td><td class="num mono tot">${fmtMoney(tc)}</td></tr></tbody>
-    </table></div>
-    <p class="note">Income and expense accounts are cumulative since the first record (they are not closed at year-end in this view).</p>
-    <div class="section-title">${t('General journal')} — ${efy} EFY</div>
-    <div class="tablewrap"><table class="rep-table">
-      <thead><tr><th>${t('Date')}</th><th>${t('Description')}</th><th>${t('Account')}</th><th class="num">${t('Debit')}</th><th class="num">${t('Credit')}</th></tr></thead>
-      <tbody>${jRows}</tbody>
-    </table></div>
-  </div>`;
-}
-
-/* ================= REPORTS (P&L + statements) ================= */
-let reportView = 'pl';
 function renderReports(){
+  const tx = taxProfile();
   const years = fyList();
   if(!years.includes(reportsYear)) reportsYear = currentEFY();
   const efy = reportsYear;
   const yearOptions = years.map(y=>`<option value="${y}" ${y===efy?'selected':''}>${y}</option>`).join('');
-  const views = [['pl','Profit & Loss'],['bs','Balance Sheet'],['cf','Cash Flow'],['eq',"Owner's Equity"],['tb','Ledger / Trial Balance']];
-  const tabs = views.map(v=>`<button class="toggle-btn${reportView===v[0]?' active':''}" data-repview="${v[0]}">${t(v[1])}</button>`).join('');
-  let body;
-  try{
-    body = reportView==='bs' ? renderBalanceSheet(efy) : reportView==='cf' ? renderCashFlow(efy) : reportView==='eq' ? renderEquityReport(efy) : reportView==='tb' ? renderTrialBalance(efy) : renderPLBody(efy);
-  }catch(err){
-    console.error(err);
-    body = `<div class="panel"><div class="panel-pad" style="color:var(--clay);">⚠ Could not build this report: ${escHtml(err.message)}</div></div>`;
-  }
-  return `
+
+  const toggle = `
+  <div class="toggle-row no-print">
+    <button class="toggle-btn${reportView==='income'?' active':''}" id="viewIncome">${t('Income Statement')}</button>
+    <button class="toggle-btn${reportView==='balance'?' active':''}" id="viewBalance">${t('Balance Sheet')}</button>
+    <button class="toggle-btn${reportView==='cashflow'?' active':''}" id="viewCashflow">${t('Cash Flow Statement')}</button>
+    <button class="toggle-btn${reportView==='equity'?' active':''}" id="viewEquity">${t("Statement of Owner's Equity")}</button>
+  </div>`;
+
+  const head = `
   <div class="pagehead no-print">
     <div><h1>${t('Financial Report')}</h1><p>${t('Fiscal year')} ${efy} EFY</p></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <select id="reportsYearSelect" style="padding:8px;border-radius:8px;border:1px solid var(--rule);font-family:inherit;">${yearOptions}</select>
       <button class="btn btn-primary" id="printReport">🖨 ${t('Print / Save PDF')}</button>
     </div>
-  </div>
-  <div class="toggle-row no-print" style="flex-wrap:wrap;">${tabs}</div>
-  ${body}`;
+  </div>`;
+
+  let body;
+  if(reportView==='balance') body = renderBalanceSheetView();
+  else if(reportView==='cashflow') body = renderCashFlowView(efy);
+  else if(reportView==='equity') body = renderEquityView(efy);
+  else body = renderIncomeStatementView(efy, tx);
+
+  return head + toggle + body;
 }
 
-function renderPLBody(efy){
-  const tx = taxProfile();
+function renderIncomeStatementView(efy, tx){
   const adj = taxAdj(efy), r = fyReport(efy);
   const rng = fyRange(efy);
   const isAm = lang==='am';
@@ -2475,16 +1812,15 @@ function renderPLBody(efy){
         ${sec('2. Cost of production')}${list(r.cop)}${line(t('Total cost of production'), r.totCop,'tot')}
         ${sec('3. Gross profit')}${line(t('3. Gross profit'), r.gross,'tot')}
         ${sec('4. Operating expenses')}${list(r.opex)}${line(t('Total operating expenses'), r.totOpex,'tot')}
-        ${sec('5. Depreciation')}${line(t('5. Depreciation'), r.dep)}${Math.abs(r.bioAmort)>0.005 ? line(t('Amortisation of mature layers (biological assets)'), r.bioAmort) : ''}${Math.abs(r.bioAmortO)>0.005 ? line(t('Amortisation of other livestock (goats, sheep, oxen)'), r.bioAmortO) : ''}
-        ${sec('5b. Finance costs and other items')}${line(t('Finance costs (loan interest)'), r.finance)}${line(t('Other income (grants, interest earned)'), r.otherInc)}${line(t('Gain / (loss) on disposal of assets'), r.gainLoss)}
-        ${(bioBatches().length || Math.abs(r.bioMort)+Math.abs(r.bioWo)+Math.abs(r.bioMortO)+Math.abs(r.bioWoO)>0.005) ? sec('5c. Livestock mortality and write-offs')+line(t('Poultry mortality expense (deaths)'), r.bioMort)+line(t('Carrying value of birds sold / culled / lost'), r.bioWo)+line(t('Other livestock mortality expense (deaths)'), r.bioMortO)+line(t('Carrying value of other livestock sold / culled / lost'), r.bioWoO) : ''}
+        ${sec('5. Depreciation')}${line(t('5. Depreciation'), r.dep)}
+        ${line(t('Interest expense on loans'), r.interestExpense)}
+        ${line(t('Biological asset expense (amortization, mortality, loss & animals sold)'), r.bioExpense)}
         ${sec('6. Net profit / (loss) before tax')}${line(t('6. Net profit / (loss) before tax'), r.netBefore,'tot')}
         ${tx.regime==='A'
           ? sec('7. Tax adjustments')+line(t('Add: non-deductible expenses'), r.nonDed)+line(t('Less: exempt income'), r.exempt)+sec('8. Taxable income')+line(t('8. Taxable income'), r.taxable,'tot')
           : sec('Presumptive tax on gross sales')+line(t('Gross sales (tax base)'), r.totRev,'tot')}
         <tr><td class="ind">${t('Tax rate (%)')}</td><td class="num mono">${num(tx.taxOverride)>0?'—':num(tx.taxRatePct)+'%'}</td></tr>
         ${line(t('Tax due'), r.taxDue,'tot')}
-        ${line(t('Net profit / (loss) after tax'), r.netAfter,'tot')}
         ${sec('9. Tax credits')}${line(t('Less: withholding tax already deducted'), r.wht)}${line(t('Less: quarterly advance payments made'), r.advance)}
         ${line(t('Net tax payable / (refundable)'), r.netPayable,'tot')}
       </tbody>
@@ -2501,6 +1837,105 @@ function renderPLBody(efy){
   `;
 }
 
+function renderBalanceSheetView(){
+  const bs = balanceSheetData();
+  const o = opening();
+  const line = (label, amt, cls) => `<tr><td class="${cls||'ind'}">${escHtml(label)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtMoney(amt)}</td></tr>`;
+  const sec = label => `<tr><td class="sec" colspan="2">${t(label)}</td></tr>`;
+  return `
+  <div class="panel no-print"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">${t('Opening balances (before using this app)')}</div>
+    <div class="calc-grid">
+      <label class="calc-field">${t('As of date')}<input type="date" id="openAsOf" value="${escHtml(o.asOfDate)}"></label>
+      <label class="calc-field">${t('Opening cash')}<input type="number" step="any" id="openCash" value="${escHtml(o.cash)}"></label>
+      <label class="calc-field">${t('Opening owner capital / net worth')}<input type="number" step="any" id="openCapital" value="${escHtml(o.capital)}"></label>
+    </div>
+  </div></div>
+  <div class="rep-sheet">
+    <div class="rep-head"><h2>${t('Balance Sheet')}</h2><div style="color:var(--ink-soft);font-size:12.5px;">${t('As of')} ${ethDateStr(todayISO())} (${todayISO()})</div></div>
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead>
+      <tbody>
+        ${sec('Assets')}
+        ${line(t('Cash and cash equivalents'), bs.cash)}
+        ${line(t('Accounts receivable (customers)'), bs.ar)}
+        ${line(t('Feed stock, at cost'), bs.feedStock)}
+        ${line(t('Biological assets, net (livestock)'), bs.bioNBV)}
+        ${line(t('Fixed assets, net of depreciation'), bs.fixedAssetsNBV)}
+        ${line(t('Total assets'), bs.totalAssets,'tot')}
+        ${sec('Liabilities')}
+        ${line(t('Loans payable'), bs.loansPayable)}
+        ${line(t('Tax payable (accrued, unpaid)'), bs.taxPayable)}
+        ${line(t('Total liabilities'), bs.totalLiabilities,'tot')}
+        ${sec("Owner's Equity")}
+        ${line(t("Owner's capital & retained earnings"), bs.equity,'tot')}
+        ${line(t('Total liabilities & equity'), bs.totalLandE,'tot')}
+        <tr><td class="ind">${t('Difference (should be zero)')}</td><td class="num mono">${fmtMoney(bs.diff)}</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <p class="note no-print">Feed stock and biological (livestock) assets are valued at cost, as of today, regardless of which fiscal year is selected. Accounts payable to suppliers isn't tracked, so any unpaid supplier bill won't appear as a liability here. Tax payable assumes none of the computed tax has been paid to the authority yet — there's currently no way to record an actual tax payment, so pay it outside the app for now and let me know if you want that added. If "Difference" isn't zero, an amount was entered somewhere the model doesn't expect — check your opening balances and any manual report adjustments.</p>
+  `;
+}
+
+function renderCashFlowView(efy){
+  const cf = cashFlowData(efy);
+  const line = (label, amt, cls) => `<tr><td class="${cls||'ind'}">${escHtml(label)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtMoney(amt)}</td></tr>`;
+  const sec = label => `<tr><td class="sec" colspan="2">${t(label)}</td></tr>`;
+  return `
+  <div class="rep-sheet">
+    <div class="rep-head"><h2>${t('Cash Flow Statement')}</h2><div style="color:var(--ink-soft);font-size:12.5px;">${t('Fiscal year')} ${efy} EFY</div></div>
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead>
+      <tbody>
+        ${sec('Operating activities')}
+        ${line(t('Cash received from customers'), cf.inCust+cf.inPmt)}
+        ${line(t('Cash paid for operating expenses'), -cf.outExp)}
+        ${line(t('Cash paid for interest'), -cf.outInt)}
+        ${line(t('Net cash from operating activities'), cf.operating,'tot')}
+        ${sec('Investing activities')}
+        ${line(t('Cash paid for fixed assets'), -cf.outAssets)}
+        ${line(t('Cash paid for livestock (capitalized)'), -cf.outLivestock)}
+        ${line(t('Net cash from investing activities'), cf.investing,'tot')}
+        ${sec('Financing activities')}
+        ${line(t('Cash from loans received'), cf.inLoans)}
+        ${line(t('Cash paid for loan principal'), -cf.outLoanPrin)}
+        ${line(t('Cash from owner investments'), cf.inCap)}
+        ${line(t('Cash paid for owner drawings'), -cf.outCap)}
+        ${line(t('Net cash from financing activities'), cf.financing,'tot')}
+        ${line(t('Net change in cash'), cf.netChange,'tot')}
+        ${line(t('Cash at start of year'), cf.beginCash)}
+        ${line(t('Cash at end of year'), cf.endCash,'tot')}
+      </tbody>
+    </table></div>
+  </div>
+  <p class="note no-print">Direct method. All expenses and asset purchases are assumed paid in cash at the time they're recorded — accounts payable to suppliers isn't tracked, so a bill you haven't actually paid yet would still show as a cash outflow here.</p>
+  `;
+}
+
+function renderEquityView(efy){
+  const eq = equityStatementData(efy);
+  const line = (label, amt, cls) => `<tr><td class="${cls||'ind'}">${escHtml(label)}</td><td class="num mono ${cls==='tot'?'tot':''}">${fmtMoney(amt)}</td></tr>`;
+  return `
+  <div class="rep-sheet">
+    <div class="rep-head"><h2>${t("Statement of Owner's Equity")}</h2><div style="color:var(--ink-soft);font-size:12.5px;">${t('Fiscal year')} ${efy} EFY</div></div>
+    <div class="tablewrap"><table class="rep-table">
+      <thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead>
+      <tbody>
+        ${line(t('Opening equity (start of year)'), eq.openingBase)}
+        ${line(t('Add: owner investments this year'), eq.inCap)}
+        ${line(t('Less: owner drawings this year'), -eq.outCap)}
+        ${line(t('Add: net income this year'), eq.netIncome)}
+        ${line(t('Subtotal'), eq.beforeInventory,'tot')}
+        ${line(t('Add: inventory on hand (feed, at cost, today)'), eq.inventoryAdj)}
+        ${line(t('Closing equity'), eq.closing,'tot')}
+      </tbody>
+    </table></div>
+  </div>
+  <p class="note no-print">The inventory line reflects feed stock on hand today, not a historical figure for this specific fiscal year — it only lines up exactly with the Balance Sheet when viewing the current year.</p>
+  `;
+}
+
 function attachReportEvents(){
   const tx = taxProfile();
   const bind = (id, fn) => { const el=document.getElementById(id); if(el) el.addEventListener('change', async ()=>{ fn(el.value); await saveSetup(); render(); }); };
@@ -2514,7 +1949,14 @@ function attachReportEvents(){
   bind('adjExempt', v=>taxAdj(reportsYear).exempt=num(v));
   bind('adjWht', v=>taxAdj(reportsYear).wht=num(v));
   bind('adjAdvance', v=>taxAdj(reportsYear).advance=num(v));
-  document.querySelectorAll('[data-repview]').forEach(b=>b.addEventListener('click', ()=>{ reportView = b.dataset.repview; render(); }));
+  bind('openAsOf', v=>opening().asOfDate=v);
+  bind('openCash', v=>opening().cash=num(v));
+  bind('openCapital', v=>opening().capital=num(v));
+  const viewBtns = {viewIncome:'income', viewBalance:'balance', viewCashflow:'cashflow', viewEquity:'equity'};
+  Object.keys(viewBtns).forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.addEventListener('click', ()=>{ reportView=viewBtns[id]; render(); });
+  });
   const pb = document.getElementById('printReport');
   if(pb) pb.addEventListener('click', ()=>window.print());
 }
@@ -2621,204 +2063,16 @@ function renderSetup(){
 /* =========================================================
    FORM CONFIGS + MODAL
    ========================================================= */
-function batchReferenced(batchId){
-  return allReductions().some(r=>r.batchId===batchId) || state.feeding.some(r=>r.batchId===batchId) || state.production.some(r=>r.batchId===batchId)
-      || state.vaccinations.some(r=>r.batchId===batchId) || state.medications.some(r=>r.batchId===batchId) || state.expenses.some(r=>r.batchId===batchId)
-      || state.income.some(r=>r.stockBatchId===batchId);
-}
-function livestockValidate(r){
-  if(!validDate(r.dateAcquired)) return 'Date acquired is required.';
-  if(!(num(r.initialQty)>0)) return 'Initial quantity must be greater than zero.';
-  if(num(r.purchaseCost)<0) return 'Purchase cost cannot be negative.';
-  if(state.livestock.some(b=>b.id!==r.id && b.batchId===r.batchId)) return 'Another batch already uses this ID.';
-  const old = state.livestock.find(b=>b.id===r.id);
-  if(old && old.batchId!==r.batchId && batchReferenced(old.batchId)) return 'This batch already has records (reductions, feeding, sales, health…). Its ID cannot be changed.';
-  if(old && old.animalType!==r.animalType && batchReferenced(old.batchId)) return 'This batch already has records. Its animal type cannot be changed.';
-  if(r.animalType!=='Poultry') r.bio = 'No';
-  if(r.bio===BIO_YES){
-    if(num(r.layingAgeMonths)<=0) r.layingAgeMonths = DEFAULT_LAYING_AGE;
-    if(num(r.amortMonths)<=0) r.amortMonths = DEFAULT_AMORT_MONTHS;
-  }
-  if(!ASSET_ANIMALS.includes(r.animalType)) r.amortMonthsOther = 0;
-  const used = allReductions().filter(x=>x.batchId===(old?old.batchId:r.batchId)).reduce((t,x)=>t+num(x.qty),0);
-  if(num(r.initialQty) < used) return 'Initial quantity ('+fmtNum(r.initialQty)+') is lower than the '+fmtNum(used)+' animals already removed from this batch.';
-  return '';
-}
-function reductionValidate(r){
-  const b = state.livestock.find(x=>x.batchId===r.batchId);
-  if(!b) return 'Choose an existing batch.';
-  if(!(num(r.qty)>0)) return 'Quantity must be greater than zero.';
-  if(r.reason==='Sale') return 'Sales are entered in Income, not here.';
-  if(validDate(b.dateAcquired) && validDate(r.date) && r.date<b.dateAcquired) return 'The date is before this batch was acquired ('+b.dateAcquired+').';
-  const left = batchCurrentQty(r.batchId, r.id);
-  if(num(r.qty) > left + 1e-9) return 'Only '+fmtNum(left)+' animals are left in batch '+r.batchId+'.';
-  r.animalType = b.animalType;
-  return '';
-}
-function prodReductionValidate(r){
-  if(!(num(r.qty)>0)) return 'Quantity must be greater than zero.';
-  if(r.reason==='Sale') return 'Sales are entered in Income, not here.';
-  const others = allProdReductions().filter(x=>x.product===r.product && x.id!==r.id).reduce((t,x)=>t+num(x.qty),0);
-  const left = productGoodOutput(r.product) - others;
-  if(num(r.qty) > left + 1e-9) return 'Only '+fmtNum(left)+' '+r.product+' in stock.';
-  return '';
-}
-function feedPurchaseValidate(r){
-  if(!(num(r.qty)>0)) return 'Quantity must be greater than zero.';
-  if(!(num(r.unitCost)>0)) return 'Enter the unit cost — it is needed to value the feed stock.';
-  return '';
-}
-function feedingValidate(r){
-  if(!(num(r.qtyUsed)>0)) return 'Quantity used must be greater than zero.';
-  const b = state.livestock.find(x=>x.batchId===r.batchId);
-  if(!b) return 'Choose an existing batch.';
-  if(validDate(b.dateAcquired) && validDate(r.date) && r.date<b.dateAcquired) return 'The date is before this batch was acquired ('+b.dateAcquired+').';
-  r.animalType = b.animalType;
-  const avail = feedStockAsOf(r.feedType, r.date, r.id);
-  if(num(r.qtyUsed) > avail + 1e-9) return 'Only '+fmtNum(Math.max(0,avail))+' kg of '+r.feedType+' in stock on '+r.date+'. Record the feed purchase first.';
-  return '';
-}
-function incomeValidate(r){
-  if(!(num(r.qty)>0)) return 'Quantity must be greater than zero.';
-  const old = state.income.find(x=>x.id===r.id);
-  const prod = incomeProduct(r);
-  if(prod){
-    const oldQty = (old && incomeProduct(old)===prod) ? num(old.qty) : 0;
-    const left = productStock(prod) + oldQty;
-    if(num(r.qty) > left + 1e-9) return 'Only '+fmtNum(left)+' '+prod+' in stock. Record the production first (Production tab).';
-  }
-  if(incomeIsLivestockSale(r)){
-    if(!r.stockBatchId) return 'Choose the batch / herd the animals are sold from.';
-    const b = state.livestock.find(x=>x.batchId===r.stockBatchId);
-    if(!b) return 'Choose an existing batch.';
-    const left = batchCurrentQty(r.stockBatchId, old ? 'inc:'+old.id : undefined);
-    if(num(r.qty) > left + 1e-9) return 'Only '+fmtNum(left)+' animals are left in batch '+r.stockBatchId+'.';
-  }else r.stockBatchId = '';
-  return '';
-}
-function expenseValidate(r){
-  if(AUTO_COST_CATS.includes(r.category)) return 'This cost is created automatically: feed from the Feed tab, vaccines and medication from the Health tab, animals from the Livestock tab.';
-  if(r.batchId && !layerBatchById(r.batchId)) r.batchId = '';
-  if(!r.batchId) r.capMode = 'Auto';
-  return '';
-}
-/* ================= SMART FORMS: the fields follow what is being sold or bought ================= */
-const PURCHASE_KINDS = [
-  {value:'Feed', label:'Feed (adds to feed stock)'},
-  {value:'Livestock', label:'Animals (new batch / herd)'},
-  {value:'Vaccine', label:'Vaccine (health log)'},
-  {value:'Medication', label:'Medication (health log)'},
-  {value:'Other', label:'Other cost (labor, rent, transport…)'}
-];
-function fundFromPay(ps){ ps = ps||''; if(ps.indexOf('Unpaid')===0) return FUND_CREDIT; if(ps.indexOf('Paid personally')===0) return FUND_OWNER; return FUND_PAID; }
-async function submitPurchase(rec){
-  const k = rec.kind;
-  if(!k) return 'Choose what you are buying.';
-  if(!validDate(rec.date)) return 'Date is required.';
-  let msg = '';
-  if(k==='Feed'){
-    const r = {id:uid(), date:rec.date, feedType:rec.f_type, qty:num(rec.f_qty), unitCost:num(rec.f_unit), payStatus:rec.f_pay||PAY_PAID, supplier:rec.f_supplier||'', notes:rec.f_notes||''};
-    if(!r.feedType) return 'Choose the feed type.';
-    msg = feedPurchaseValidate(r); if(msg) return msg;
-    state.feedPurchases.push(r); await saveEntity('feedPurchases');
-  }
-  else if(k==='Livestock'){
-    if(!rec.l_type) return 'Choose the animal type.';
-    if(!String(rec.l_batch||'').trim()) return 'Enter a Batch/Herd ID for the new animals.';
-    const qty = num(rec.l_qty), unit = num(rec.l_unit);
-    if(!(qty>0)) return 'Enter how many animals were bought.';
-    const r = {id:uid(), animalType:rec.l_type, batchId:String(rec.l_batch).trim(), breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
-      purchaseCost:money2(qty*unit), fundedBy:fundFromPay(rec.l_pay), bio:rec.l_type==='Poultry' ? (rec.l_bio||'No') : 'No',
-      ageMonthsAtPurchase:num(rec.l_age), layingAgeMonths:num(rec.l_lay), amortMonths:num(rec.l_amort), amortMonthsOther:num(rec.l_amortO), notes:rec.l_notes||''};
-    msg = livestockValidate(r); if(msg) return msg;
-    state.livestock.push(r); await refreshCapFlags(); await saveEntity('livestock');
-  }
-  else if(k==='Vaccine'){
-    const b = state.livestock.find(x=>x.batchId===rec.v_batch);
-    if(!b) return 'Choose the batch that was vaccinated.';
-    if(!String(rec.v_name||'').trim()) return 'Enter the vaccine name.';
-    state.vaccinations.push({id:uid(), date:rec.date, animalType:b.animalType, batchId:b.batchId, vaccine:rec.v_name, dose:rec.v_dose||'', cost:num(rec.v_cost), payStatus:rec.v_pay||PAY_PAID, administeredBy:rec.v_by||'', notes:rec.v_notes||''});
-    await refreshCapFlags(); await saveEntity('vaccinations');
-  }
-  else if(k==='Medication'){
-    const b = state.livestock.find(x=>x.batchId===rec.m_batch);
-    if(!b) return 'Choose the batch that was treated.';
-    if(!String(rec.m_name||'').trim()) return 'Enter the medication name.';
-    state.medications.push({id:uid(), date:rec.date, animalType:b.animalType, batchId:b.batchId, disease:rec.m_disease||'', medication:rec.m_name, dosage:rec.m_dose||'', cost:num(rec.m_cost), payStatus:rec.m_pay||PAY_PAID, notes:rec.m_notes||''});
-    await refreshCapFlags(); await saveEntity('medications');
-  }
-  else{
-    const r = {id:uid(), date:rec.date, category:rec.o_cat, description:rec.o_desc||'', amount:num(rec.o_amount), payStatus:rec.o_pay||PAY_PAID, refNo:rec.o_ref||'', supplier:rec.o_supplier||'',
-      nonDeductible:rec.o_nonded||'No', batchId:rec.o_batch||'', capMode:rec.o_cap||'Auto', notes:rec.o_notes||''};
-    if(!r.category) return 'Choose the expense category.';
-    if(!(r.amount>0)) return 'Amount must be greater than zero.';
-    msg = expenseValidate(r); if(msg) return msg;
-    state.expenses.push(r); await refreshCapFlags(); await saveEntity('expenses');
-  }
-  return '';
-}
-function purchaseFormHook(root){
-  const q = n=>root.querySelector('[name="'+n+'"]'), v = n=>{ const e = q(n); return e ? e.value : ''; };
-  const hint = document.createElement('div'); hint.className = 'note'; hint.style.cssText = 'font-weight:600;margin:6px 0 10px;';
-  const acts = root.querySelector('.modal-actions'); if(acts) acts.before(hint);
-  const upd = ()=>{
-    const k = v('kind'); let h = '';
-    if(k==='Feed'){
-      const tot = num(v('f_qty'))*num(v('f_unit')), ft = v('f_type');
-      h = 'Total: '+fmtMoney(tot)+'.'+(ft ? ' Feed stock now '+fmtNum(feedStock(ft))+' kg → '+fmtNum(feedStock(ft)+num(v('f_qty')))+' kg.' : '')+' Booked as feed inventory (asset); it becomes a cost when fed out.';
-    }else if(k==='Livestock'){
-      const tot = num(v('l_qty'))*num(v('l_unit')), t = v('l_type');
-      const how = (t==='Poultry' && v('l_bio')==='Yes') ? 'an asset — layer flock (immature layers until laying age, then amortised)' : ASSET_ANIMALS.includes(t) ? 'an asset — livestock, kept at cost' : 'an expense (cost of production)';
-      h = 'Total: '+fmtMoney(tot)+'. Adds '+fmtNum(num(v('l_qty')))+' animals to a new batch. Booked as '+how+'.';
-    }else if(k==='Vaccine' || k==='Medication'){
-      h = 'Booked as an expense now — or capitalised into the flock’s asset if it is a layer flock still under laying age. Cost is logged in the Health tab.';
-    }else if(k==='Other'){
-      h = 'Booked as an expense (or capitalised into a young layer flock if you pick one below).';
-    }
-    hint.textContent = h;
-  };
-  root.querySelectorAll('input,select').forEach(e=>{ e.addEventListener('input', upd); e.addEventListener('change', upd); });
-  upd();
-}
-function incomeFormHook(root, record){
-  const q = n=>root.querySelector('[name="'+n+'"]');
-  const cat = q('category'), qty = q('qty'), price = q('unitPrice'), batch = q('stockBatchId'), desc = q('description');
-  if(!cat || !qty || !price || !batch) return;
-  const setLabel = (el, txt)=>{ const l = el.closest('label'); if(l && l.childNodes[0]) l.childNodes[0].nodeValue = txt; };
-  const hint = document.createElement('div'); hint.className = 'note'; hint.style.cssText = 'font-weight:600;margin:-2px 0 8px;';
-  qty.closest('label').after(hint);
-  const apply = ()=>{
-    const c = cat.value, prod = PRODUCT_SALE_CATS[c], live = LIVESTOCK_SALE_CATS.includes(c);
-    let ql = 'Quantity *', pl = 'Unit Price (ETB) *', h = '';
-    qty.removeAttribute('max');
-    if(prod){
-      const u = productUnit(prod), own = (record && incomeProduct(record)===prod) ? num(record.qty) : 0, avail = productStock(prod) + own;
-      const one = u==='eggs' ? 'egg' : u==='liters' ? 'liter' : u;
-      ql = 'Quantity sold ('+u+') *'; pl = 'Price per '+one+' (ETB) *';
-      h = 'In stock: '+fmtNum(avail)+' '+u+(u.toLowerCase()===prod.toLowerCase() ? '' : ' of '+prod.toLowerCase())+'. This sale reduces the stock automatically.';
-      qty.max = avail;
-      desc.placeholder = 'e.g. '+prod+' sold to …';
-    }else if(live){
-      const poultry = c==='Live Bird Sales', cur = batch.value;
-      const exclude = record ? 'inc:'+record.id : undefined;
-      const opts = state.livestock.filter(b=> poultry ? b.animalType==='Poultry' : b.animalType!=='Poultry');
-      batch.innerHTML = '<option value="">-- select --</option>' + opts.map(b=>`<option value="${escHtml(b.batchId)}">${escHtml(b.batchId+' — '+(b.breed||b.animalType)+' ('+fmtNum(batchCurrentQty(b.batchId, exclude))+' left)')}</option>`).join('');
-      batch.value = cur;
-      ql = (poultry ? 'Number of birds sold' : 'Number of animals sold')+' *'; pl = 'Price per '+(poultry?'bird':'animal')+' (ETB) *';
-      if(batch.value){ const left = batchCurrentQty(batch.value, exclude); qty.max = left; h = 'Left in '+batch.value+': '+fmtNum(left)+'. This sale removes them from the herd and writes off their book value automatically.'; }
-      else h = 'Choose the batch the animals are sold from.';
-    }
-    setLabel(qty, ql); setLabel(price, pl); hint.textContent = h;
-  };
-  cat.addEventListener('change', apply); batch.addEventListener('change', apply); apply();
-}
-
 function batchOptions(){
   return state.livestock.map(b=>({value:b.batchId, label:`${b.batchId} — ${b.breed} (${b.animalType})`}));
 }
 function customerOptions(){
   return state.customers.map(c=>({value:c.id, label:`${c.name}${c.phone?' — '+c.phone:''}`}));
 }
+function loanOptions(){
+  return state.loans.map(l=>({value:l.id, label:`${l.lender} — ${fmtMoney(l.principal)} (${fmtDate(l.date)})`}));
+}
+function loanName(id){ const l=state.loans.find(x=>x.id===id); return l ? l.lender : ''; }
 function customerName(id){ const c=state.customers.find(x=>x.id===id); return c ? c.name : ''; }
 function FORM_CONFIGS(){
   return {
@@ -2826,24 +2080,21 @@ function FORM_CONFIGS(){
       {name:'animalType', label:'Animal Type', type:'select', options:state.setup.animalTypes, required:true},
       {name:'batchId', label:'Batch/Herd ID', type:'text', required:true, placeholder:'e.g. FL-002'},
       {name:'breed', label:'Breed/Type', type:'text'},
-      {name:'dateAcquired', label:'Date Acquired', type:'date', required:true, default:todayISO()},
+      {name:'dateAcquired', label:'Date Acquired', type:'date'},
       {name:'source', label:'Source', type:'text'},
       {name:'initialQty', label:'Initial Quantity', type:'number', required:true},
-      {name:'purchaseCost', label:'Total purchase cost (ETB) — enter 0 if not bought (e.g. born on the farm)', type:'number', required:true, default:0},
-      {name:'fundedBy', label:'How was it paid for?', type:'select', options:[FUND_PAID,FUND_CREDIT,FUND_OWNER,FUND_OPEN], default:FUND_PAID, required:true},
-      {name:'bio', label:'Track as layer flock (biological asset)?', type:'select', options:['No','Yes'], default:'No', showWhen:{name:'animalType',values:['Poultry']}},
-      {name:'ageMonthsAtPurchase', label:'Age of the birds when acquired (months)', type:'number', default:0, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
-      {name:'layingAgeMonths', label:'Age at onset of laying (months)', type:'number', default:DEFAULT_LAYING_AGE, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
-      {name:'amortMonths', label:'Amortise the locked cost over (months) — 12 to 18 is typical', type:'number', default:DEFAULT_AMORT_MONTHS, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
-      {name:'amortMonthsOther', label:'Amortise over (months) — 0 = keep at cost until sold or lost', type:'number', default:0, showWhen:{name:'animalType',values:ASSET_ANIMALS}},
+      {name:'cost', label:'Acquisition cost (ETB) — optional, enables biological-asset accounting', type:'number'},
+      {name:'maturityMonths', label:'Months to maturity (e.g. laying age)', type:'number', default:5},
+      {name:'amortMonths', label:'Amortize over (months, after maturity)', type:'number', default:12},
       {name:'notes', label:'Notes', type:'textarea'}
-    ], validate:livestockValidate},
-    reductions: { title:'Livestock Reduction (no sales — enter sales in Income)', entity:'reductions', validate:reductionValidate, fields:[
+    ]},
+    reductions: { title:'Livestock Reduction', entity:'reductions', fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'animalType', label:'Animal Type', type:'select', options:state.setup.animalTypes, required:true},
       {name:'batchId', label:'Batch/Herd ID', type:'select', options:batchOptions(), required:true},
       {name:'reason', label:'Reason', type:'select', options:REDUCTION_REASONS, required:true},
       {name:'qty', label:'Quantity', type:'number', required:true},
+      {name:'unitPrice', label:'Unit Price (ETB)', type:'number', default:0},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
     production: { title:'Production Entry', entity:'production', fields:[
@@ -2856,23 +2107,23 @@ function FORM_CONFIGS(){
       {name:'unit', label:'Unit (count/kg/liters)', type:'text'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
-    prodReductions: { title:'Product Reduction (no sales — enter sales in Income)', entity:'prodReductions', validate:prodReductionValidate, fields:[
+    prodReductions: { title:'Product Reduction', entity:'prodReductions', fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'product', label:'Product', type:'select', options:state.setup.productTypes, required:true},
       {name:'reason', label:'Reason', type:'select', options:PROD_REDUCTION_REASONS, required:true},
       {name:'qty', label:'Quantity', type:'number', required:true},
+      {name:'unitPrice', label:'Unit Price (ETB)', type:'number', default:0},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
-    feedPurchases: { title:'Feed Purchase', entity:'feedPurchases', validate:feedPurchaseValidate, fields:[
+    feedPurchases: { title:'Feed Purchase', entity:'feedPurchases', fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'feedType', label:'Feed Type', type:'select', options:state.setup.feedTypes, required:true},
       {name:'qty', label:'Quantity (kg)', type:'number', required:true},
-      {name:'unitCost', label:'Unit Cost (ETB/kg)', type:'number', required:true},
-      {name:'payStatus', label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID, required:true},
+      {name:'unitCost', label:'Unit Cost (ETB/kg)', type:'number', default:0},
       {name:'supplier', label:'Supplier', type:'text'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
-    feeding: { title:'Feeding Entry', entity:'feeding', validate:feedingValidate, fields:[
+    feeding: { title:'Feeding Entry', entity:'feeding', fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'animalType', label:'Animal Type', type:'select', options:state.setup.animalTypes, required:true},
       {name:'batchId', label:'Batch/Herd ID', type:'select', options:batchOptions(), required:true},
@@ -2880,13 +2131,12 @@ function FORM_CONFIGS(){
       {name:'qtyUsed', label:'Quantity Used', type:'number', required:true},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
-    income: { title:'Income Entry', entity:'income', validate:incomeValidate, onOpen:incomeFormHook, fields:[
+    income: { title:'Income Entry', entity:'income', fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
-      {name:'category', label:'What are you selling?', type:'select', options:state.setup.incomeCats, required:true},
-      {name:'stockBatchId', label:'Which batch / herd are the animals sold from?', type:'select', options:batchOptions(), showWhen:{name:'category',values:LIVESTOCK_SALE_CATS}},
+      {name:'category', label:'Category', type:'select', options:state.setup.incomeCats, required:true},
       {name:'description', label:'Description', type:'text'},
       {name:'customerId', label:'Customer (optional)', type:'select', options:customerOptions()},
-      {name:'qty', label:'Quantity (units sold — this reduces stock automatically)', type:'number', default:1, required:true},
+      {name:'qty', label:'Quantity', type:'number', default:1, required:true},
       {name:'unitPrice', label:'Unit Price (ETB)', type:'number', required:true},
       {name:'paymentStatus', label:'Payment status', type:'select', options:['Paid in full','Partial / Credit'], default:'Paid in full', required:true},
       {name:'amountPaid', label:'Amount received now (ETB) — only if Partial/Credit', type:'number', default:0},
@@ -2896,72 +2146,14 @@ function FORM_CONFIGS(){
       {name:'exempt', label:'Tax-exempt income?', type:'select', options:['No','Yes'], default:'No'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
-    purchase: { title:'Purchase / Expense', entity:'purchase', custom:submitPurchase, onOpen:purchaseFormHook, fields:(()=>{
-      const W = (k, more)=>[{name:'kind', values:[k]}].concat(more||[]);
-      const PAY = (n,k)=>({name:n, label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID, showWhen:W(k)});
-      return [
-        {name:'date', label:'Date', type:'date', default:todayISO()},
-        {name:'kind', label:'What are you buying / paying for?', type:'select', required:true, options:PURCHASE_KINDS},
-        /* feed -> feed stock */
-        {name:'f_type', label:'Feed type', type:'select', options:state.setup.feedTypes, showWhen:W('Feed')},
-        {name:'f_qty', label:'Quantity bought (kg)', type:'number', showWhen:W('Feed')},
-        {name:'f_unit', label:'Price per kg (ETB)', type:'number', showWhen:W('Feed')},
-        {name:'f_supplier', label:'Supplier', type:'text', showWhen:W('Feed')},
-        PAY('f_pay','Feed'),
-        {name:'f_notes', label:'Notes', type:'textarea', showWhen:W('Feed')},
-        /* animals -> new batch / herd */
-        {name:'l_type', label:'Animal type', type:'select', options:state.setup.animalTypes, showWhen:W('Livestock')},
-        {name:'l_batch', label:'Batch/Herd ID (new)', type:'text', placeholder:'e.g. GT-002', showWhen:W('Livestock')},
-        {name:'l_breed', label:'Breed/Type', type:'text', showWhen:W('Livestock')},
-        {name:'l_source', label:'Bought from', type:'text', showWhen:W('Livestock')},
-        {name:'l_qty', label:'Number of animals bought', type:'number', showWhen:W('Livestock')},
-        {name:'l_unit', label:'Price per animal (ETB)', type:'number', showWhen:W('Livestock')},
-        PAY('l_pay','Livestock'),
-        {name:'l_bio', label:'Buy as a layer flock (biological asset)?', type:'select', options:['No','Yes'], default:'No', showWhen:W('Livestock',[{name:'l_type',values:['Poultry']}])},
-        {name:'l_age', label:'Age of the birds when bought (months)', type:'number', default:0, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
-        {name:'l_lay', label:'Age at onset of laying (months)', type:'number', default:DEFAULT_LAYING_AGE, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
-        {name:'l_amort', label:'Amortise over (months) — 12 to 18 is typical', type:'number', default:DEFAULT_AMORT_MONTHS, showWhen:W('Livestock',[{name:'l_type',values:['Poultry']},{name:'l_bio',values:['Yes']}])},
-        {name:'l_amortO', label:'Amortise over (months) — 0 = keep at cost until sold or lost', type:'number', default:0, showWhen:W('Livestock',[{name:'l_type',values:ASSET_ANIMALS}])},
-        {name:'l_notes', label:'Notes', type:'textarea', showWhen:W('Livestock')},
-        /* vaccine -> health log */
-        {name:'v_batch', label:'Batch/Herd vaccinated', type:'select', options:batchOptions(), showWhen:W('Vaccine')},
-        {name:'v_name', label:'Vaccine name', type:'text', showWhen:W('Vaccine')},
-        {name:'v_dose', label:'Dose/Route', type:'text', showWhen:W('Vaccine')},
-        {name:'v_cost', label:'Cost (ETB)', type:'number', showWhen:W('Vaccine')},
-        {name:'v_by', label:'Administered by', type:'text', showWhen:W('Vaccine')},
-        PAY('v_pay','Vaccine'),
-        {name:'v_notes', label:'Notes', type:'textarea', showWhen:W('Vaccine')},
-        /* medication -> health log */
-        {name:'m_batch', label:'Batch/Herd treated', type:'select', options:batchOptions(), showWhen:W('Medication')},
-        {name:'m_disease', label:'Disease', type:'select', options:state.setup.diseases, showWhen:W('Medication')},
-        {name:'m_name', label:'Medication', type:'text', showWhen:W('Medication')},
-        {name:'m_dose', label:'Dosage', type:'text', showWhen:W('Medication')},
-        {name:'m_cost', label:'Cost (ETB)', type:'number', showWhen:W('Medication')},
-        PAY('m_pay','Medication'),
-        {name:'m_notes', label:'Notes', type:'textarea', showWhen:W('Medication')},
-        /* everything else -> plain expense */
-        {name:'o_cat', label:'Expense category', type:'select', options:state.setup.expenseCats.filter(c=>!AUTO_COST_CATS.includes(c)), showWhen:W('Other')},
-        {name:'o_desc', label:'Description', type:'text', showWhen:W('Other')},
-        {name:'o_amount', label:'Amount (ETB)', type:'number', showWhen:W('Other')},
-        PAY('o_pay','Other'),
-        {name:'o_ref', label:'Receipt / Invoice No.', type:'text', showWhen:W('Other')},
-        {name:'o_supplier', label:'Supplier name / TIN', type:'text', showWhen:W('Other')},
-        {name:'o_nonded', label:'Non-deductible for tax?', type:'select', options:['No','Yes'], default:'No', showWhen:W('Other')},
-        {name:'o_batch', label:'Layer flock this cost belongs to (optional)', type:'select', options:bioBatchOptions(), showWhen:W('Other')},
-        {name:'o_cap', label:'If the flock is under laying age: capitalise as an asset?', type:'select', options:['Auto','No'], default:'Auto', showWhen:W('Other',[{name:'o_batch',nonEmpty:true}])},
-        {name:'o_notes', label:'Notes', type:'textarea', showWhen:W('Other')}
-      ];
-    })()},
-    expenses: { title:'Expense Entry', entity:'expenses', validate:expenseValidate, fields:[
+    expenses: { title:'Expense Entry', entity:'expenses', fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
-      {name:'category', label:'Category', type:'select', options:state.setup.expenseCats.filter(c=>!AUTO_COST_CATS.includes(c)), required:true},
-      {name:'batchId', label:'Layer flock this cost belongs to (optional)', type:'select', options:bioBatchOptions()},
-      {name:'capMode', label:'If the flock is under laying age: capitalise this cost as an asset?', type:'select', options:['Auto','No'], default:'Auto', showWhen:{name:'batchId',nonEmpty:true}},
+      {name:'category', label:'Category', type:'select', options:state.setup.expenseCats, required:true},
       {name:'description', label:'Description', type:'text'},
       {name:'amount', label:'Amount (ETB)', type:'number', required:true},
-      {name:'payStatus', label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID, required:true},
       {name:'refNo', label:'Receipt / Invoice No.', type:'text'},
       {name:'supplier', label:'Supplier name / TIN', type:'text'},
+      {name:'batchId', label:'Tag to livestock batch (rearing cost, optional)', type:'select', options:batchOptions()},
       {name:'nonDeductible', label:'Non-deductible for tax?', type:'select', options:['No','Yes'], default:'No'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
@@ -2981,19 +2173,6 @@ function FORM_CONFIGS(){
       {name:'refNo', label:'Receipt / Ref No.', type:'text'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
-    acct: { title:'Accounting Transaction', entity:'acct', validate:acctValidate, fields:[
-      {name:'date', label:'Date', type:'date', default:todayISO()},
-      {name:'type', label:'Transaction type', type:'select', options:ACCT_TYPE_LIST, required:true, default:AT.INV},
-      {name:'party', label:'Name (owner, partner, investor, lender or supplier)', type:'text', placeholder:'Leave blank = Owner'},
-      {name:'fromParty', label:'Transferred from (owner giving up the share)', type:'text', showFor:[AT.XFER]},
-      {name:'amount', label:'Amount (ETB)', type:'number', required:true},
-      {name:'ownershipPct', label:'Ownership % held by this person after the transaction (optional)', type:'number', showFor:[AT.INV,AT.SALE,AT.XFER]},
-      {name:'loanTerm', label:'Loan term', type:'select', options:[TERM_LONG,TERM_SHORT], default:TERM_LONG, showFor:[AT.LOAN,AT.REPAY,AT.OPLOAN]},
-      {name:'interestRate', label:'Annual interest rate % (information only)', type:'number', showFor:[AT.LOAN,AT.OPLOAN]},
-      {name:'dueDate', label:'Final due date (optional)', type:'date', showFor:[AT.LOAN,AT.OPLOAN]},
-      {name:'refNo', label:'Reference / receipt / agreement No.', type:'text'},
-      {name:'notes', label:'Notes', type:'textarea'}
-    ]},
     comments: { title:'Comment / Interaction', entity:'comments', fields:[
       {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
       {name:'customerId', label:'Customer', type:'select', options:customerOptions(), required:true},
@@ -3008,16 +2187,40 @@ function FORM_CONFIGS(){
       {name:'followUpDate', label:'Follow-up date', type:'date'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
+    capitalTx: { title:'Owner Capital Transaction', entity:'capitalTx', fields:[
+      {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
+      {name:'type', label:'Type', type:'select', options:CAPITAL_TX_TYPES, required:true},
+      {name:'amount', label:'Amount (ETB)', type:'number', required:true},
+      {name:'partyName', label:'Investor / Owner name', type:'text'},
+      {name:'ownershipPct', label:'Ownership % (if this changes ownership stake)', type:'number'},
+      {name:'method', label:'Method', type:'select', options:PAYMENT_METHODS, default:'Cash'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
+    loans: { title:'Loan Received', entity:'loans', fields:[
+      {name:'date', label:'Date received', type:'date', required:true, default:todayISO()},
+      {name:'lender', label:'Lender', type:'text', required:true, placeholder:'e.g. Cooperative Bank of Oromia'},
+      {name:'principal', label:'Principal amount (ETB)', type:'number', required:true},
+      {name:'interestRatePct', label:'Interest rate (% per year)', type:'number'},
+      {name:'termNotes', label:'Term (e.g. 24 months)', type:'text'},
+      {name:'refNo', label:'Loan / Contract No.', type:'text'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
+    loanPayments: { title:'Loan Repayment', entity:'loanPayments', fields:[
+      {name:'date', label:'Date', type:'date', required:true, default:todayISO()},
+      {name:'loanId', label:'Loan', type:'select', options:loanOptions(), required:true},
+      {name:'principalPortion', label:'Principal portion (ETB)', type:'number', required:true},
+      {name:'interestPortion', label:'Interest portion (ETB)', type:'number', default:0},
+      {name:'refNo', label:'Receipt / Ref No.', type:'text'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
     assets: { title:'Fixed Asset', entity:'assets', fields:[
       {name:'name', label:'Asset name', type:'text', required:true, placeholder:'e.g. Layer house, feed mixer'},
       {name:'assetClass', label:'Class', type:'select', options:ASSET_CLASSES, required:true},
       {name:'dateAcquired', label:'Date acquired', type:'date', required:true, default:todayISO()},
       {name:'cost', label:'Cost (ETB)', type:'number', required:true},
-      {name:'fundedBy', label:'How was it paid for?', type:'select', options:[FUND_PAID,FUND_CREDIT,FUND_OWNER,FUND_OPEN], default:FUND_PAID, required:true},
       {name:'method', label:'Depreciation method', type:'select', options:['Straight-line','Declining balance'], default:'Straight-line', required:true},
       {name:'ratePct', label:'Annual depreciation rate (%) — use the rate allowed for this class', type:'number', required:true},
       {name:'disposedDate', label:'Date disposed (if sold/lost)', type:'date'},
-      {name:'disposalProceeds', label:'Sale proceeds received on disposal (ETB, 0 if lost/scrapped)', type:'number', default:0},
       {name:'refNo', label:'Receipt / Invoice No.', type:'text'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
@@ -3028,7 +2231,6 @@ function FORM_CONFIGS(){
       {name:'vaccine', label:'Vaccine', type:'text', required:true},
       {name:'dose', label:'Dose/Route', type:'text'},
       {name:'cost', label:'Cost (ETB)', type:'number', default:0},
-      {name:'payStatus', label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID},
       {name:'administeredBy', label:'Administered By', type:'text'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
@@ -3040,7 +2242,6 @@ function FORM_CONFIGS(){
       {name:'medication', label:'Medication', type:'text', required:true},
       {name:'dosage', label:'Dosage', type:'text'},
       {name:'cost', label:'Cost (ETB)', type:'number', default:0},
-      {name:'payStatus', label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID},
       {name:'notes', label:'Notes', type:'textarea'}
     ]}
   };
@@ -3049,8 +2250,6 @@ function FORM_CONFIGS(){
 function fieldHTML(f, value){
   const val = (value!==undefined && value!==null) ? value : (f.default!==undefined ? f.default : '');
   const req = f.required ? ' required' : '';
-  let dfor = f.showFor ? ` data-for="${escHtml(f.showFor.join('|'))}"` : '';
-  if(f.showWhen) dfor += ` data-sw="${escHtml(JSON.stringify([].concat(f.showWhen)))}"`;
   if(f.type==='select'){
     const opts = f.options||[];
     const optHtml = opts.map(o=>{
@@ -3058,14 +2257,14 @@ function fieldHTML(f, value){
       const ol = (typeof o==='object') ? o.label : o;
       return `<option value="${escHtml(ov)}" ${String(val)===String(ov)?'selected':''}>${escHtml(ol)}</option>`;
     }).join('');
-    return `<label${dfor}>${escHtml(f.label)}${f.required?' *':''}<select name="${f.name}"${req}><option value="">-- select --</option>${optHtml}</select></label>`;
+    return `<label>${escHtml(f.label)}${f.required?' *':''}<select name="${f.name}"${req}><option value="">-- select --</option>${optHtml}</select></label>`;
   }
   if(f.type==='textarea'){
-    return `<label${dfor}>${escHtml(f.label)}<textarea name="${f.name}">${escHtml(val)}</textarea></label>`;
+    return `<label>${escHtml(f.label)}<textarea name="${f.name}">${escHtml(val)}</textarea></label>`;
   }
   const stepAttr = f.type==='number' ? ' step="any"' : '';
   const placeholder = f.placeholder ? ` placeholder="${escHtml(f.placeholder)}"` : '';
-  return `<label${dfor}>${escHtml(f.label)}${f.required?' *':''}<input type="${f.type}" name="${f.name}" value="${escHtml(val)}"${stepAttr}${placeholder}${req}></label>`;
+  return `<label>${escHtml(f.label)}${f.required?' *':''}<input type="${f.type}" name="${f.name}" value="${escHtml(val)}"${stepAttr}${placeholder}${req}></label>`;
 }
 
 function openForm(formKey, existingId){
@@ -3086,8 +2285,6 @@ function openForm(formKey, existingId){
       </div>
     </div>`;
   translateDom(root);
-  setupConditionalFields(root);
-  if(cfg.onOpen) cfg.onOpen(root, record);
   document.getElementById('cancelForm').addEventListener('click', closeForm);
   document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeForm(); });
   document.getElementById('entityForm').addEventListener('submit', (e)=>{
@@ -3096,21 +2293,6 @@ function openForm(formKey, existingId){
   });
 }
 function closeForm(){ document.getElementById('modalRoot').innerHTML=''; }
-/* show/hide form fields that only apply to some transaction types */
-function setupConditionalFields(root){
-  const sel = root.querySelector('select[name="type"]');
-  if(sel && root.querySelector('label[data-for]')){
-    const apply = ()=>{ root.querySelectorAll('label[data-for]').forEach(l=>{ const arr = l.getAttribute('data-for').split('|'); l.style.display = (sel.value && arr.indexOf(sel.value)<0) ? 'none' : ''; }); };
-    sel.addEventListener('change', apply); apply();
-  }
-  root.querySelectorAll('label[data-sw]').forEach(l=>{
-    let conds = []; try{ conds = JSON.parse(l.getAttribute('data-sw')); }catch(e){}
-    const check = ()=> conds.every(c=>{ const ctl = root.querySelector('[name="'+c.name+'"]'); if(!ctl) return true; return c.nonEmpty ? !!ctl.value : (c.values||[]).indexOf(ctl.value)>=0; });
-    const apply = ()=>{ l.style.display = check() ? '' : 'none'; };
-    conds.forEach(c=>{ const ctl = root.querySelector('[name="'+c.name+'"]'); if(ctl) ctl.addEventListener('change', apply); });
-    apply();
-  });
-}
 
 async function submitForm(formKey, existingId, cfg, formEl){
   const fd = new FormData(formEl);
@@ -3120,46 +2302,18 @@ async function submitForm(formKey, existingId, cfg, formEl){
     if(f.type==='number') v = v===''||v===null ? 0 : parseFloat(v);
     record[f.name] = v;
   });
-  if(cfg.custom){ const msg = await cfg.custom(record); if(msg){ say(msg); return; } closeForm(); render(); showToast('Saved'); return; }
-  if(cfg.validate){ const msg = cfg.validate(record); if(msg){ say(msg); return; } }
   const arr = state[cfg.entity];
   const idx = arr.findIndex(r=>r.id===record.id);
   if(idx>=0) arr[idx]=record; else arr.push(record);
-  if(cfg.entity==='expenses' || cfg.entity==='livestock') await refreshCapFlags();
   await saveEntity(cfg.entity);
   closeForm();
   render();
   showToast('Saved');
 }
 
-function deleteGuard(entityKey, id){
-  if(entityKey==='livestock'){
-    const b = state.livestock.find(x=>x.id===id);
-    if(b && batchReferenced(b.batchId)) return 'This batch already has records (reductions, feeding, sales, health, production…). Delete or move those first.';
-  }
-  if(entityKey==='feedPurchases'){
-    const keep = state.feedPurchases.filter(x=>x.id!==id), f = state.feedPurchases.find(x=>x.id===id);
-    if(f){
-      let q = 0; keep.forEach(x=>{ if(x.feedType===f.feedType) q += num(x.qty); });
-      state.feeding.forEach(x=>{ if(x.feedType===f.feedType) q -= num(x.qtyUsed); });
-      if(q < -1e-9) return 'Deleting this purchase would leave '+f.feedType+' with negative stock because the feed was already used.';
-    }
-  }
-  if(entityKey==='production'){
-    const pr = state.production.find(x=>x.id===id);
-    if(pr){
-      const others = state.production.filter(x=>x.id!==id && x.product===pr.product).reduce((t,x)=>t+(num(x.qtyProduced)-num(x.waste)),0);
-      if(others - productReducedQty(pr.product) < -1e-9) return 'Deleting this would leave '+pr.product+' with negative stock because some was already sold or used.';
-    }
-  }
-  return '';
-}
 async function deleteRecord(entityKey, id){
-  const blocked = deleteGuard(entityKey, id);
-  if(blocked){ say(blocked); return; }
   if(!ask('Delete this entry? This cannot be undone.')) return;
   state[entityKey] = state[entityKey].filter(r=>r.id!==id);
-  if(entityKey==='livestock') await refreshCapFlags();
   await saveEntity(entityKey);
   render();
   showToast('Deleted');
@@ -3277,7 +2431,6 @@ async function driveDownloadIntoState(){
   state.setup = data.setup || state.setup;
   state.calc = data.calc || state.calc;
   ENTITY_KEYS.forEach(k=>{ state[k] = Array.isArray(data[k]) ? data[k] : []; });
-  await refreshCapFlags();
   await Promise.all([saveKey(STORE_KEYS.setup, state.setup), saveKey(STORE_KEYS.calc, state.calc), ...ENTITY_KEYS.map(k=>saveKey(STORE_KEYS[k], state[k]))]);
   driveConfig.lastSync = new Date().toISOString();
   saveDriveConfigLocal();
@@ -3328,7 +2481,7 @@ function exportBackup(){
   showToast('Backup downloaded');
 }
 
-const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','assets','customers','payments','comments','inquiries','acct'];
+const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','assets','customers','payments','comments','inquiries','capitalTx','loans','loanPayments'];
 
 async function importBackupFile(file){
   let data;
@@ -3345,7 +2498,6 @@ async function importBackupFile(file){
   state.calc = data.calc || state.calc;
   ENTITY_KEYS.forEach(k=>{ state[k] = Array.isArray(data[k]) ? data[k] : []; });
   await Promise.all([saveSetup(), saveCalc(), ...ENTITY_KEYS.map(saveEntity)]);
-  await refreshCapFlags();
   render();
   showToast('Backup imported');
 }
@@ -3355,8 +2507,9 @@ function attachTabEvents(){
   const addBtnMap = {
     addLivestock:'livestock', addReductions:'reductions', addProduction:'production',
     addProdReductions:'prodReductions', addFeedPurchases:'feedPurchases', addFeeding:'feeding',
-    addIncome:'income', addExpenses:'purchase', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
-    addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries', addAcct:'acct'
+    addIncome:'income', addExpenses:'expenses', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
+    addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries',
+    addCapitalTx:'capitalTx', addLoans:'loans', addLoanPayments:'loanPayments'
   };
   Object.keys(addBtnMap).forEach(btnId=>{
     const el = document.getElementById(btnId);
@@ -3459,19 +2612,6 @@ function attachTabEvents(){
     await Promise.all(ENTITY_KEYS.map(saveEntity));
     render();
     showToast('All farm data cleared');
-  });
-
-  const ownerInput = document.getElementById('acctOwnerName');
-  if(ownerInput) ownerInput.addEventListener('change', async (e)=>{
-    if(!state.setup.acctOpts) state.setup.acctOpts = {};
-    state.setup.acctOpts.ownerName = e.target.value.trim();
-    await saveSetup(); render();
-  });
-  const invToggle = document.getElementById('acctInvToggle');
-  if(invToggle) invToggle.addEventListener('change', async (e)=>{
-    if(!state.setup.acctOpts) state.setup.acctOpts = {};
-    state.setup.acctOpts.feedInventory = e.target.checked;
-    await saveSetup(); render();
   });
 
   if(currentTab==='reports') attachReportEvents();
