@@ -2627,5 +2627,167 @@ if('serviceWorker' in navigator){
 }
 
 </script>
+<!-- GH Farm financial statements patch.
+     Paste this whole <script> block into app.html just before </body>. Test on a backup copy first. -->
+<script>
+(function(){
+/* 1. Transfers entity (cash <-> bank) */
+STORE_KEYS.transfers='gh_transfers'; ENTITY_KEYS.push('transfers'); state.transfers=[];
+loadKey(STORE_KEYS.transfers,[]).then(v=>{ state.transfers=v||[]; render(); });
+
+/* 2. Payment method on every money movement */
+const _FC = FORM_CONFIGS;
+FORM_CONFIGS = function(){
+  const c=_FC();
+  const pm={name:'payMethod',label:'Paid / received via',type:'select',options:PAYMENT_METHODS,default:'Cash'};
+  ['income','expenses','feedPurchases','assets','livestock','loans','loanPayments'].forEach(k=>{ const f=c[k].fields; f.splice(f.length-1,0,pm); });
+  c.transfers={title:'Cash / Bank Transfer',entity:'transfers',fields:[
+    {name:'date',label:'Date',type:'date',required:true,default:todayISO()},
+    {name:'from',label:'Direction',type:'select',required:true,options:[{value:'cash',label:'Cash on hand → Bank (deposit)'},{value:'bank',label:'Bank → Cash on hand (withdrawal)'}]},
+    {name:'amount',label:'Amount (ETB)',type:'number',required:true},
+    {name:'notes',label:'Notes',type:'textarea'}]};
+  return c;
+};
+
+/* 3. Cash on hand vs cash at bank (also fixes the loan-repayment bug) */
+const acctOf = m => (!m || m==='Cash') ? 'cash' : 'bank';
+function cashMoves(){
+  const mv=[], add=(d,m,a)=>{ if(d) mv.push({date:d,acct:acctOf(m),amt:a}); };
+  state.income.forEach(r=>add(r.date,r.payMethod,incomePaidAmt(r)));
+  state.payments.forEach(p=>add(p.date,p.method,num(p.amount)));
+  state.expenses.filter(r=>r.category!=='Feed Purchase').forEach(r=>add(r.date,r.payMethod,-num(r.amount)));
+  state.feedPurchases.forEach(f=>add(f.date,f.payMethod,-num(f.qty)*num(f.unitCost)));
+  state.assets.forEach(a=>add(a.dateAcquired,a.payMethod,-num(a.cost)));
+  state.livestock.forEach(b=>add(b.dateAcquired,b.payMethod,-num(b.cost)));
+  state.loans.forEach(l=>add(l.date,l.payMethod,num(l.principal)));
+  state.loanPayments.forEach(p=>add(p.date,p.payMethod,-(num(p.principalPortion)+num(p.interestPortion))));
+  state.capitalTx.forEach(c=>add(c.date,c.method,c.type==='Investment'?num(c.amount):-num(c.amount)));
+  state.transfers.forEach(t=>{ const b=t.from==='bank'; add(t.date,b?'Bank Transfer':'Cash',-num(t.amount)); add(t.date,b?'Cash':'Bank Transfer',num(t.amount)); });
+  return mv;
+}
+function cashBalanceBy(acct,cutoff){
+  const o=opening(), open=acct==='cash'?num(o.cash):num(o.bank);
+  return open+cashMoves().filter(m=>m.acct===acct&&(!cutoff||m.date<=cutoff)).reduce((s,m)=>s+m.amt,0);
+}
+cashBalance = function(cutoff){ return cashBalanceBy('cash',cutoff)+cashBalanceBy('bank',cutoff); };
+
+/* 4. Feed = inventory, expensed when consumed (moving-average cost) */
+function feedAvgCostAt(ft,d){
+  const p=state.feedPurchases.filter(f=>f.feedType===ft&&(!d||f.date<=d)), q=p.reduce((s,f)=>s+num(f.qty),0);
+  return q?p.reduce((s,f)=>s+num(f.qty)*num(f.unitCost),0)/q:0;
+}
+const feedUseCost = r => num(r.qtyUsed)*feedAvgCostAt(r.feedType,r.date);
+const feedUsedInFY = efy => state.feeding.filter(r=>inFY(r.date,efy)).reduce((s,r)=>s+feedUseCost(r),0);
+feedStockValue = function(ft){
+  return feedPurchasedCost(ft)-state.feeding.filter(f=>f.feedType===ft).reduce((s,r)=>s+feedUseCost(r),0);
+};
+const feedBoughtInFY = efy => state.feedPurchases.filter(f=>inFY(f.date,efy)).reduce((s,f)=>s+num(f.qty)*num(f.unitCost),0);
+const oldFeedExpInFY = efy => state.expenses.filter(x=>inFY(x.date,efy)&&x.category==='Feed Purchase').reduce((s,x)=>s+num(x.amount),0);
+
+const _fy = fyReport;
+fyReport = function(efy){
+  const r=_fy(efy), tx=taxProfile(), used=feedUsedInFY(efy);
+  const delta=oldFeedExpInFY(efy)-used;           // profit change from switching to consumption basis
+  r.cop=r.cop.filter(x=>x.cat!=='Feed Purchase'); if(used) r.cop.push({cat:'Feed consumed',amt:used});
+  r.totCop-=delta; r.gross+=delta; r.netBefore+=delta; r.taxable+=delta;
+  r.base=tx.regime==='A'?Math.max(0,r.taxable):r.totRev;
+  r.taxDue=num(tx.taxOverride)>0?num(tx.taxOverride):r.base*num(tx.taxRatePct)/100;
+  r.netAfterTax=r.netBefore-r.taxDue; r.netPayable=r.taxDue-(r.wht+r.advance);
+  return r;
+};
+
+/* 5. Equity without the inventory plug; cash flow uses feed purchases log */
+ownerEquity = function(through,cutoff){ return num(opening().capital)+cashInCapital(cutoff)-cashOutCapital(cutoff)+retainedEarnings(through); };
+const _eq = equityStatementData;
+equityStatementData = function(efy){ const r=_eq(efy); r.inventoryAdj=0; r.closing=r.beforeInventory; return r; };
+const _cf = cashFlowData;
+cashFlowData = function(efy){
+  const r=_cf(efy), d=feedBoughtInFY(efy)-oldFeedExpInFY(efy);
+  r.outExp+=d; r.operating-=d; r.netChange-=d; r.check=r.endCash-(r.beginCash+r.netChange);
+  return r;
+};
+
+/* 6. Classified Balance Sheet (current / non-current) with header and notes */
+const _bs = balanceSheetData;
+balanceSheetData = function(){
+  const b=_bs(), o=opening(), efy=b.efy;
+  b.cashOnHand=cashBalanceBy('cash'); b.bank=cashBalanceBy('bank');
+  b.capital=num(o.capital)+cashInCapital()-cashOutCapital(); b.retained=retainedEarnings(efy);
+  b.currentAssets=b.cashOnHand+b.bank+b.ar+b.feedStock; b.nonCurrentAssets=b.fixedAssetsNBV+b.bioNBV;
+  return b;
+};
+renderBalanceSheetView = function(){
+  const b=balanceSheetData(), o=opening(), tx=taxProfile();
+  const L=(l,a,c)=>`<tr><td class="${c||'ind'}">${escHtml(t(l))}</td><td class="num mono ${c==='tot'?'tot':''}">${fmtMoney(a)}</td></tr>`;
+  const S=l=>`<tr><td class="sec" colspan="2">${t(l)}</td></tr>`;
+  return `
+  <div class="panel no-print"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">${t('Opening balances (before using this app)')}</div>
+    <div class="calc-grid">
+      <label class="calc-field">${t('As of date')}<input type="date" id="openAsOf" value="${escHtml(o.asOfDate)}"></label>
+      <label class="calc-field">Opening cash on hand<input type="number" step="any" id="openCash" value="${escHtml(o.cash)}"></label>
+      <label class="calc-field">Opening cash at bank<input type="number" step="any" id="openBank" value="${escHtml(o.bank||0)}"></label>
+      <label class="calc-field">${t('Opening owner capital / net worth')}<input type="number" step="any" id="openCapital" value="${escHtml(o.capital)}"></label>
+    </div></div></div>
+  <div class="rep-sheet">
+    <div class="rep-head"><h2>${t('Balance Sheet')}</h2><div style="font-size:12.5px;color:var(--ink-soft)">Statement of Financial Position</div></div>
+    <div class="rep-meta">
+      <div><strong>${t('Business name')}:</strong> ${escHtml(tx.businessName)}</div><div><strong>TIN:</strong> ${escHtml(tx.tin)||'—'}</div>
+      <div><strong>${t('As of')}:</strong> ${ethDateStr(todayISO())} (${todayISO()})</div><div><strong>${t('Currency')}:</strong> ETB</div>
+    </div>
+    <div class="tablewrap"><table class="rep-table"><thead><tr><th>${t('Description')}</th><th class="num">${t('Amount')}</th></tr></thead><tbody>
+      ${S('Assets')}${S('Current assets')}
+      ${L('Cash on hand',b.cashOnHand)}${L('Cash at bank',b.bank)}${L('Accounts receivable (customers)',b.ar)}${L('Feed inventory, at cost',b.feedStock)}
+      ${L('Total current assets',b.currentAssets,'tot')}
+      ${S('Non-current assets')}
+      ${L('Biological assets, net (livestock)',b.bioNBV)}${L('Fixed assets, net of depreciation',b.fixedAssetsNBV)}
+      ${L('Total non-current assets',b.nonCurrentAssets,'tot')}
+      ${L('Total assets',b.totalAssets,'tot')}
+      ${S('Liabilities')}
+      ${L('Loans payable',b.loansPayable)}${L('Tax payable (accrued, unpaid)',b.taxPayable)}${L('Total liabilities',b.totalLiabilities,'tot')}
+      ${S("Owner's Equity")}
+      ${L("Owner's capital (opening + investments − drawings)",b.capital)}${L('Retained earnings',b.retained)}${L("Total owner's equity",b.equity,'tot')}
+      ${L('Total liabilities & equity',b.totalLandE,'tot')}
+      ${L('Difference (should be zero)',b.diff)}
+    </tbody></table></div>
+    <div class="section-title">Notes</div>
+    <ol style="font-size:12px;color:var(--ink-soft);line-height:1.6;padding-left:18px;">
+      <li>Basis: accrual; feed inventory at moving-average cost, expensed when consumed.</li>
+      <li>Livestock are carried at cost less amortisation (not IAS 41 fair value). Fixed assets are at cost less depreciation.</li>
+      <li>Loans are shown in total; the current portion (due within 12 months) is not split out.</li>
+      <li>Unsold produce (eggs, honey, etc.), supplier payables and prepaid withholding tax are not recognised.</li>
+    </ol>
+  </div>`;
+};
+const _are = attachReportEvents;
+attachReportEvents = function(){
+  _are();
+  const el=document.getElementById('openBank');
+  if(el) el.addEventListener('change',async()=>{ opening().bank=num(el.value); await saveSetup(); render(); });
+};
+
+/* 7. Cash-flow reconciliation by account + Transfers table on Capital tab */
+const _rcf = renderCashFlowView;
+renderCashFlowView = function(efy){
+  const fs=fyRange(efy)[0], fe=fyRange(efy)[1], R=(a,l)=>`<tr><td class="ind">${l}</td><td class="num mono">${fmtMoney(cashBalanceBy(a,prevDay(fs)))}</td><td class="num mono">${fmtMoney(cashBalanceBy(a,fe))}</td></tr>`;
+  return _rcf(efy)+`<div class="rep-sheet"><div class="section-title" style="margin-top:0">Cash reconciliation</div>
+   <div class="tablewrap"><table class="rep-table"><thead><tr><th></th><th class="num">Start of year</th><th class="num">End of year</th></tr></thead><tbody>${R('cash','Cash on hand')}${R('bank','Cash at bank')}</tbody></table></div></div>`;
+};
+const _rc = renderCapital;
+renderCapital = function(){
+  const rows=state.transfers.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>
+   `<tr><td>${fmtDate(x.date)}</td><td>${x.from==='bank'?'Bank → Cash':'Cash → Bank'}</td><td class="num mono">${fmtMoney(x.amount)}</td><td class="notes-cell">${escHtml(x.notes)}</td>${rowActionsHtml('transfers',x.id)}</tr>`).join('')||emptyRow(5,'No transfers logged yet.');
+  return _rc()+`<div class="pagehead"><div><div class="section-title" style="margin-top:0">Cash / Bank Transfers</div></div><button class="btn btn-primary" id="addTransfers">+ Add transfer</button></div>
+   ${tableShell([{label:'Date'},{label:'Direction'},{label:'Amount',num:true},{label:'Notes'}],rows)}`;
+};
+const _ate = attachTabEvents;
+attachTabEvents = function(){
+  _ate();
+  const b=document.getElementById('addTransfers'); if(b) b.addEventListener('click',()=>openForm('transfers',null));
+};
+render();
+})();
+</script>
+
 </body>
 </html>
