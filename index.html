@@ -285,6 +285,17 @@ let state = {
 let currentTab = 'dashboard';
 let healthSubTab = 'vaccinations';
 let reportsYear = currentEFY();   // Ethiopian fiscal year (EFY), not calendar year
+/* Layer accounting policy for financial statements:
+   'amort' = amortise mature layers over productive life (matching principle)
+   'cost'  = hold at cost until sold/die (no amortisation) — use if tax authority rejects amortisation */
+let bioPolicy = 'amort';
+try{ const bp = localStorage.getItem('gh_bioPolicy'); if(bp==='amort'||bp==='cost') bioPolicy = bp; }catch(e){}
+function setBioPolicy(p){
+  if(p!=='amort' && p!=='cost') return;
+  bioPolicy = p;
+  try{ localStorage.setItem('gh_bioPolicy', p); }catch(e){}
+  render();
+}
 let lang = 'en';
 try{ lang = localStorage.getItem('gh_lang') || 'en'; }catch(e){}
 
@@ -576,11 +587,20 @@ function fyList(){
 /* ---------------- Tax profile (stored inside state.setup so backups/Drive sync include it) ---------------- */
 const COST_OF_PRODUCTION_CATS = ['Feed Used','Livestock Purchase','Vaccination','Medication','Beekeeping Supplies','Shearing/Processing'];
 function taxProfile(){
-  if(!state.setup.tax) state.setup.tax = {businessName:'Green Horizon', tin:'', category:'', taxRatePct:0, taxOverride:0, adj:{}};
+  if(!state.setup.tax) state.setup.tax = {businessName:'Green Horizon', tin:'', category:'', taxRatePct:0, taxOverride:0, adj:{}, vatRegistered:false, vatRatePct:15};
   if(!state.setup.tax.adj) state.setup.tax.adj = {};
   if(!state.setup.tax.regime){ state.setup.tax.regime = 'B'; state.setup.tax.category = 'B'; }
+  if(state.setup.tax.vatRegistered===undefined) state.setup.tax.vatRegistered = false;
+  if(state.setup.tax.vatRatePct===undefined) state.setup.tax.vatRatePct = 15;
   return state.setup.tax;
 }
+function vatRate(){ const tx = taxProfile(); return tx.vatRegistered ? num(tx.vatRatePct)||15 : 0; }
+/** Gross invoice amount (what customer pays). */
+function incomeGross(r){ return num(r.qty)*num(r.unitPrice); }
+/** VAT portion of a sale (0 if not VAT-registered). Prices are treated as VAT-inclusive. */
+function incomeVat(r){ const g = incomeGross(r), rate = vatRate(); return rate>0 ? money2(g * rate/(100+rate)) : 0; }
+/** Net revenue recognised in P&L (ex-VAT when registered). */
+function incomeNet(r){ return money2(incomeGross(r) - incomeVat(r)); }
 function taxAdj(efy){
   const tx = taxProfile();
   if(!tx.adj[efy]) tx.adj[efy] = {depreciation:0, nonDeductible:0, exempt:0, wht:0, advance:0};
@@ -594,7 +614,7 @@ function fyReport(efy){
   const tx = taxProfile(), adj = taxAdj(efy);
   const inc = state.income.filter(r=>inFY(r.date,efy));
   const exp = costRows().filter(r=>inFY(r.date,efy) && !expCapBatch(r));   // capitalised rearing costs are not P&L expenses
-  const revenue = groupByCat(inc, incomeAmount);
+  const revenue = groupByCat(inc, incomeNet);   // net of VAT when registered
   const cop = groupByCat(exp.filter(r=>COST_OF_PRODUCTION_CATS.includes(r.category)), r=>num(r.amount));
   const invChange = 0;   // feed cost is recognised when used, so no year-end inventory adjustment is needed
   const opex = groupByCat(exp.filter(r=>!COST_OF_PRODUCTION_CATS.includes(r.category)), r=>num(r.amount));
@@ -603,17 +623,20 @@ function fyReport(efy){
   const gross = totRev-totCop;
   const dep = assetsDepreciation(efy) + num(adj.depreciation);
   const nonDed = exp.filter(r=>r.nonDeductible==='Yes').reduce((s,r)=>s+num(r.amount),0) + num(adj.nonDeductible);
-  const exempt = inc.filter(r=>r.exempt==='Yes').reduce((s,r)=>s+incomeAmount(r),0) + num(adj.exempt);
+  const exempt = inc.filter(r=>r.exempt==='Yes').reduce((s,r)=>s+incomeNet(r),0) + num(adj.exempt);
   const wht = inc.reduce((s,r)=>s+num(r.whtAmount),0) + num(adj.wht);
   const finance = acctSum(AT.INT, efy), otherInc = acctSum(AT.OINC, efy);
   const gainLoss = state.assets.map(assetDisposal).filter(d=>d && d.fy===efy).reduce((s,d)=>s+d.gl,0);
   const bio = bioFY(efy);
-  const netBefore = gross - totOpex - dep - bio.amort - bio.mort - bio.wo - finance + otherInc + gainLoss;
-  const taxable = netBefore + nonDed - exempt;
-  const base = tx.regime==='A' ? Math.max(0,taxable) : totRev;   // B = presumptive on gross sales, A = net profit
+  const produceChange = produceChangeInFY(efy);
+  const vatOutput = inc.reduce((s,r)=>s+incomeVat(r),0);
+  // Produce inventory change is in accounting profit but excluded from taxable income (unrealised)
+  const netBefore = gross - totOpex - dep - bio.amort - bio.mort - bio.wo - finance + otherInc + gainLoss + produceChange;
+  const taxable = (netBefore - produceChange) + nonDed - exempt;
+  const base = tx.regime==='A' ? Math.max(0,taxable) : totRev;   // B = presumptive on gross sales (ex-VAT), A = net profit
   const taxDue = num(tx.taxOverride)>0 ? num(tx.taxOverride) : base*num(tx.taxRatePct)/100;
   const credits = wht + num(adj.advance);
-  return {bioAmort:bio.amortL,bioAmortO:bio.amortO,bioMort:bio.mortL,bioMortO:bio.mortO,bioWo:bio.woL,bioWoO:bio.woO,revenue,cop,opex,totRev,totCop,totOpex,gross,dep,netBefore,taxable,base,taxDue,nonDed,exempt,wht,advance:num(adj.advance),netPayable:taxDue-credits,finance,otherInc,gainLoss,invChange,netAfter:netBefore-taxDue};
+  return {bioAmort:bio.amortL,bioAmortO:bio.amortO,bioMort:bio.mortL,bioMortO:bio.mortO,bioWo:bio.woL,bioWoO:bio.woO,revenue,cop,opex,totRev,totCop,totOpex,gross,dep,netBefore,taxable,base,taxDue,nonDed,exempt,wht,advance:num(adj.advance),netPayable:taxDue-credits,finance,otherInc,gainLoss,invChange,produceChange,vatOutput,netAfter:netBefore-taxDue};
 }
 
 /* ---------------- Google Drive sync state ---------------- */
@@ -901,6 +924,30 @@ function productValue(product){
   return allProdReductions().filter(p=>p.product===product).reduce((s,p)=>s+num(p.qty)*num(p.unitPrice),0);
 }
 function productStock(product){ return productGoodOutput(product)-productReducedQty(product); }
+/* Unsold produce valuation (Balance Sheet inventory) */
+function produceStockAt(product, asOf){
+  const ok = x => !asOf || (validDate(x.date) && x.date<=asOf);
+  const produced = state.production.filter(x=>x.product===product && ok(x)).reduce((s,x)=>s+num(x.qtyProduced)-num(x.waste),0);
+  const reduced = allProdReductions().filter(x=>x.product===product && ok(x)).reduce((s,x)=>s+num(x.qty),0);
+  return Math.max(0, produced - reduced);
+}
+function produceUnitValue(product){
+  if(!state.setup.produceValues) state.setup.produceValues = {};
+  const man = num(state.setup.produceValues[product]);
+  if(man>0) return man;
+  const sales = state.income.filter(r=>incomeProduct(r)===product && num(r.unitPrice)>0);
+  const q = sales.reduce((s,r)=>s+num(r.qty),0);
+  return q>0 ? sales.reduce((s,r)=>s+num(r.qty)*num(r.unitPrice),0)/q : 0;
+}
+function produceValueAt(asOf){
+  return state.setup.productTypes.reduce((s,p)=>s+produceStockAt(p,asOf)*produceUnitValue(p),0);
+}
+function produceChangeInFY(efy){
+  const r = fyRange(efy);
+  const start = new Date(r[0]); start.setDate(start.getDate()-1);
+  const prev = start.toISOString().slice(0,10);
+  return money2(produceValueAt(r[1]) - produceValueAt(prev));
+}
 
 function feedPurchasedQty(ft){ return state.feedPurchases.filter(f=>f.feedType===ft).reduce((s,f)=>s+num(f.qty),0); }
 function feedPurchasedCost(ft){ return state.feedPurchases.filter(f=>f.feedType===ft).reduce((s,f)=>s+num(f.qty)*num(f.unitCost),0); }
@@ -934,8 +981,8 @@ function feedStockAsOf(ft, date, excludeUseId){
   return q;
 }
 
-function incomeAmount(r){ return num(r.qty)*num(r.unitPrice); }
-function totalIncomeAll(){ return state.income.reduce((s,r)=>s+incomeAmount(r),0); }
+function incomeAmount(r){ return incomeGross(r); }  // gross (customer invoice) — used for AR / payments
+function totalIncomeAll(){ return state.income.reduce((s,r)=>s+incomeNet(r),0); }  // net of VAT for dashboard KPIs
 function expensedList(){ return costRows().filter(r=>!expCapBatch(r)); }   // capitalised rearing costs are assets, not expenses
 function bioChargesSum(pred){ return bioCharges().filter(pred).reduce((s,c)=>s+c.amt,0); }
 function totalExpensesAll(){ const t0 = todayISO(); return expensedList().reduce((s,r)=>s+num(r.amount),0) + bioChargesSum(c=>c.date<=t0); }
@@ -1180,12 +1227,18 @@ function renderProduction(){
 
 /* ================= PRODUCT STOCK (Production Reductions + Inventory) ================= */
 function renderProdStock(){
-  const invRows = state.setup.productTypes.map(p=>`
-    <tr><td>${escHtml(p)}</td><td class="num mono">${fmtNum(productGoodOutput(p))}</td>
-    <td class="num mono">${fmtNum(productReducedQty(p))}</td>
-    <td class="num mono"><strong>${fmtNum(productStock(p))}</strong></td>
-    <td class="num mono">${fmtMoney(productValue(p))}</td></tr>`
-  ).join('') || emptyRow(5,'No product types configured.');
+  const invRows = state.setup.productTypes.map(p=>{
+    const st = productStock(p), uv = produceUnitValue(p);
+    const man = num((state.setup.produceValues||{})[p]);
+    return `<tr><td>${escHtml(p)}</td>
+      <td class="num mono">${fmtNum(productGoodOutput(p))}</td>
+      <td class="num mono">${fmtNum(productReducedQty(p))}</td>
+      <td class="num mono"><strong>${fmtNum(st)}</strong></td>
+      <td class="num mono">${fmtMoney(productValue(p))}</td>
+      <td class="num"><input type="number" step="any" min="0" data-produce-price="${escHtml(p)}" value="${man||''}" placeholder="${uv?uv.toFixed(2):'0'}" style="width:100px;padding:5px 7px;border:1px solid var(--rule);border-radius:6px;text-align:right;"></td>
+      <td class="num mono">${fmtMoney(uv)}</td>
+      <td class="num mono"><strong>${fmtMoney(st*uv)}</strong></td></tr>`;
+  }).join('') || emptyRow(8,'No product types configured.');
 
   const rows = allProdReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const body = rows.length ? rows.map(r=>`
@@ -1198,9 +1251,10 @@ function renderProdStock(){
     </tr>`).join('') : emptyRow(8,'No product reductions logged yet.');
 
   return `
-  <div class="pagehead"><div><h1>Product Stock</h1><p>Auto-calculated stock, plus the sales/consumption log behind it.</p></div></div>
+  <div class="pagehead"><div><h1>Product Stock</h1><p>Auto-calculated stock, plus the sales/consumption log behind it. Unsold stock is valued on the Balance Sheet.</p></div></div>
   <div class="section-title" style="margin-top:0">Current Stock by Product</div>
-  ${tableShell([{label:'Product'},{label:'Produced',num:true},{label:'Reduced',num:true},{label:'Current Stock',num:true},{label:'Value Sold/Used',num:true}], invRows)}
+  ${tableShell([{label:'Product'},{label:'Produced',num:true},{label:'Reduced',num:true},{label:'Current Stock',num:true},{label:'Value Sold/Used',num:true},{label:'Your price (optional)',num:true},{label:'Price used',num:true},{label:'Stock value (BS)',num:true}], invRows)}
+  <p class="note">Price used = your price if entered, otherwise the average sale price from Income. Leave blank for products you never sell. Change in stock value appears on the P&amp;L but is <strong>not taxable</strong> until sold.</p>
   <div class="pagehead" style="margin-top:6px;">
     <div><div class="section-title" style="margin-top:0">Reductions Log</div><p style="margin:-4px 0 0;color:var(--ink-soft);font-size:12.5px;">Consumed, spoiled, broken or given away. Sales are entered in Income and appear here automatically.</p></div>
     <button class="btn btn-primary" id="addProdReductions">+ Add reduction</button>
@@ -1621,16 +1675,16 @@ const TERM_LONG = 'Long-term (over 1 year)', TERM_SHORT = 'Short-term (within 1 
 const PAY_PAID = 'Paid (cash / bank)', PAY_UNPAID = 'Unpaid (on credit)', PAY_OWNER = 'Paid personally by owner';
 const FUND_PAID = 'Paid (cash / bank)', FUND_CREDIT = 'Supplier credit (unpaid)', FUND_OWNER = 'Contributed by owner (in kind)', FUND_OPEN = 'Owned before using this app (opening balance)';
 const ACCT_NAMES = {
-  '1000':'Cash and bank', '1100':'Accounts receivable (net of customer advances)', '1150':'Withholding tax receivable', '1200':'Feed inventory',
+  '1000':'Cash and bank', '1100':'Accounts receivable (net of customer advances)', '1150':'Withholding tax receivable', '1200':'Feed inventory', '1250':'Agricultural produce inventory (eggs, honey, etc.)',
   '1500':'Fixed assets — cost', '1510':'Accumulated depreciation',
   '1600':'Biological assets — immature layers (at cost)', '1610':'Biological assets — mature layers (cost)', '1620':'Accumulated amortisation — mature layers', '1650':'Other livestock (goats, sheep, oxen) — cost', '1660':'Accumulated amortisation — other livestock',
-  '2000':'Accounts payable — suppliers', '2050':'Payable to asset suppliers', '2100':'Loans payable — short-term', '2150':'Loans payable — long-term', '2300':'Income tax payable',
+  '2000':'Accounts payable — suppliers', '2050':'Payable to asset suppliers', '2100':'Loans payable — short-term', '2150':'Loans payable — long-term', '2210':'VAT payable / (receivable)', '2300':'Income tax payable',
   '3000':"Owner's capital", '3100':"Owner's drawings",
-  '4000':'Sales revenue', '4900':'Other income', '5000':'Cost of production', '5100':'Change in feed inventory',
+  '4000':'Sales revenue', '4900':'Other income', '4950':'Change in agricultural produce inventory (unrealised)', '5000':'Cost of production', '5100':'Change in feed inventory',
   '6000':'Operating expenses', '6100':'Depreciation', '6110':'Amortisation of mature layers', '6120':'Amortisation of other livestock', '6400':'Poultry mortality expense', '6410':'Carrying value of birds sold / culled / lost', '6420':'Other livestock mortality expense', '6430':'Carrying value of other livestock sold / culled / lost', '6200':'Finance costs (loan interest)', '6900':'Gain / (loss) on disposal of assets', '8000':'Income tax expense'
 };
-const PL_ACCTS = ['4000','4900','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900','8000'];
-const PL_PRETAX = ['4000','4900','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900'];
+const PL_ACCTS = ['4000','4900','4950','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900','8000'];
+const PL_PRETAX = ['4000','4900','4950','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900'];
 
 let _canon = {};
 function defaultOwnerName(){ return String((state.setup.acctOpts && state.setup.acctOpts.ownerName) || '').trim() || 'Owner'; }
@@ -1711,12 +1765,16 @@ function bioAccts(b){
 function bioParams(b){
   if(isLayerFlock(b)){
     const lay = num(b.layingAgeMonths)>0 ? Math.round(num(b.layingAgeMonths)) : DEFAULT_LAYING_AGE;
-    const am  = num(b.amortMonths)>0 ? Math.round(num(b.amortMonths)) : DEFAULT_AMORT_MONTHS;
+    // When policy is 'cost', force amortisation to 0 so statements hold layers at cost until disposal
+    let am = num(b.amortMonths)>0 ? Math.round(num(b.amortMonths)) : DEFAULT_AMORT_MONTHS;
+    if(bioPolicy==='cost') am = 0;
     const age0 = Math.max(0, Math.round(num(b.ageMonthsAtPurchase)));
     const born = validDate(b.dateAcquired) ? addMonthsISO(b.dateAcquired, -age0) : null;
     return {lay, am, age0, born, mature: born ? addMonthsISO(born, lay) : null};
   }
-  return {lay:0, am: Math.max(0, Math.round(num(b.amortMonthsOther))), age0:0, born:b.dateAcquired, mature: validDate(b.dateAcquired) ? b.dateAcquired : null};
+  let amO = Math.max(0, Math.round(num(b.amortMonthsOther)));
+  if(bioPolicy==='cost') amO = 0;
+  return {lay:0, am: amO, age0:0, born:b.dateAcquired, mature: validDate(b.dateAcquired) ? b.dateAcquired : null};
 }
 /* Is this cost eligible to be capitalised into a layer flock that is still under laying age? */
 function expEligibleBatch(r){
@@ -1871,12 +1929,13 @@ function buildJournal(sel){
     if(lines.length) J.push({date,desc,src,kind,cf,lines});
   };
 
-  /* --- sales --- */
+  /* --- sales (gross invoice; VAT extracted when registered; revenue = net) --- */
   state.income.forEach(r=>{
     if(!validDate(r.date) || r.date>end) return;
-    const amt = incomeAmount(r), paid = incomePaidAmt(r), w = whtRecognisedOnSale(r);
+    const gross = incomeGross(r), paid = incomePaidAmt(r), w = whtRecognisedOnSale(r);
+    const vat = incomeVat(r), net = money2(gross - vat);
     add(r.date, 'Sale: '+(r.description||r.category||''), 'income', 'sale', 'op',
-      [drcr('1000',paid-w), drcr('1150',w), drcr('1100',amt-paid), drcr('4000',-amt)]);
+      [drcr('1000',paid-w), drcr('1150',w), drcr('1100',gross-paid), drcr('4000',-net), drcr('2210',-vat)]);
   });
   /* --- customer payments --- */
   state.payments.forEach(p=>{
@@ -1978,10 +2037,12 @@ function buildJournal(sel){
       case AT.OPLOAN:add(d,'Opening loan owed — '+lenderName(x),'acct','oploan','open',[drcr('3000',amt,partyName('')),drcr(loanAcctFor(x),-amt)]); break;
     }
   });
-  /* --- fiscal-year-end entries: manual adjustments, tax, feed inventory --- */
+  /* --- fiscal-year-end entries: produce inventory, manual adjustments, tax --- */
   const first = Math.min(acctFirstFY(), sel);
   for(let fy=first; fy<=sel; fy++){
     const fe = fyRange(fy)[1], adj = taxAdj(fy), rep = fyReport(fy);
+    const pch = produceChangeInFY(fy);
+    if(Math.abs(pch)>0.005) add(fe,'Change in agricultural produce inventory '+fy+' EFY','adj','produce',null,[drcr('1250',pch),drcr('4950',-pch)]);
     add(fe,'Manual depreciation adjustment '+fy+' EFY','adj','dep',null,[drcr('6100',num(adj.depreciation)),drcr('1510',-num(adj.depreciation))]);
     add(fe,'Manual withholding tax adjustment '+fy+' EFY','adj','adjwht','op',[drcr('1150',num(adj.wht)),drcr('1000',-num(adj.wht))]);
     add(fe,'Income tax for '+fy+' EFY','tax','tax',null,[drcr('8000',rep.taxDue),drcr('2300',-rep.taxDue)]);
@@ -2010,13 +2071,16 @@ function balanceSheet(sel){
   const J = buildJournal(sel), cc = fyRange(sel)[1], B = a=>bal(J,[a],cc), o = {};
   o.rawCash = B('1000'); o.cash = Math.max(o.rawCash,0); o.overdraft = Math.max(-o.rawCash,0);
   const sp = receivablesSplit(cc); o.ar = sp.ar; o.adv = sp.adv;
-  o.wht = B('1150'); o.inv = B('1200');
+  o.wht = B('1150'); o.inv = B('1200'); o.produce = B('1250');
   const taxNet = -B('2300'); o.taxPay = Math.max(taxNet,0); o.taxRefund = Math.max(-taxNet,0);
+  const vatNet = -B('2210'); o.vatPay = Math.max(vatNet,0); o.vatRecv = Math.max(-vatNet,0);
   o.fixedCost = B('1500'); o.accDep = -B('1510'); o.fixedNet = o.fixedCost - o.accDep;
   o.ap = -B('2000'); o.apA = -B('2050'); o.loanS = -B('2100'); o.loanL = -B('2150');
   o.bioImm = B('1600'); o.bioMatCost = B('1610'); o.bioAccAmort = -B('1620'); o.bioMatNet = o.bioMatCost - o.bioAccAmort; o.bioNet = o.bioImm + o.bioMatNet;
-  o.ca = o.cash + o.ar + o.wht + o.taxRefund + o.inv; o.livCost = B('1650'); o.livAcc = -B('1660'); o.livNet = o.livCost - o.livAcc; o.ta = o.ca + o.fixedNet + o.bioNet + o.livNet;
-  o.cl = o.overdraft + o.ap + o.apA + o.adv + o.taxPay + o.loanS; o.tl = o.cl + o.loanL;
+  o.ca = o.cash + o.ar + o.wht + o.taxRefund + o.inv + o.produce + o.vatRecv;
+  o.livCost = B('1650'); o.livAcc = -B('1660'); o.livNet = o.livCost - o.livAcc;
+  o.ta = o.ca + o.fixedNet + o.bioNet + o.livNet;
+  o.cl = o.overdraft + o.ap + o.apA + o.adv + o.taxPay + o.vatPay + o.loanS; o.tl = o.cl + o.loanL;
   o.capital = -B('3000'); o.profitCum = -bal(J,PL_ACCTS,cc); o.drawCum = B('3100');
   o.retained = o.profitCum - o.drawCum; o.te = o.capital + o.retained;
   o.loans = o.loanS + o.loanL; o.check = o.ta - o.tl - o.te; o.J = J;
@@ -2237,7 +2301,7 @@ function renderBalanceSheet(efy){
   const Rif = (label,key)=>{ if(Math.abs(c[key])>0.005 || Math.abs(p[key])>0.005) R(label,key); };
   rows.push(repSec('ASSETS',3));
   rows.push(repSec('Current assets',3));
-  R('Cash and bank','cash'); R('Accounts receivable (customers)','ar'); Rif('Withholding tax receivable','wht'); Rif('Income tax refundable','taxRefund'); Rif('Feed inventory','inv');
+  R('Cash and bank','cash'); R('Accounts receivable (customers)','ar'); Rif('Withholding tax receivable','wht'); Rif('Income tax refundable','taxRefund'); Rif('VAT receivable','vatRecv'); Rif('Feed inventory','inv'); Rif('Agricultural produce inventory (eggs, honey, etc.)','produce');
   R('Total current assets','ca','tot');
   rows.push(repSec('Non-current assets',3));
   R('Fixed assets at cost','fixedCost'); rows.push(repLine2('Less: accumulated depreciation', -c.accDep, -p.accDep));
@@ -2255,7 +2319,7 @@ function renderBalanceSheet(efy){
   R('TOTAL ASSETS','ta','tot');
   rows.push(repSec('LIABILITIES',3));
   rows.push(repSec('Current liabilities',3));
-  Rif('Bank overdraft (negative cash)','overdraft'); R('Accounts payable (suppliers)','ap'); Rif('Payable to asset suppliers','apA'); Rif('Customer advances / deposits','adv'); Rif('Income tax payable','taxPay'); R('Loans payable — short-term','loanS');
+  Rif('Bank overdraft (negative cash)','overdraft'); R('Accounts payable (suppliers)','ap'); Rif('Payable to asset suppliers','apA'); Rif('Customer advances / deposits','adv'); Rif('VAT payable','vatPay'); Rif('Income tax payable','taxPay'); R('Loans payable — short-term','loanS');
   R('Total current liabilities','cl','tot');
   rows.push(repSec('Non-current liabilities',3));
   R('Loans payable — long-term','loanL');
@@ -2425,6 +2489,9 @@ function renderReports(){
     console.error(err);
     body = `<div class="panel"><div class="panel-pad" style="color:var(--clay);">⚠ Could not build this report: ${escHtml(err.message)}</div></div>`;
   }
+  const policyNote = bioPolicy==='amort'
+    ? 'Layers are amortised over productive life (matching principle).'
+    : 'Layers held at cost until sold or die (no amortisation) — for tax authority if amortisation is rejected.';
   return `
   <div class="pagehead no-print">
     <div><h1>${t('Financial Report')}</h1><p>${t('Fiscal year')} ${efy} EFY</p></div>
@@ -2433,6 +2500,14 @@ function renderReports(){
       <button class="btn btn-primary" id="printReport">🖨 ${t('Print / Save PDF')}</button>
     </div>
   </div>
+  <div class="panel no-print" style="margin-bottom:12px;"><div class="panel-pad" style="padding:10px 14px;">
+    <div style="font-weight:700;color:var(--green-dark);margin-bottom:6px;">Livestock accounting policy (affects all statements)</div>
+    <div class="toggle-row" style="margin:0;">
+      <button class="toggle-btn${bioPolicy==='amort'?' active':''}" id="bioPolicyAmort">Amortise layers</button>
+      <button class="toggle-btn${bioPolicy==='cost'?' active':''}" id="bioPolicyCost">Hold at cost (no amortisation)</button>
+    </div>
+    <p class="note" style="margin:6px 0 0;">${policyNote} Switch and print both versions if needed.</p>
+  </div></div>
   <div class="toggle-row no-print" style="flex-wrap:wrap;">${tabs}</div>
   ${body}`;
 }
@@ -2465,7 +2540,15 @@ function renderPLBody(efy){
       </label>
       ${inp('taxRatePct','Tax rate (%)',tx.taxRatePct)}
       ${inp('taxOverride','Tax override (ETB)',tx.taxOverride)}
+      <label class="calc-field">VAT registered?
+        <select id="taxVatRegistered">
+          <option value="No" ${!tx.vatRegistered?'selected':''}>No</option>
+          <option value="Yes" ${tx.vatRegistered?'selected':''}>Yes</option>
+        </select>
+      </label>
+      ${inp('taxVatRatePct','VAT rate (%)',tx.vatRatePct)}
     </div>
+    <p class="note">When VAT is registered, sale prices are treated as VAT-inclusive: revenue on the P&amp;L is net of VAT and VAT payable appears on the Balance Sheet. Primary agricultural produce is often VAT-exempt — confirm with your advisor.</p>
     <div class="section-title">${t('Adjustments for this year')} (${efy} EFY)</div>
     <div class="calc-grid">
       ${inp('adjDepreciation','Other depreciation (manual)',adj.depreciation)}
@@ -2496,10 +2579,12 @@ function renderPLBody(efy){
         ${sec('5. Depreciation')}${line(t('5. Depreciation'), r.dep)}${Math.abs(r.bioAmort)>0.005 ? line(t('Amortisation of mature layers (biological assets)'), r.bioAmort) : ''}${Math.abs(r.bioAmortO)>0.005 ? line(t('Amortisation of other livestock (goats, sheep, oxen)'), r.bioAmortO) : ''}
         ${sec('5b. Finance costs and other items')}${line(t('Finance costs (loan interest)'), r.finance)}${line(t('Other income (grants, interest earned)'), r.otherInc)}${line(t('Gain / (loss) on disposal of assets'), r.gainLoss)}
         ${(bioBatches().length || Math.abs(r.bioMort)+Math.abs(r.bioWo)+Math.abs(r.bioMortO)+Math.abs(r.bioWoO)>0.005) ? sec('5c. Livestock mortality and write-offs')+line(t('Poultry mortality expense (deaths)'), r.bioMort)+line(t('Carrying value of birds sold / culled / lost'), r.bioWo)+line(t('Other livestock mortality expense (deaths)'), r.bioMortO)+line(t('Carrying value of other livestock sold / culled / lost'), r.bioWoO) : ''}
+        ${Math.abs(r.produceChange)>0.005 ? sec('5d. Agricultural produce inventory')+line(t('Change in agricultural produce inventory (unrealised)'), r.produceChange) : ''}
         ${sec('6. Net profit / (loss) before tax')}${line(t('6. Net profit / (loss) before tax'), r.netBefore,'tot')}
+        <tr><td class="ind" style="font-style:italic;color:var(--ink-soft);" colspan="2">Livestock policy: ${bioPolicy==='amort'?'Amortise layers':'Hold at cost (no amortisation)'}${tx.vatRegistered?' · VAT registered ('+num(tx.vatRatePct)+'%)':''}</td></tr>
         ${tx.regime==='A'
-          ? sec('7. Tax adjustments')+line(t('Add: non-deductible expenses'), r.nonDed)+line(t('Less: exempt income'), r.exempt)+sec('8. Taxable income')+line(t('8. Taxable income'), r.taxable,'tot')
-          : sec('Presumptive tax on gross sales')+line(t('Gross sales (tax base)'), r.totRev,'tot')}
+          ? sec('7. Tax adjustments')+line(t('Add: non-deductible expenses'), r.nonDed)+line(t('Less: exempt income'), r.exempt)+line(t('Less: change in produce inventory (not taxable until sold)'), r.produceChange)+sec('8. Taxable income')+line(t('8. Taxable income'), r.taxable,'tot')
+          : sec('Presumptive tax on gross sales')+line(t('Gross sales (tax base, ex-VAT)'), r.totRev,'tot')}
         <tr><td class="ind">${t('Tax rate (%)')}</td><td class="num mono">${num(tx.taxOverride)>0?'—':num(tx.taxRatePct)+'%'}</td></tr>
         ${line(t('Tax due'), r.taxDue,'tot')}
         ${line(t('Net profit / (loss) after tax'), r.netAfter,'tot')}
@@ -2527,6 +2612,12 @@ function attachReportEvents(){
   bind('taxRegime', v=>{ tx.regime=v; tx.category=v; });
   bind('taxRatePct', v=>tx.taxRatePct=num(v));
   bind('taxOverride', v=>tx.taxOverride=num(v));
+  bind('taxVatRegistered', v=>{ tx.vatRegistered = (v==='Yes'); });
+  bind('taxVatRatePct', v=>tx.vatRatePct=num(v));
+  const ba = document.getElementById('bioPolicyAmort');
+  if(ba) ba.addEventListener('click', ()=>setBioPolicy('amort'));
+  const bc = document.getElementById('bioPolicyCost');
+  if(bc) bc.addEventListener('click', ()=>setBioPolicy('cost'));
   bind('adjDepreciation', v=>taxAdj(reportsYear).depreciation=num(v));
   bind('adjNonDeductible', v=>taxAdj(reportsYear).nonDeductible=num(v));
   bind('adjExempt', v=>taxAdj(reportsYear).exempt=num(v));
@@ -3506,6 +3597,15 @@ function attachTabEvents(){
     if(!state.setup.acctOpts) state.setup.acctOpts = {};
     state.setup.acctOpts.feedInventory = e.target.checked;
     await saveSetup(); render();
+  });
+
+  document.querySelectorAll('[data-produce-price]').forEach(el=>{
+    el.addEventListener('change', async ()=>{
+      if(!state.setup.produceValues) state.setup.produceValues = {};
+      state.setup.produceValues[el.dataset.producePrice] = num(el.value);
+      await saveSetup();
+      render();
+    });
   });
 
   if(currentTab==='reports') attachReportEvents();
