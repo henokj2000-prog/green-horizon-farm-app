@@ -2796,6 +2796,21 @@ function renderSetup(){
       <input type="file" id="importFileInput" accept="application/json" style="display:none;">
     </div>
   </div></div>
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">Archive old years</div>
+    <p class="note" style="margin:4px 0 12px;">Keep the live app light: download a file of everything up to the end of a fiscal year, then optionally remove those old transactions from this device. Batches, customers and assets stay; livestock quantities are adjusted so current stock stays correct.</p>
+    <div class="calc-grid" style="margin-bottom:12px;">
+      <label class="calc-field">Archive through end of EFY
+        <select id="archiveEfySelect">${fyList().map(y=>`<option value="${y}" ${y===currentEFY()-1?'selected':''}>${y} EFY (ends ${fyRange(y)[1]})</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="archiveExportBtn">⬇ Download archive only</button>
+      <button class="btn btn-danger" id="archivePurgeBtn">⬇ Download archive &amp; remove from this device</button>
+    </div>
+    <p class="note" style="margin:10px 0 0;">Always keep the downloaded archive file somewhere safe. Removal cannot be undone except by importing a backup.</p>
+  </div></div>
   ${lists}
   <div class="danger-zone">
     <h3>Danger zone</h3>
@@ -3533,6 +3548,88 @@ function exportBackup(){
 
 const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','assets','customers','payments','comments','inquiries','acct'];
 
+/* Entities with a date field that can be archived by fiscal year */
+const ARCHIVE_DATE_FIELDS = {
+  reductions:'date', production:'date', prodReductions:'date',
+  feedPurchases:'date', feeding:'date', income:'date', expenses:'date',
+  vaccinations:'date', medications:'date', payments:'date', comments:'date',
+  inquiries:'date', acct:'date'
+};
+
+function downloadJson(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+function buildArchivePayload(efy){
+  const cutoff = fyRange(efy)[1];
+  const payload = {
+    app:'Green Horizon Farm Manager',
+    type:'year-archive',
+    archivedThroughEFY: efy,
+    cutoffDate: cutoff,
+    exportedAt: new Date().toISOString(),
+    setup: state.setup,
+    calc: state.calc,
+    livestock: state.livestock.slice(),
+    customers: state.customers.slice(),
+    assets: state.assets.slice()
+  };
+  Object.keys(ARCHIVE_DATE_FIELDS).forEach(k=>{
+    const field = ARCHIVE_DATE_FIELDS[k];
+    payload[k] = (state[k]||[]).filter(r=>r[field] && r[field]<=cutoff);
+  });
+  return payload;
+}
+
+function exportYearArchive(efy){
+  const payload = buildArchivePayload(efy);
+  downloadJson(payload, `green-horizon-archive-through-EFY${efy}-${todayISO()}.json`);
+  showToast('Archive downloaded (through '+efy+' EFY)');
+}
+
+/** Remove archived transactions from live state; adjust livestock initialQty so current stock stays correct. */
+async function purgeArchivedYear(efy){
+  const cutoff = fyRange(efy)[1];
+  // 1) Freeze livestock qty as of cutoff, then drop old reductions
+  state.livestock.forEach(b=>{
+    const qtyAtCutoff = num(b.initialQty) - allReductions().filter(r=>r.batchId===b.batchId && r.date && r.date<=cutoff).reduce((s,r)=>s+num(r.qty),0);
+    b.initialQty = Math.max(0, qtyAtCutoff);
+    // Optional note for audit trail
+    if(!b.notes) b.notes = '';
+    if(b.notes.indexOf('[Archived through')<0) b.notes = (b.notes?b.notes+' ':'')+'[Archived through EFY '+efy+'; opening qty reset to stock at '+cutoff+']';
+  });
+  // 2) Remove date-bound records on or before cutoff
+  Object.keys(ARCHIVE_DATE_FIELDS).forEach(k=>{
+    const field = ARCHIVE_DATE_FIELDS[k];
+    state[k] = (state[k]||[]).filter(r=>!(r[field] && r[field]<=cutoff));
+  });
+  // 3) Persist
+  await Promise.all([saveEntity('livestock'), ...Object.keys(ARCHIVE_DATE_FIELDS).map(k=>saveEntity(k))]);
+  await refreshCapFlags();
+}
+
+async function archiveYearFlow(purge){
+  const sel = document.getElementById('archiveEfySelect');
+  const efy = sel ? parseInt(sel.value,10) : currentEFY()-1;
+  if(!efy || isNaN(efy)){ say('Choose a fiscal year to archive.'); return; }
+  const cutoff = fyRange(efy)[1];
+  if(purge){
+    if(!ask('This will:\n1) Download an archive of all transactions up to '+cutoff+' (end of '+efy+' EFY)\n2) REMOVE those transactions from this device\n3) Reset each livestock batch opening qty to the stock level on that date\n\nCustomers, assets and batches stay. Continue?')) return;
+    if(!ask('Final confirmation: remove archived data from this device? Keep the downloaded file safe — this cannot be undone otherwise.')) return;
+    exportYearArchive(efy);
+    await purgeArchivedYear(efy);
+    render();
+    showToast('Archived through '+efy+' EFY and removed from this device');
+  }else{
+    exportYearArchive(efy);
+  }
+}
+
 async function importBackupFile(file){
   let data;
   try{
@@ -3621,6 +3718,11 @@ function attachTabEvents(){
       importInput.value = '';
     });
   }
+  // Archive old years
+  const archExp = document.getElementById('archiveExportBtn');
+  if(archExp) archExp.addEventListener('click', ()=>archiveYearFlow(false));
+  const archPurge = document.getElementById('archivePurgeBtn');
+  if(archPurge) archPurge.addEventListener('click', ()=>archiveYearFlow(true));
 
   // Google Drive sync
   const saveClientIdBtn = document.getElementById('saveDriveClientId');
