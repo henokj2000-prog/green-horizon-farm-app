@@ -1279,7 +1279,33 @@ function render(){
   translateDom(c);
   attachTabEvents();
   wireTableTools();
+  fitMoneyTexts(c);
 }
+
+/** Shrink ETB / number text so it stays on one line inside its card. */
+function fitMoneyTexts(root){
+  const scope = root || document;
+  const els = scope.querySelectorAll('.kpi-value, .branch-card .br-val');
+  els.forEach(el=>{
+    el.style.fontSize = '';
+    el.style.whiteSpace = 'nowrap';
+    const box = el.closest('.kpi-card') || el.parentElement;
+    if(!box) return;
+    const maxW = Math.max(40, (box.clientWidth || 0) - 24);
+    let size = parseFloat(getComputedStyle(el).fontSize) || 20;
+    const min = 10;
+    // Binary-ish shrink until it fits
+    while(el.scrollWidth > maxW && size > min){
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+  });
+}
+// Re-fit on window resize
+window.addEventListener('resize', ()=>{
+  clearTimeout(window._fitMoneyT);
+  window._fitMoneyT = setTimeout(()=>fitMoneyTexts(document.getElementById('content')), 100);
+});
 
 /* ---------------- Shared table helpers ---------------- */
 /** Smart table: horizontal + vertical scroll, sticky header, search, optional row limit with "Show more".
