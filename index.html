@@ -117,15 +117,15 @@ a{color:var(--green);}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
 .kpi-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);min-width:0;overflow:hidden;}
 .kpi-label{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;font-weight:600;line-height:1.35;white-space:normal;word-break:break-word;hyphens:auto;}
-.kpi-value{font-size:clamp(14px,2.8vw,20px);font-weight:600;margin-top:6px;color:var(--green-dark);line-height:1.2;overflow-wrap:anywhere;word-break:break-word;}
+.kpi-value{font-size:20px;font-weight:600;margin-top:6px;color:var(--green-dark);line-height:1.15;white-space:nowrap;overflow:hidden;display:block;max-width:100%;}
 .kpi-value.neg{color:var(--clay);}
 .branch-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px;}
 .branch-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);min-width:0;}
 .branch-card h3{margin:0 0 10px;font-size:15px;color:var(--green-dark);font-family:'Space Grotesk',sans-serif;word-break:break-word;}
-.branch-card .br-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--rule);}
+.branch-card .br-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--rule);min-width:0;}
 .branch-card .br-row:last-child{border-bottom:none;}
 .branch-card .br-label{color:var(--ink-soft);min-width:0;flex:1;word-break:break-word;}
-.branch-card .br-val{font-family:ui-monospace,monospace;font-weight:600;color:var(--green-dark);text-align:right;white-space:nowrap;}
+.branch-card .br-val{font-family:ui-monospace,monospace;font-weight:600;color:var(--green-dark);text-align:right;white-space:nowrap;overflow:hidden;flex-shrink:1;min-width:0;max-width:65%;}
 .branch-card .br-val.neg{color:var(--clay);}
 .branch-card .br-status{display:inline-block;margin-top:8px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
 .branch-card .br-status.ok{background:#DCEBDD;color:var(--green-dark);}
@@ -527,7 +527,87 @@ Object.assign(AM, {
   'ASSETS':'ንብረት','LIABILITIES':'ዕዳዎች',"OWNER'S EQUITY":'የባለቤት ካፒታል','Current assets':'የአጭር ጊዜ ንብረት','Non-current assets':'የረጅም ጊዜ ንብረት',
   'Current liabilities':'የአጭር ጊዜ ዕዳዎች','Non-current liabilities':'የረጅም ጊዜ ዕዳዎች','OPERATING ACTIVITIES':'የሥራ እንቅስቃሴዎች','INVESTING ACTIVITIES':'የኢንቨስትመንት እንቅስቃሴዎች',
   'FINANCING ACTIVITIES':'የፋይናንስ እንቅስቃሴዎች','As at':'እስከ','Debit':'ዴቢት','Credit':'ክሬዲት','Account':'ሂሳብ','Code':'ኮድ','Total':'ጠቅላላ',
-  'Net profit / (loss) after tax':'የተጣራ ትርፍ / (ኪሳራ) ከግብር በኋላ','Retained earnings':'የተጠራቀመ ትርፍ',"Owner's capital":'የባለቤት ካፒታል','Loans outstanding':'ያልተከፈሉ ብድሮች'
+  'Net profit / (loss) after tax':'የተጣራ ትርፍ / (ኪሳራ) ከግብር በኋላ','Retained earnings':'የተጠራቀመ ትርፍ',"Owner's capital":'የባለቤት ካፒታል','Loans outstanding':'ያልተከፈሉ ብድሮች',
+  /* --- branches & dashboard --- */
+  'Branch':'ቅርንጫፍ','Branches':'ቅርንጫፎች','Main':'ዋና','Branch / farm site':'ቅርንጫፍ / የእርሻ ቦታ',
+  'Branches / farm sites (each gets its own batch numbers from 001)':'ቅርንጫፎች / የእርሻ ቦታዎች (እያንዳንዱ ከ 001 የራሱ ቡድን ቁጥር ይጀምራል)',
+  'Status by branch':'ሁኔታ በቅርንጫፍ','Farm-wide overview and status by branch.':'የመላው እርሻ አጠቃላይ እይታ እና ሁኔታ በቅርንጫፍ።',
+  'Livestock (head)':'እንስሳት (ጭንቅላት)','Active batches':'ንቁ ቡድኖች','Feed stock (kg)':'የመኖ ክምችት (ኪ.ግ)','Egg stock':'የእንቁላል ክምችት',
+  'Income':'ገቢ','Expenses':'ወጪዎች','Net profit':'የተጣራ ትርፍ','YTD net':'እስከ አሁን የዓመቱ ትርፍ','Receivables':'ተቀባይ ሂሳቦች',
+  'Cash & bank':'ጥሬ ገንዘብና ባንክ','Loans':"ብድሮች","Owner's equity":'የባለቤት ካፒታል',
+  'On track':'በመንገድ ላይ','No activity':'እንቅስቃሴ የለም','Loss':'ኪሳራ','Break-even':'እኩልነት','Profit':'ትርፍ',
+  'Add branches in Setup to see per-site status.':'በቅንብር ውስጥ ቅርንጫፎችን ጨምረው የእያንዳንዱን ቦታ ሁኔታ ይመልከቱ።',
+  'Branch profitability':'የቅርንጫፍ ትርፋማነት','Branch / batch profitability':'የቅርንጫፍ / ቡድን ትርፋማነት',
+  'Stock now':'አሁን ያለ ክምችት','Revenue':'ገቢ','Health':'ጤና','Other costs':'ሌሎች ወጪዎች','Bio / purchase':'ባዮ / ግዢ',
+  'Total cost':'ጠቅላላ ወጪ','Profit / (loss)':'ትርፍ / (ኪሳራ)','Margin':'ሕዳግ','Type':'ዓይነት','Batch':'ቡድን',
+  '(Not tagged to a batch)':'(ለቡድን ያልተመደበ)','(Not tagged to a branch)':'(ለቅርንጫፍ ያልተመደበ)',
+  /* --- feed / stock by branch --- */
+  'Feed Stock by Branch':'የመኖ ክምችት በቅርንጫፍ','Feed stock is separate per branch':'የመኖ ክምችት በቅርንጫፍ ተለይቷል',
+  'Branch (feed stock is separate per branch)':'ቅርንጫፍ (የመኖ ክምችት በቅርንጫፍ ተለይቷል)',
+  'Branch (stock is separate per branch)':'ቅርንጫፍ (ክምችት በቅርንጫፍ ተለይቷል)',
+  'Branch (required — separate books per site)':'ቅርንጫፍ (አስፈላጊ — ለእያንዳንዱ ቦታ የተለየ መዝገብ)',
+  'Feed stock is separate for each branch. Buy feed under a branch, then feed only from that branch’s stock. Enter total kg for day / week / bi-week / month.':'የመኖ ክምችት ለእያንዳንዱ ቅርንጫፍ ተለይቷል። መኖን በቅርንጫፍ ይግዙ፣ ከዚያ ከዚያ ቅርንጫፍ ክምችት ብቻ ይመግቡ። ለቀን / ሳምንት / ሁለት ሳምንት / ወር ጠቅላላ ኪ.ግ ያስገቡ።',
+  'Purchased (kg)':'የተገዛ (ኪ.ግ)','Used (kg)':'የተጠቀመ (ኪ.ግ)','Current Stock (kg)':'አሁን ያለ ክምችት (ኪ.ግ)','Avg Cost/kg':'አማካይ ወጪ/ኪ.ግ','Stock Value':'የክምችት ዋጋ',
+  'Feed Purchases':'የመኖ ግዢዎች','Feeding Log':'የመመገብ መዝገብ','Period':'ጊዜ','Qty Used (kg)':'የተጠቀመ ብዛት (ኪ.ግ)','Cost expensed':'እንደ ወጪ የተመዘገበ',
+  'Day':'ቀን','Week':'ሳምንት','Bi-week':'ሁለት ሳምንት','Month':'ወር','Per day':'በቀን','Per week':'በሳምንት','Per bi-week':'በሁለት ሳምንት','Per month':'በወር',
+  'This quantity covers':'ይህ ብዛት የሚሸፍነው','Total quantity used for that period (kg)':'ለዚያ ጊዜ የተጠቀመ ጠቅላላ ብዛት (ኪ.ግ)',
+  'Date (end of the period, or the day fed)':'ቀን (የጊዜው መጨረሻ ወይም የተመገበበት ቀን)',
+  'Batch/Herd ID (sets branch automatically)':'የቡድን/መንጋ መለያ (ቅርንጫፍ በራስ-ሰር ይወሰናል)',
+  'Batch/Herd ID (sets branch)':'የቡድን/መንጋ መለያ (ቅርንጫፍ ይወሰናል)',
+  /* --- purchase / forms --- */
+  'What are you buying / paying for?':'ምን እየገዙ / እየከፈሉ ነው?','Feed':'መኖ','Livestock':'እንስሳት','Vaccine':'ክትባት','Medication':'መድኃኒት','Other':'ሌላ',
+  'Animals (new batch / herd)':'እንስሳት (አዲስ ቡድን / መንጋ)','Feed type':'የመኖ ዓይነት','Quantity bought (kg)':'የተገዛ ብዛት (ኪ.ግ)',
+  'Price per kg (ETB)':'ዋጋ በኪ.ግ (ብር)','Animal type':'የእንስሳት ዓይነት',
+  'Batch code (auto: BRANCH-ANIMAL-001… per branch)':'የቡድን ኮድ (በራስ-ሰር: ቅርንጫፍ-እንስሳ-001… በቅርንጫፍ)',
+  'Batch code (auto-generated from animal type)':'የቡድን ኮድ (ከእንስሳት ዓይነት በራስ-ሰር)',
+  'Select branch and animal type':'ቅርንጫፍና የእንስሳት ዓይነት ይምረጡ','Select animal type first':'መጀመሪያ የእንስሳት ዓይነት ይምረጡ',
+  'Breed/Type':'ዝርያ/ዓይነት','Bought from':'ከማን ተገዛ','Number of animals bought':'የተገዙ እንስሳት ብዛት','Price per animal (ETB)':'ዋጋ በአንድ እንስሳ (ብር)',
+  'Buy as a layer flock (biological asset)?':'እንደ እንቁላል ጣይ መንጋ (ባዮሎጂካል ንብረት) ይግዙ?',
+  'Age of the birds when bought (weeks)':'ወፎቹ ሲገዙ ያላቸው ዕድሜ (ሳምንታት)',
+  'Age of the birds when acquired (weeks)':'ወፎቹ ሲገኙ ያላቸው ዕድሜ (ሳምንታት)',
+  'Age at onset of laying (weeks) — about 20–24 is typical':'እንቁላል መጣል የሚጀምሩበት ዕድሜ (ሳምንታት) — አብዛኛውን ጊዜ 20–24',
+  'Amortise over (months) — 12 to 18 is typical':'በ (ወራት) ይከፋፈል — አብዛኛውን ጊዜ 12 እስከ 18',
+  'Amortise the locked cost over (months) — 12 to 18 is typical':'የተቆለፈውን ወጪ በ (ወራት) ይከፋፈሉ — አብዛኛውን ጊዜ 12 እስከ 18',
+  'Amortise over (months) — 0 = keep at cost until sold or lost':'በ (ወራት) ይከፋፈል — 0 = እስከ ሽያጭ ወይም ጥፋት በዋጋ ይቆይ',
+  'Expense category (Labor, Utilities, Rent…)':'የወጪ ምድብ (ሠራተኛ፣ ፍጆታ፣ ኪራይ…)',
+  'Amount (ETB)':'መጠን (ብር)','Receipt / Invoice No.':'ደረሰኝ / ደረሰኝ ቁጥር','Supplier name / TIN':'የአቅራቢ ስም / ቲን',
+  'Non-deductible for tax?':'ለግብር የማይቀነስ?',
+  'Batch / flock at this branch (optional detail)':'በዚህ ቅርንጫፍ ያለ ቡድን / መንጋ (አማራጭ ዝርዝር)',
+  'Also capitalise into young layer asset? (default No = expense on P&L)':'ወደ ወጣት እንቁላል ጣይ ንብረት ይካተት? (ነባሪ አይ = በትርፍና ኪሳራ እንደ ወጪ)',
+  'Payment status':'የክፍያ ሁኔታ','Paid':'ተከፍሏል','Unpaid / credit':'ያልተከፈለ / ብድር','Paid by owner':'በባለቤት የተከፈለ',
+  'What are you selling?':'ምን እየሸጡ ነው?','Which batch / herd are the animals sold from?':'እንስሳቱ ከየትኛው ቡድን / መንጋ ይሸጣሉ?',
+  'Batch detail (optional)':'የቡድን ዝርዝር (አማራጭ)',
+  'Branch / batch this sale belongs to (for profitability)':'ይህ ሽያጭ የሚገኝበት ቅርንጫፍ / ቡድን (ለትርፋማነት)',
+  'Quantity (units sold — this reduces stock automatically)':'ብዛት (የተሸጠ — ክምችት በራስ-ሰር ይቀንሳል)',
+  'Unit Price (ETB)':'የአንዱ ዋጋ (ብር)','Paid in full':'ሙሉ በሙሉ ተከፍሏል','Partial / Credit':'ከፊል / ብድር',
+  'Amount received now (ETB) — only if Partial/Credit':'አሁን የተቀበለ መጠን (ብር) — ከፊል/ብድር ከሆነ ብቻ',
+  'Buyer name / TIN (if no customer record)':'የገዢ ስም / ቲን (የደንበኛ መዝገብ ከሌለ)',
+  'Withholding tax deducted by buyer (ETB)':'በገዢ የተቀነሰ የምንጭ ታክስ (ብር)',
+  'Tax-exempt income?':'ከግብር ነፃ ገቢ?',
+  'Customer (optional)':'ደንበኛ (አማራጭ)','Customers':'ደንበኞች','Customer name':'የደንበኛ ስም','Phone':'ስልክ','Customer Types':'የደንበኛ ዓይነቶች',
+  /* --- livestock table --- */
+  'Batch code':'የቡድን ኮድ','Book treatment':'የመዝገብ አያያዝ','Age (weeks for poultry / days others)':'ዕድሜ (ሳምንት ለዶሮ / ቀን ለሌሎች)',
+  'Reductions':'ቅናሾች','Asset — layers':'ንብረት — እንቁላል ጣዮች','Asset — livestock':'ንብረት — እንስሳት','Expensed':'እንደ ወጪ',
+  'No batches yet. Buy animals under Expenses & Purchases → Livestock (choose branch; batch code is auto).':'እስካሁን ቡድን የለም። እንስሳትን በወጪዎችና ግዢዎች → እንስሳት ይግዙ (ቅርንጫፍ ይምረጡ፤ የቡድን ኮድ በራስ-ሰር ነው)።',
+  'Track as layer flock (biological asset)?':'እንደ እንቁላል ጣይ መንጋ (ባዮሎጂካል ንብረት) ይከታተሉ?',
+  'Total purchase cost (ETB) — enter 0 if not bought (e.g. born on the farm)':'ጠቅላላ የግዢ ወጪ (ብር) — ካልተገዛ 0 ያስገቡ (ለምሳሌ በእርሻ የተወለደ)',
+  'How was it paid for?':'እንዴት ተከፍሏል?','Paid from farm cash':'ከእርሻ ጥሬ ገንዘብ ተከፍሏል','Bought on credit':'በብድር ተገዛ','Paid by owner (capital)':'በባለቤት ተከፍሏል (ካፒታል)','Opening balance / gift':'መክፈቻ ቀሪ / ስጦታ',
+  /* --- reports --- */
+  'How this works:':'እንዴት እንደሚሰራ:','Contribution by branch / batch for':'አስተዋጽኦ በቅርንጫፍ / ቡድን ለ',
+  'Each branch has its own batch numbers (ADD-POU-001, BIS-POU-001…). Tag income and costs to a batch; the branch comes from that batch. Shared costs with no batch appear under “(Not tagged to a batch)”.':'እያንዳንዱ ቅርንጫፍ የራሱ የቡድን ቁጥሮች አሉት። ገቢና ወጪን ለቡድን ይመድቡ፤ ቅርንጫፉ ከቡድኑ ይመጣል። ቡድን የሌላቸው የጋራ ወጪዎች በ«(ለቡድን ያልተመደበ)» ስር ይታያሉ።',
+  'No batch-tagged activity in this year. Tag sales and costs with a batch to see profitability.':'በዚህ ዓመት ለቡድን የተመደበ እንቅስቃሴ የለም። ትርፋማነትን ለማየት ሽያጭና ወጪን ለቡድን ይመድቡ።',
+  'Search…':'ፈልግ…','Show more':'ተጨማሪ አሳይ','Show less':'ያነሰ አሳይ',
+  'Paid':'ተከፍሏል','Unpaid':'ያልተከፈለ','Partial':'ከፊል','Credit':'ብድር',
+  'Vaccine name':'የክትባት ስም','Medication name':'የመድኃኒት ስም','Dosage':'መጠን','Dose':'መጠን','Disease':'በሽታ',
+  'Administered by':'የሰጠው','Administered By':'የሰጠው','Cost (ETB)':'ወጪ (ብር)',
+  'Batch/Herd vaccinated':'የተከተበ ቡድን/መንጋ','Batch/Herd treated':'የታከመ ቡድን/መንጋ',
+  'Quantity Produced':'የተመረተ ብዛት','Waste/Loss':'ቆሻሻ/ጥፋት','Unit (count/kg/liters)':'መለኪያ (ብዛት/ኪ.ግ/ሊትር)',
+  'Product Reduction (no sales — enter sales in Income)':'የምርት ቅናሽ (ሽያጭ አይደለም — ሽያጭን በገቢ ያስገቡ)',
+  'Income Entry':'የገቢ መግቢያ','Purchase / Expense':'ግዢ / ወጪ','Feeding Entry':'የመመገብ መግቢያ','Feed Purchase':'የመኖ ግዢ',
+  'Production Entry':'የምርት መግቢያ','Batch / Herd':'ቡድን / መንጋ',
+  'Select branch and animal type':'ቅርንጫፍና የእንስሳት ዓይነት ይምረጡ',
+  'Auto from branch + animal type':'ከቅርንጫፍ + የእንስሳት ዓይነት በራስ-ሰር',
+  'Payment':'ክፍያ','Booked as':'እንደ','expense':'ወጪ','asset':'ንብረት'
 });
 function trStr(raw){
   if(raw===undefined || raw===null) return null;
@@ -535,9 +615,21 @@ function trStr(raw){
   if(!s) return null;
   if(Object.prototype.hasOwnProperty.call(AM, s)) return AM[s];
   for(const p of AM_PATTERNS){ const m = s.match(p[0]); if(m){ const out = p[1](m); if(out!==null && out!==undefined) return out; } }
+  // Translate known segments inside longer labels (e.g. "Branch · Breed")
+  if(s.includes(' — ') || s.includes(' · ')){
+    const parts = s.split(/( — | · )/);
+    let changed = false;
+    const out = parts.map(p=>{
+      if(p===' — ' || p===' · ') return p;
+      if(Object.prototype.hasOwnProperty.call(AM, p)){ changed = true; return AM[p]; }
+      const m = p.match(AM_PATTERNS.find(x=>x[0].test(p))?.[0]);
+      return p;
+    });
+    if(changed) return out.join('');
+  }
   return null;
 }
-function amFinish(s){ return s.replace(/\bETB\b/g,'ብር').replace(/(\d{4}) EFY/g,'$1 ዓ.ም'); }
+function amFinish(s){ return s.replace(/\bETB\b/g,'ብር').replace(/(\d{4}) EFY/g,'$1 ዓ.ም').replace(/\bEFY\b/g,'ዓ.ም'); }
 function tr(raw){ if(lang!=='am') return raw; const o = trStr(raw); return amFinish(o!==null ? o : String(raw)); }
 function t(k){ return tr(k); }
 function ask(msg){ return confirm(tr(msg)); }
@@ -546,8 +638,14 @@ function say(msg){ alert(tr(msg)); }
 /* Translate everything visible inside a container (called after each render when Amharic is selected) */
 function translateDom(root){
   if(lang!=='am' || !root) return;
-  // 1) elements that mix text with child elements (e.g. "Go to <a>…</a> and create…") – matched as one sentence with {0},{1} placeholders
-  root.querySelectorAll('li,p,div,span,label,td').forEach(el=>{
+  // 0) option elements (select dropdowns) – text content only
+  root.querySelectorAll('option').forEach(opt=>{
+    const raw = opt.textContent; if(!raw || !raw.trim()) return;
+    const o = trStr(raw);
+    if(o!==null) opt.textContent = amFinish(o);
+  });
+  // 1) elements that mix text with child elements
+  root.querySelectorAll('li,p,div,span,label,td,th,h1,h2,h3,button,a,legend,summary').forEach(el=>{
     let hasEl=false, hasTxt=false;
     el.childNodes.forEach(n=>{ if(n.nodeType===1) hasEl=true; else if(n.nodeType===3 && n.nodeValue.trim()) hasTxt=true; });
     if(!(hasEl && hasTxt)) return;
@@ -3610,16 +3708,16 @@ function fieldHTML(f, value){
     const optHtml = opts.map(o=>{
       const ov = (typeof o==='object') ? o.value : o;
       const ol = (typeof o==='object') ? o.label : o;
-      return `<option value="${escHtml(ov)}" ${String(val)===String(ov)?'selected':''}>${escHtml(ol)}</option>`;
+      return `<option value="${escHtml(ov)}" ${String(val)===String(ov)?'selected':''}>${escHtml(t(String(ol)))}</option>`;
     }).join('');
-    return `<label${dfor}>${escHtml(f.label)}${f.required?' *':''}<select name="${f.name}"${req}><option value="">-- select --</option>${optHtml}</select></label>`;
+    return `<label${dfor}>${escHtml(t(f.label))}${f.required?' *':''}<select name="${f.name}"${req}><option value="">${escHtml(t('-- select --'))}</option>${optHtml}</select></label>`;
   }
   if(f.type==='textarea'){
-    return `<label${dfor}>${escHtml(f.label)}<textarea name="${f.name}">${escHtml(val)}</textarea></label>`;
+    return `<label${dfor}>${escHtml(t(f.label))}<textarea name="${f.name}">${escHtml(val)}</textarea></label>`;
   }
   const stepAttr = f.type==='number' ? ' step="any"' : '';
-  const placeholder = f.placeholder ? ` placeholder="${escHtml(f.placeholder)}"` : '';
-  return `<label${dfor}>${escHtml(f.label)}${f.required?' *':''}<input type="${f.type}" name="${f.name}" value="${escHtml(val)}"${stepAttr}${placeholder}${req}></label>`;
+  const ph = f.placeholder ? ` placeholder="${escHtml(t(f.placeholder))}"` : '';
+  return `<label${dfor}>${escHtml(t(f.label))}${f.required?' *':''}<input type="${f.type}" name="${f.name}" value="${escHtml(val)}"${stepAttr}${ph}${req}></label>`;
 }
 
 function openForm(formKey, existingId){
@@ -3629,7 +3727,7 @@ function openForm(formKey, existingId){
   root.innerHTML = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal">
-        <h2>${record?'Edit ':'Add '}${cfg.title}</h2>
+        <h2>${escHtml(t((record?'Edit ':'Add ')+cfg.title))}</h2>
         <form id="entityForm">
           ${cfg.fields.map(f=>fieldHTML(f, record ? record[f.name] : undefined)).join('')}
           <div class="modal-actions">
