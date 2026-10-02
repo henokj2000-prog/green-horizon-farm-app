@@ -282,7 +282,8 @@ const DEFAULT_SETUP = {
   diseases:["Newcastle Disease","Coccidiosis","Fowl Typhoid","Infectious Bronchitis","Avian Influenza","Fowl Pox","Mastitis","Foot Rot","PPR (Peste des Petits Ruminants)","Foot & Mouth Disease","Bloat","Internal Parasites/Worms","Varroa Mites","Nosema","Anaplasmosis"],
   animalTypes:["Poultry","Bees","Goats","Sheep","Oxen"],
   productTypes:["Eggs","Honey","Milk","Wool","Manure"],
-  customerTypes:["Retail / Walk-in","Wholesale / Shop","Distributor","Institution","Other"]
+  customerTypes:["Retail / Walk-in","Wholesale / Shop","Distributor","Institution","Other"],
+  branches:["Main"]   // farm sites — each gets its own batch sequence starting at 001
 };
 
 const REDUCTION_REASONS = ["Death","Cull","Swarm Lost","Transfer Out","Theft/Loss","Other"];   // sales are recorded in Income only
@@ -676,19 +677,55 @@ function saveDriveConfigLocal(){
 function uid(){ return 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 /* Auto batch codes: Poultry→POU-001, Bees→BEE-001, Goats→GOA-001, Sheep→SHE-001, Oxen→OXE-001 */
 const BATCH_PREFIX = {Poultry:'POU', Bees:'BEE', Goats:'GOA', Sheep:'SHE', Oxen:'OXE'};
+function ensureBranches(){
+  if(!state.setup.branches || !Array.isArray(state.setup.branches) || !state.setup.branches.length){
+    state.setup.branches = ['Main'];
+  }
+  return state.setup.branches;
+}
 function batchPrefix(animalType){
   if(BATCH_PREFIX[animalType]) return BATCH_PREFIX[animalType];
   const s = String(animalType||'').replace(/[^A-Za-z]/g,'').toUpperCase();
   return (s.slice(0,3) || 'BAT');
 }
-function nextBatchId(animalType){
-  const pref = batchPrefix(animalType);
+/** Short unique code for a branch name (e.g. Addis → ADD, Bishoftu → BIS). */
+function branchCode(branchName){
+  const name = String(branchName||'').trim() || 'Main';
+  const cleaned = name.replace(/[^A-Za-z0-9]/g,'').toUpperCase() || 'MAIN';
+  const base = cleaned.slice(0,3).padEnd(3,'X');
+  const branches = ensureBranches();
+  const collisions = branches.filter(b=>{
+    const c = String(b).replace(/[^A-Za-z0-9]/g,'').toUpperCase() || 'MAIN';
+    return c.slice(0,3).padEnd(3,'X') === base;
+  });
+  if(collisions.length <= 1) return base;
+  const idx = Math.max(0, collisions.indexOf(name));
+  return (cleaned.slice(0,2) + String(idx+1)).slice(0,3).toUpperCase();
+}
+/**
+ * Auto batch code per branch + animal type, each branch counting from 001.
+ * Format: BRANCH-ANIMAL-###  e.g. ADD-POU-001, BIS-POU-001
+ */
+function nextBatchId(animalType, branchName){
+  const br = String(branchName||'').trim() || (ensureBranches()[0]||'Main');
+  const bc = branchCode(br);
+  const ap = batchPrefix(animalType);
+  const fullPref = bc + '-' + ap;
   let max = 0;
   state.livestock.forEach(b=>{
-    const m = String(b.batchId||'').match(new RegExp('^'+pref+'-(\\d+)$','i'));
+    // Prefer matching same branch field when present
+    if(b.branch && String(b.branch).trim() === br && batchPrefix(b.animalType) === ap){
+      const m = String(b.batchId||'').match(/(\d+)\s*$/);
+      if(m) max = Math.max(max, parseInt(m[1],10));
+      return;
+    }
+    const m = String(b.batchId||'').match(new RegExp('^'+fullPref.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'-(\\d+)$','i'));
     if(m) max = Math.max(max, parseInt(m[1],10));
   });
-  return pref + '-' + String(max+1).padStart(3,'0');
+  return fullPref + '-' + String(max+1).padStart(3,'0');
+}
+function branchOptions(){
+  return ensureBranches().map(b=>({value:b, label:b}));
 }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function num(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
@@ -782,7 +819,10 @@ async function initApp(){
   const seeds = isFirstRun ? seedExamples() : {};
 
   state.setup = setup || JSON.parse(JSON.stringify(DEFAULT_SETUP));
+  if(!state.setup.branches || !state.setup.branches.length) state.setup.branches = ['Main'];
   state.livestock = livestock || seeds.livestock || [];
+  // Backfill branch on old batches that have none
+  state.livestock.forEach(b=>{ if(!b.branch) b.branch = 'Main'; });
   state.reductions = reductions || seeds.reductions || [];
   state.production = production || seeds.production || [];
   state.prodReductions = prodReductions || seeds.prodReductions || [];
@@ -1224,6 +1264,7 @@ function renderLivestock(){
   const rows = livestockComputed();
   const body = rows.length ? rows.map(r=>`
     <tr>
+      <td>${escHtml(r.branch||'—')}</td>
       <td>${escHtml(r.animalType)}</td>
       <td class="mono">${escHtml(r.batchId)}</td>
       <td>${escHtml(r.breed)}</td>
@@ -1238,7 +1279,7 @@ function renderLivestock(){
       <td><span class="tag ${r.status==='Active'?'tag-active':'tag-closed'}">${r.status}</span></td>
       <td class="notes-cell">${escHtml(r.notes)}</td>
       ${rowActionsHtml('livestock', r.id)}
-    </tr>`).join('') : emptyRow(14,'No batches yet. Buy animals under Expenses & Purchases → Livestock (batch code is generated automatically).');
+    </tr>`).join('') : emptyRow(15,'No batches yet. Buy animals under Expenses & Purchases → Livestock (choose branch; batch code is auto).');
 
   const redRows = allReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const wo = bioWriteOffByReduction();
@@ -1261,7 +1302,7 @@ function renderLivestock(){
     </div>
   </div>
   ${tableShell([
-    {label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
+    {label:'Branch'},{label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
     {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (weeks for poultry / days others)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
     {label:'Status'},{label:'Notes'}
   ], body, {id:'tbl_livestock_batches'})}
@@ -2595,20 +2636,34 @@ function incomeBranchId(r){
 function branchProfitData(efy){
   const map = {};
   const ensure = (id, meta)=>{
-    if(!map[id]) map[id] = {id, rev:0, feed:0, health:0, opex:0, cop:0, bio:0, purchase:0, qty:0, animalType:'', breed:'', label:id};
-    if(meta){ if(meta.animalType) map[id].animalType = meta.animalType; if(meta.breed!==undefined) map[id].breed = meta.breed; if(meta.qty!==undefined) map[id].qty = meta.qty; if(meta.label) map[id].label = meta.label; }
+    if(!map[id]) map[id] = {id, branch:'', rev:0, feed:0, health:0, opex:0, cop:0, bio:0, purchase:0, qty:0, animalType:'', breed:'', label:id};
+    if(meta){
+      if(meta.animalType) map[id].animalType = meta.animalType;
+      if(meta.breed!==undefined) map[id].breed = meta.breed;
+      if(meta.qty!==undefined) map[id].qty = meta.qty;
+      if(meta.label) map[id].label = meta.label;
+      if(meta.branch) map[id].branch = meta.branch;
+    }
     return map[id];
   };
   state.livestock.forEach(b=>{
-    ensure(b.batchId, {animalType:b.animalType, breed:b.breed||'', qty:batchCurrentQty(b.batchId), label:b.batchId+' — '+(b.breed||b.animalType)});
+    ensure(b.batchId, {
+      animalType:b.animalType, breed:b.breed||'', qty:batchCurrentQty(b.batchId),
+      branch:b.branch||'', label:b.batchId+' — '+(b.breed||b.animalType),
+    });
   });
-  ensure('_unallocated', {animalType:'—', breed:'', qty:0, label:'(Not tagged to a branch)'});
+  ensure('_unallocated', {animalType:'—', breed:'', qty:0, branch:'—', label:'(Not tagged to a batch)'});
 
   state.income.filter(r=>inFY(r.date, efy)).forEach(r=>{
-    ensure(incomeBranchId(r) || '_unallocated').rev += incomeNet(r);
+    const id = incomeBranchId(r) || '_unallocated';
+    const m = ensure(id);
+    if(!m.branch && id!=='_unallocated') m.branch = branchOfBatch(id);
+    m.rev += incomeNet(r);
   });
   costRows().filter(r=>inFY(r.date, efy) && !expCapBatch(r)).forEach(r=>{
-    const m = ensure(r.batchId || '_unallocated');
+    const id = r.batchId || '_unallocated';
+    const m = ensure(id);
+    if(!m.branch && id!=='_unallocated') m.branch = branchOfBatch(id);
     const a = num(r.amount);
     if(r.category==='Feed Used') m.feed += a;
     else if(r.category==='Vaccination' || r.category==='Medication') m.health += a;
@@ -2616,9 +2671,10 @@ function branchProfitData(efy){
     else m.opex += a;
   });
   bioCharges().filter(c=>inFY(c.date, efy)).forEach(c=>{
-    ensure(c.batchId || '_unallocated').bio += c.amt;
+    const m = ensure(c.batchId || '_unallocated');
+    if(!m.branch && c.batchId) m.branch = branchOfBatch(c.batchId);
+    m.bio += c.amt;
   });
-  // Non-asset livestock purchases (e.g. broilers expensed) charged to that batch
   state.livestock.filter(b=>!isBioBatch(b) && num(b.purchaseCost)>0 && inFY(b.dateAcquired, efy)).forEach(b=>{
     ensure(b.batchId).purchase += num(b.purchaseCost);
   });
@@ -2634,6 +2690,8 @@ function branchProfitData(efy){
     .sort((a,b)=>{
       if(a.id==='_unallocated') return 1;
       if(b.id==='_unallocated') return -1;
+      const br = String(a.branch).localeCompare(String(b.branch));
+      if(br) return br;
       return b.profit - a.profit;
     });
 }
@@ -2642,6 +2700,7 @@ function renderBranchProfit(efy){
   const tot = rows.reduce((s,r)=>({rev:s.rev+r.rev, cost:s.cost+r.totalCost, profit:s.profit+r.profit}), {rev:0,cost:0,profit:0});
   const body = rows.length ? rows.map(r=>`
     <tr>
+      <td>${escHtml(r.branch||'—')}</td>
       <td class="mono">${escHtml(r.label)}</td>
       <td>${escHtml(r.animalType||'—')}</td>
       <td class="num mono">${r.id==='_unallocated'?'—':fmtNum(r.qty)}</td>
@@ -2653,8 +2712,8 @@ function renderBranchProfit(efy){
       <td class="num mono">${fmtMoney(r.totalCost)}</td>
       <td class="num mono"><strong style="color:${r.profit>=0?'var(--green-dark)':'var(--clay)'}">${fmtMoney(r.profit)}</strong></td>
       <td class="num mono">${r.margin===null?'—':r.margin.toFixed(1)+'%'}</td>
-    </tr>`).join('') : emptyRow(11,'No branch-tagged activity in this year. Tag sales and costs with a batch to see profitability.');
-  const totRow = `<tr class="tot"><td colspan="3">Total</td>
+    </tr>`).join('') : emptyRow(12,'No batch-tagged activity in this year. Tag sales and costs with a batch to see profitability.');
+  const totRow = `<tr class="tot"><td colspan="4">Total</td>
     <td class="num mono tot">${fmtMoney(tot.rev)}</td><td colspan="4"></td>
     <td class="num mono tot">${fmtMoney(tot.cost)}</td>
     <td class="num mono tot">${fmtMoney(tot.profit)}</td>
@@ -2665,16 +2724,15 @@ function renderBranchProfit(efy){
     ${repHeader('Branch / batch profitability', efy, true)}
     <div class="tablewrap"><table class="rep-table">
       <thead><tr>
-        <th>Branch / batch</th><th>Type</th><th class="num">Stock now</th>
+        <th>Branch</th><th>Batch</th><th>Type</th><th class="num">Stock now</th>
         <th class="num">Revenue</th><th class="num">Feed</th><th class="num">Health</th>
         <th class="num">Other costs</th><th class="num">Bio / purchase</th>
         <th class="num">Total cost</th><th class="num">Profit / (loss)</th><th class="num">Margin</th>
       </tr></thead>
       <tbody>${body}${rows.length?totRow:''}</tbody>
     </table></div>
-    <p class="note"><strong>How this works:</strong> Revenue and costs are grouped by the batch/branch you select when recording.
-    Tag <em>Income</em> with “Branch / batch”, tag <em>expenses / labor / utilities</em> with the same batch, and feed/health logs already require a batch.
-    Rows with no tag appear under “(Not tagged to a branch)”. Shared head-office costs stay unallocated unless you assign them.</p>
+    <p class="note"><strong>How this works:</strong> Each branch has its own batch numbers (ADD-POU-001, BIS-POU-001…). Tag income and costs to a batch; the branch comes from that batch.
+    Shared costs with no batch appear under “(Not tagged to a batch)”.</p>
     ${repFooter()}
   </div>`;
 }
@@ -2851,6 +2909,7 @@ function styleNetPanel(){
 
 /* ================= SETUP ================= */
 const SETUP_LISTS = [
+  {key:'branches', label:'Branches / farm sites (each gets its own batch numbers from 001)'},
   {key:'incomeCats', label:'Income Categories'},
   {key:'expenseCats', label:'Expense Categories'},
   {key:'feedTypes', label:'Feed Types'},
@@ -3065,13 +3124,14 @@ async function submitPurchase(rec){
   }
   else if(k==='Livestock'){
     if(!rec.l_type) return 'Choose the animal type.';
+    const branch = String(rec.l_branch||'').trim() || (ensureBranches()[0]||'Main');
+    if(!ensureBranches().includes(branch) && branch) ensureBranches().push(branch);
     let batchCode = String(rec.l_batch||'').trim();
-    if(!batchCode) batchCode = nextBatchId(rec.l_type);
-    // Guard against rare collision if two tabs race
-    if(state.livestock.some(b=>b.batchId===batchCode)) batchCode = nextBatchId(rec.l_type);
+    if(!batchCode) batchCode = nextBatchId(rec.l_type, branch);
+    if(state.livestock.some(b=>b.batchId===batchCode)) batchCode = nextBatchId(rec.l_type, branch);
     const qty = num(rec.l_qty), unit = num(rec.l_unit);
     if(!(qty>0)) return 'Enter how many animals were bought.';
-    const r = {id:uid(), animalType:rec.l_type, batchId:batchCode, breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
+    const r = {id:uid(), animalType:rec.l_type, branch:branch, batchId:batchCode, breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
       purchaseCost:money2(qty*unit), fundedBy:fundFromPay(rec.l_pay), bio:rec.l_type==='Poultry' ? (rec.l_bio||'No') : 'No',
       ageWeeksAtPurchase:num(rec.l_age), layingAgeWeeks:num(rec.l_lay)||DEFAULT_LAYING_AGE_WEEKS, amortMonths:num(rec.l_amort), amortMonthsOther:num(rec.l_amortO), notes:rec.l_notes||''};
     msg = livestockValidate(r); if(msg) return msg;
@@ -3109,15 +3169,18 @@ function purchaseFormHook(root){
   const hint = document.createElement('div'); hint.className = 'note'; hint.style.cssText = 'font-weight:600;margin:6px 0 10px;';
   const acts = root.querySelector('.modal-actions'); if(acts) acts.before(hint);
   const batchEl = q('l_batch');
-  if(batchEl){ batchEl.readOnly = true; batchEl.style.background = 'var(--surface-alt)'; batchEl.placeholder = 'Auto-generated'; }
+  if(batchEl){ batchEl.readOnly = true; batchEl.style.background = 'var(--surface-alt)'; batchEl.placeholder = 'Auto from branch + animal type'; }
   const assignBatch = ()=>{
     if(!batchEl) return;
-    const t = v('l_type');
-    if(t) batchEl.value = nextBatchId(t);
+    const t = v('l_type'), br = v('l_branch');
+    if(t && br) batchEl.value = nextBatchId(t, br);
+    else if(t) batchEl.value = nextBatchId(t, ensureBranches()[0]||'Main');
     else batchEl.value = '';
   };
   const typeEl = q('l_type');
   if(typeEl) typeEl.addEventListener('change', assignBatch);
+  const branchEl = q('l_branch');
+  if(branchEl) branchEl.addEventListener('change', assignBatch);
   const kindEl = q('kind');
   if(kindEl) kindEl.addEventListener('change', ()=>{ if(v('kind')==='Livestock') assignBatch(); });
   const upd = ()=>{
@@ -3126,15 +3189,15 @@ function purchaseFormHook(root){
       const tot = num(v('f_qty'))*num(v('f_unit')), ft = v('f_type');
       h = 'Total: '+fmtMoney(tot)+'.'+(ft ? ' Feed stock now '+fmtNum(feedStock(ft))+' kg → '+fmtNum(feedStock(ft)+num(v('f_qty')))+' kg.' : '')+' Booked as feed inventory (asset); it becomes a cost when fed out.';
     }else if(k==='Livestock'){
-      if(!v('l_batch') && v('l_type')) assignBatch();
-      const tot = num(v('l_qty'))*num(v('l_unit')), t = v('l_type');
+      assignBatch();
+      const tot = num(v('l_qty'))*num(v('l_unit')), t = v('l_type'), br = v('l_branch')||'Main';
       const how = (t==='Poultry' && v('l_bio')==='Yes') ? 'an asset — layer flock (immature layers until laying age, then amortised)' : ASSET_ANIMALS.includes(t) ? 'an asset — livestock, kept at cost' : 'an expense (cost of production)';
-      h = 'Batch code: '+(v('l_batch')||'—')+' (auto). Total: '+fmtMoney(tot)+'. Adds '+fmtNum(num(v('l_qty')))+' animals. Booked as '+how+'.';
+      h = 'Branch: '+br+'. Batch code: '+(v('l_batch')||'—')+' (auto, this branch starts counting from 001). Total: '+fmtMoney(tot)+'. Booked as '+how+'.';
     }else if(k==='Vaccine' || k==='Medication'){
       h = 'Booked as an expense now — or capitalised into the flock’s asset if it is a layer flock still under laying age. Cost is logged in the Health tab.';
     }else if(k==='Other'){
       const cat = v('o_cat'), bat = v('o_batch');
-      h = (cat||'This cost')+(bat?' for '+bat:'')+' is recorded as an expense on the P&L by default. Pick the branch/batch to identify the farm unit. Capitalise only if you explicitly choose Auto for a young layer rearing cost.';
+      h = (cat||'This cost')+(bat?' for '+bat:'')+' is recorded as an expense on the P&L by default. Pick the batch (which includes its branch). Capitalise only if you explicitly choose Auto for a young layer rearing cost.';
     }
     hint.textContent = h;
   };
@@ -3175,7 +3238,14 @@ function incomeFormHook(root, record){
 }
 
 function batchOptions(){
-  return state.livestock.map(b=>({value:b.batchId, label:`${b.batchId} — ${b.breed} (${b.animalType})`}));
+  return state.livestock.map(b=>{
+    const br = b.branch ? b.branch+' · ' : '';
+    return {value:b.batchId, label:`${b.batchId} — ${br}${b.breed||b.animalType}`};
+  });
+}
+function branchOfBatch(batchId){
+  const b = state.livestock.find(x=>x.batchId===batchId);
+  return b && b.branch ? b.branch : '';
 }
 function customerOptions(){
   return state.customers.map(c=>({value:c.id, label:`${c.name}${c.phone?' — '+c.phone:''}`}));
@@ -3184,8 +3254,9 @@ function customerName(id){ const c=state.customers.find(x=>x.id===id); return c 
 function FORM_CONFIGS(){
   return {
     livestock: { title:'Batch / Herd', entity:'livestock', fields:[
+      {name:'branch', label:'Branch / farm site', type:'select', options:ensureBranches(), required:true},
       {name:'animalType', label:'Animal Type', type:'select', options:state.setup.animalTypes, required:true},
-      {name:'batchId', label:'Batch/Herd ID', type:'text', required:true, placeholder:'e.g. FL-002'},
+      {name:'batchId', label:'Batch/Herd ID', type:'text', required:true, placeholder:'e.g. ADD-POU-001'},
       {name:'breed', label:'Breed/Type', type:'text'},
       {name:'dateAcquired', label:'Date Acquired', type:'date', required:true, default:todayISO()},
       {name:'source', label:'Source', type:'text'},
@@ -3273,8 +3344,9 @@ function FORM_CONFIGS(){
         PAY('f_pay','Feed'),
         {name:'f_notes', label:'Notes', type:'textarea', showWhen:W('Feed')},
         /* animals -> new batch / herd */
+        {name:'l_branch', label:'Branch / farm site', type:'select', options:ensureBranches(), showWhen:W('Livestock')},
         {name:'l_type', label:'Animal type', type:'select', options:state.setup.animalTypes, showWhen:W('Livestock')},
-        {name:'l_batch', label:'Batch code (auto-generated from animal type)', type:'text', placeholder:'Select animal type first', showWhen:W('Livestock')},
+        {name:'l_batch', label:'Batch code (auto: BRANCH-ANIMAL-001… per branch)', type:'text', placeholder:'Select branch and animal type', showWhen:W('Livestock')},
         {name:'l_breed', label:'Breed/Type', type:'text', showWhen:W('Livestock')},
         {name:'l_source', label:'Bought from', type:'text', showWhen:W('Livestock')},
         {name:'l_qty', label:'Number of animals bought', type:'number', showWhen:W('Livestock')},
