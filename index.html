@@ -867,6 +867,7 @@ async function saveKey(key, value){
     console.error('Save failed for', key, e);
     showToast('⚠ Could not save — device storage may be full');
   }
+  fbAfterLocalSave(key, value);
 }
 async function saveEntity(entityKey){
   await saveKey(STORE_KEYS[entityKey], state[entityKey]);
@@ -880,6 +881,221 @@ function maybeAutoSync(){
   if(driveConfig.autoSync && driveRuntime.connected){
     driveUploadState().then(()=>render()).catch(e=>console.error('Auto-sync failed', e));
   }
+}
+
+
+/* ---------------- Firebase Realtime Database sync (optional) ----------------
+   localStorage stays the primary, offline-first copy. When you are signed in, every save is
+   also written to  farms/<your-uid>/data/<key>  and changes made on other devices arrive live.
+   Each collection is stored as { json: "<the array/object as JSON>", ts: <server-corrected ms> }
+   and the newest ts wins. -------------------------------------------------------------- */
+const FIREBASE_CONFIG = {   // optional: paste your config here instead of using Setup → Firebase
+  apiKey:'', authDomain:'', databaseURL:'', projectId:'', appId:''
+};
+const FB_SDK_VERSION = '10.14.1';
+const FB_KEYS = Object.values(STORE_KEYS);
+const FB_NAME = {}; Object.keys(STORE_KEYS).forEach(n=>{ FB_NAME[STORE_KEYS[n]] = n; });
+let fbCfg = null;
+try{ const raw = localStorage.getItem('gh_fbConfig'); if(raw) fbCfg = JSON.parse(raw); }catch(e){}
+if(!fbCfg && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL) fbCfg = FIREBASE_CONFIG;
+const fb = { db:null, auth:null, user:null, ref:null, offset:0, online:false, err:'', lastSync:null, renderPending:false };
+
+function fbNow(){ return Date.now() + (fb.offset||0); }
+function fbTs(key){ return parseInt(localStorage.getItem('gh_ts:'+key),10) || 0; }
+function fbStatusText(){
+  if(!fbCfg) return 'Not set up';
+  if(fb.err) return '⚠ ' + fb.err;
+  if(!fb.db) return 'Loading Firebase…';
+  if(!fb.user) return 'Signed out — sign in to start syncing';
+  const when = fb.lastSync ? ' · last sync ' + new Date(fb.lastSync).toLocaleTimeString() : '';
+  return (fb.online ? '🟢 Live' : '🟠 Offline — changes upload when you are back online') + ' · ' + (fb.user.email||'') + when;
+}
+function fbSetStatus(){ const el = document.getElementById('fbStatus'); if(el) el.textContent = tr(fbStatusText()); }
+function fbFriendlyError(e){
+  const c = (e && e.code) || '';
+  if(/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'Wrong email or password.';
+  if(c==='auth/email-already-in-use') return 'That email already has an account — use Sign in.';
+  if(c==='auth/weak-password') return 'Password must be at least 6 characters.';
+  if(c==='auth/invalid-email') return 'That email address is not valid.';
+  if(c==='auth/operation-not-allowed') return 'Email/Password sign-in is not enabled yet in the Firebase console (Authentication → Sign-in method).';
+  if(c==='auth/network-request-failed') return 'No internet connection.';
+  if(/not-supported-in-this-environment/.test(c)) return 'Firebase sign-in does not work when the app is opened as a plain file. Open it from https:// (e.g. Firebase Hosting) or http://localhost.';
+  return (e && e.message) || String(e);
+}
+function fbLoadScript(src){
+  return new Promise((res,rej)=>{
+    const sc = document.createElement('script'); sc.src = src; sc.onload = res;
+    sc.onerror = ()=>rej(new Error('Could not load Firebase — check your internet connection.'));
+    document.head.appendChild(sc);
+  });
+}
+async function fbLoadSdk(){
+  if(window.firebase && firebase.database && firebase.auth) return;
+  const base = 'https://www.gstatic.com/firebasejs/'+FB_SDK_VERSION+'/';
+  await fbLoadScript(base+'firebase-app-compat.js');
+  await Promise.all([fbLoadScript(base+'firebase-auth-compat.js'), fbLoadScript(base+'firebase-database-compat.js')]);
+}
+async function fbStart(){
+  if(!fbCfg || fb.db) return;
+  try{
+    await fbLoadSdk();
+    if(!firebase.apps.length) firebase.initializeApp(fbCfg);
+    fb.auth = firebase.auth(); fb.db = firebase.database();
+    fb.err = '';
+    fb.db.ref('.info/serverTimeOffset').on('value', s=>{ fb.offset = s.val() || 0; });
+    fb.db.ref('.info/connected').on('value', s=>{ fb.online = !!s.val(); fbSetStatus(); });
+    fb.auth.onAuthStateChanged(u=>{
+      fb.user = u; fbDetach(); if(u) fbAttach();
+      fbSetStatus(); if(currentTab==='setup') render();
+    });
+  }catch(e){ fb.err = e.message || String(e); console.error(e); }
+  fbSetStatus();
+}
+function fbAttach(){
+  fb.ref = fb.db.ref('farms/'+fb.user.uid+'/data');
+  fb.ref.on('value', fbOnSnapshot, e=>{
+    fb.err = (e && e.code==='PERMISSION_DENIED') ? 'Permission denied — check your Realtime Database rules' : ((e && e.message) || 'Database error');
+    fbSetStatus();
+  });
+}
+function fbDetach(){ if(fb.ref){ try{ fb.ref.off(); }catch(e){} fb.ref = null; } }
+
+function fbPush(key, value){
+  if(!fb.user || !fb.db) return;
+  const name = FB_NAME[key]; if(!name) return;
+  let ts = fbTs(key);
+  if(!ts){ ts = fbNow(); try{ localStorage.setItem('gh_ts:'+key, String(ts)); }catch(e){} }
+  const val = (value !== undefined) ? value : state[name];
+  fb.db.ref('farms/'+fb.user.uid+'/data/'+key).set({ json: JSON.stringify(val), ts })
+    .then(()=>{ fb.err=''; fb.lastSync = Date.now(); fbSetStatus(); })
+    .catch(e=>{ fb.err = (e && e.code==='PERMISSION_DENIED') ? 'Permission denied — check your Realtime Database rules' : ((e && e.message) || 'Upload failed'); fbSetStatus(); });
+}
+/* called by saveKey after every local save */
+function fbAfterLocalSave(key, value){
+  if(!FB_NAME[key]) return;
+  const ts = fbNow();
+  try{ localStorage.setItem('gh_ts:'+key, String(ts)); }catch(e){}
+  fbPush(key, value);
+}
+function fbApply(key, r){
+  let val; try{ val = JSON.parse(r.json); }catch(e){ return false; }
+  const name = FB_NAME[key];
+  if(name==='setup'){
+    state.setup = (val && typeof val==='object') ? val : state.setup;
+    Object.keys(DEFAULT_SETUP).forEach(k=>{ if(!Array.isArray(state.setup[k])) state.setup[k] = JSON.parse(JSON.stringify(DEFAULT_SETUP[k])); });
+  }else if(name==='calc'){
+    if(val && typeof val==='object') state.calc = val;
+  }else{
+    state[name] = Array.isArray(val) ? val : [];
+    if(name==='livestock') state.livestock.forEach(b=>{ if(!b.branch) b.branch = 'Main'; });
+  }
+  try{ localStorage.setItem(key, JSON.stringify(state[name])); localStorage.setItem('gh_ts:'+key, String(r.ts||0)); }catch(e){}
+  return true;
+}
+function fbRender(){
+  const mr = document.getElementById('modalRoot');
+  if(mr && mr.innerHTML.trim()){            // don't yank a form out from under someone mid-entry
+    if(!fb.renderPending){ fb.renderPending = true; setTimeout(()=>{ fb.renderPending = false; fbRender(); }, 3000); }
+    return;
+  }
+  render();
+}
+async function fbOnSnapshot(snap){
+  const remote = snap.val() || {};
+  const linkKey = 'gh_fbLinked:' + fb.user.uid;
+  const linked = localStorage.getItem(linkKey) === '1';
+  const localHas = ENTITY_KEYS.some(k=>(state[k]||[]).length);
+  const remoteHas = ENTITY_KEYS.some(k=>{ const r = remote[STORE_KEYS[k]]; return r && r.json && r.json !== '[]'; });
+  let forceRemote = false, forceLocal = false;
+  if(!linked){
+    // First time this device meets this account: never let a blank/default device overwrite the cloud.
+    if(remoteHas && !localHas) forceRemote = true;
+    else if(remoteHas && localHas){
+      if(ask("Cloud already has farm data for this account. OK = load the cloud data (replaces data on this device). Cancel = keep this device's data and upload it to the cloud instead")) forceRemote = true; else forceLocal = true;
+    }
+    try{ localStorage.setItem(linkKey, '1'); }catch(e){}
+  }
+  let changed = false; const pushes = [];
+  for(const key of FB_KEYS){
+    const r = remote[key];
+    if(forceLocal || !r || typeof r.json !== 'string'){ pushes.push(key); continue; }
+    const rts = r.ts || 0, lts = fbTs(key);
+    if(forceRemote || rts > lts){ if(fbApply(key, r)) changed = true; }
+    else if(rts < lts){ pushes.push(key); }       // this device has newer (e.g. offline) edits
+  }
+  pushes.forEach(k=>fbPush(k));
+  fb.err = ''; fb.lastSync = Date.now();
+  if(changed){
+    try{ await refreshCapFlags(); }catch(e){}
+    fbRender();
+    showToast('Updated from cloud');
+  }
+  fbSetStatus();
+}
+function parseFirebaseConfig(text){
+  const cfg = {};
+  try{ const j = JSON.parse(text); if(j && typeof j==='object') Object.assign(cfg, j); }catch(e){}
+  if(!cfg.apiKey){
+    const re = /(\w+)\s*:\s*["']([^"']+)["']/g; let m;
+    while((m = re.exec(text))) cfg[m[1]] = m[2];
+  }
+  return (cfg.apiKey && cfg.databaseURL) ? cfg : null;
+}
+async function fbAuth(create){
+  const email = (document.getElementById('fbEmail')||{}).value || '';
+  const pw = (document.getElementById('fbPass')||{}).value || '';
+  if(!email.trim() || !pw){ showToast('Enter email and password'); return; }
+  if(!fb.auth){ say(fb.err || 'Firebase is still loading — try again in a moment.'); return; }
+  try{
+    if(create) await fb.auth.createUserWithEmailAndPassword(email.trim(), pw);
+    else await fb.auth.signInWithEmailAndPassword(email.trim(), pw);
+    showToast(create ? 'Account created — syncing' : 'Signed in — syncing');
+  }catch(e){ say(fbFriendlyError(e)); }
+}
+function renderFirebasePanel(){
+  const taStyle = 'width:100%;min-height:120px;font-family:\'IBM Plex Mono\',monospace;font-size:12px;padding:8px;border:1px solid #d6dbd2;border-radius:8px;box-sizing:border-box;';
+  let body;
+  if(!fbCfg){
+    body = `
+      <textarea id="fbCfgInput" style="${taStyle}" placeholder="Paste the firebaseConfig object from the Firebase console here…"></textarea>
+      <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" id="fbSaveCfg">Save config</button></div>`;
+  }else if(!fb.user){
+    body = `
+      <p class="note" style="margin:0 0 10px;">Project: <strong>${escHtml(fbCfg.projectId||fbCfg.databaseURL)}</strong> <button class="btn btn-ghost btn-sm" id="fbChangeCfg" type="button">Change</button></p>
+      <div class="addrow"><input type="email" id="fbEmail" placeholder="Email" autocomplete="username"></div>
+      <div class="addrow"><input type="password" id="fbPass" placeholder="Password (min 6 characters)" autocomplete="current-password"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn btn-primary btn-sm" id="fbSignIn">Sign in</button>
+        <button class="btn btn-ghost btn-sm" id="fbCreate">Create account</button>
+      </div>`;
+  }else{
+    body = `
+      <p class="note" style="margin:0 0 10px;">Project: <strong>${escHtml(fbCfg.projectId||fbCfg.databaseURL)}</strong> <button class="btn btn-ghost btn-sm" id="fbChangeCfg" type="button">Change</button></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" id="fbSyncNow">Sync now</button>
+        <button class="btn btn-ghost btn-sm" id="fbSignOut">Sign out</button>
+      </div>`;
+  }
+  return `
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">🔥 Firebase Cloud Sync <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(optional, real-time)</span></div>
+    <details style="margin:6px 0 14px;">
+      <summary style="cursor:pointer;font-size:12.5px;color:var(--green);font-weight:600;">One-time Firebase setup</summary>
+      <ol style="font-size:12.3px;color:var(--ink-soft);line-height:1.6;padding-left:18px;margin:8px 0;">
+        <li>At <a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a> create a project, then <strong>Build → Realtime Database → Create database</strong>.</li>
+        <li><strong>Build → Authentication → Sign-in method</strong> → enable <strong>Email/Password</strong>.</li>
+        <li>Realtime Database → <strong>Rules</strong> → paste the rules below and Publish.</li>
+        <li><strong>Project settings → Your apps → Web (&lt;/&gt;)</strong> → register an app → copy the <code>firebaseConfig</code> and paste it above.</li>
+        <li>Open this app from https:// (e.g. Firebase Hosting) or http://localhost — not as a plain file.</li>
+      </ol>
+      <pre style="font-size:11.5px;background:#f1f3ec;padding:8px;border-radius:8px;overflow:auto;">{ "rules": { "farms": { "$uid": {
+  ".read":  "auth != null &amp;&amp; auth.uid === $uid",
+  ".write": "auth != null &amp;&amp; auth.uid === $uid"
+} } } }</pre>
+    </details>
+    ${body}
+    <p class="note" style="margin:10px 0 0;" id="fbStatus">${escHtml(tr(fbStatusText()))}</p>
+  </div></div>`;
 }
 
 const SCHEMA_VERSION = 'linked-v3';
@@ -964,6 +1180,7 @@ async function initApp(){
   applyStaticLang();
   renderNav();
   render();
+  fbStart();
 }
 async function saveCalc(){
   await saveKey(STORE_KEYS.calc, state.calc);
@@ -3201,6 +3418,7 @@ function renderSetup(){
 
   return `
   <div class="pagehead"><div><h1>Setup</h1><p>Customize the dropdown options used throughout the app.</p></div></div>
+  ${renderFirebasePanel()}
   ${renderDriveSyncPanel()}
   <div class="panel"><div class="panel-pad">
     <div class="section-title" style="margin-top:0">Backup &amp; Restore</div>
@@ -4218,6 +4436,30 @@ function attachTabEvents(){
     driveConfig.autoSync = e.target.checked;
     saveDriveConfigLocal();
     showToast(driveConfig.autoSync ? 'Auto-sync enabled' : 'Auto-sync disabled');
+  });
+
+  // Firebase sync
+  const fbSave = document.getElementById('fbSaveCfg');
+  if(fbSave) fbSave.addEventListener('click', ()=>{
+    const cfg = parseFirebaseConfig((document.getElementById('fbCfgInput')||{}).value || '');
+    if(!cfg){ say('Could not read that config. Paste the whole firebaseConfig block — it must include apiKey and databaseURL.'); return; }
+    try{ localStorage.setItem('gh_fbConfig', JSON.stringify(cfg)); }catch(e){}
+    fbCfg = cfg; fbStart(); render();
+  });
+  const fbChange = document.getElementById('fbChangeCfg');
+  if(fbChange) fbChange.addEventListener('click', async ()=>{
+    if(!ask('Change Firebase project? You will be signed out and the app will reload. Data on this device is kept.')) return;
+    try{ if(fb.auth) await fb.auth.signOut(); }catch(e){}
+    try{ localStorage.removeItem('gh_fbConfig'); }catch(e){}
+    location.reload();
+  });
+  const fbIn = document.getElementById('fbSignIn'); if(fbIn) fbIn.addEventListener('click', ()=>fbAuth(false));
+  const fbNew = document.getElementById('fbCreate'); if(fbNew) fbNew.addEventListener('click', ()=>fbAuth(true));
+  const fbOut = document.getElementById('fbSignOut');
+  if(fbOut) fbOut.addEventListener('click', async ()=>{ try{ await fb.auth.signOut(); }catch(e){} showToast('Signed out'); });
+  const fbSyncBtn = document.getElementById('fbSyncNow');
+  if(fbSyncBtn) fbSyncBtn.addEventListener('click', async ()=>{
+    try{ await fbOnSnapshot(await fb.ref.once('value')); showToast('Synced'); }catch(e){ console.error(e); }
   });
 
   // Danger zone
