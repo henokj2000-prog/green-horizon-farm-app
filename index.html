@@ -1459,6 +1459,7 @@ const TABS = [
   {key:'prodstock', label:'Prod. Stock', icon:'📦'},
   {key:'feed', label:'Feed', icon:'🌾'},
   {key:'calculator', label:'Price Calc', icon:'🧮'},
+  {key:'rearing', label:'Rearing Cost', icon:'🐥'},
   {key:'income', label:'Income', icon:'💰'},
   {key:'expenses', label:'Expenses & Purchases', icon:'💸'},
   {key:'customers', label:'Customers', icon:'👥'},
@@ -1486,7 +1487,7 @@ function render(){
   const renderers = {
     dashboard: renderDashboard, livestock: renderLivestock,
     production: renderProduction, prodstock: renderProdStock, feed: renderFeed,
-    calculator: renderCalculator,
+    calculator: renderCalculator, rearing: renderRearing,
     income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
     reports: renderReports, setup: renderSetup
   };
@@ -2007,10 +2008,235 @@ function attachCalculatorEvents(){
   });
   const autoFillBtn = document.getElementById('calcAutoFill');
   if(autoFillBtn) autoFillBtn.addEventListener('click', ()=>{
+    const keepRear = state.calc.rear;
     state.calc = calcAutoDefaults();
+    if(keepRear) state.calc.rear = keepRear;
     saveCalc();
     render();
     showToast('Filled from your current farm records');
+  });
+}
+
+
+/* ================= REARING COST CALCULATOR =================
+   Cost of a pullet from purchase day (default 55 days old) until the flock reaches 80% hen-day laying
+   (Bovans Brown reaches ~80% at roughly 22 weeks / 154 days of age). All figures are editable estimates. */
+Object.assign(AM, {'Rearing Cost':'የማሳደጊያ ወጪ'});
+const BOVANS_FEED_STD = {0:10,1:16,2:22,3:28,4:34,5:38,6:42,7:44,8:46,9:50,10:54,11:57,12:60,13:63,14:66,15:70,16:74,17:80,18:88,19:96,20:104,21:108,22:112,23:114,24:116}; // g/bird/day by completed week of age
+const DEFAULT_REAR_VAX = [
+  {name:'Fowl pox (wing-web)', age:63, cost:0.6},
+  {name:'Newcastle (Lasota)', age:70, cost:0.35},
+  {name:'Deworming', age:77, cost:1.5},
+  {name:'Infectious coryza', age:91, cost:6},
+  {name:'Fowl cholera', age:105, cost:3},
+  {name:'ND + IB + EDS (inactivated)', age:119, cost:12},
+  {name:'Newcastle (Lasota) booster', age:133, cost:0.35}
+];
+function defaultRear(){
+  return {
+    birds: (livestockByType()['Poultry']||0) || 500, chickPrice:700, startDay:55, endDay:154, mortPct:3,
+    feedCostPerKg: num(state.calc.feedCostPerKg) || 89, feedWastePct:3, feedStd: Object.assign({}, BOVANS_FEED_STD),
+    workers:1, wage:3500, labourSharePct:100,
+    lightWatts:150, lightHours:12, tariff:3,
+    waterRatio:2, washPct:20, waterPerM3:25,
+    medPerBirdWeek:0.6, vetFlat:0,
+    litterPerBird:4, cleaningPerMonth:400, equipPerMonth:300, transportFlat:2000, miscFlat:0,
+    contingencyPct:3, interestPct:0,
+    vax: DEFAULT_REAR_VAX.map(v=>Object.assign({}, v))
+  };
+}
+function getRear(){ if(!state.calc.rear) state.calc.rear = defaultRear(); return state.calc.rear; }
+function rearFeedAt(r, w){
+  if(r.feedStd[w]!==undefined) return num(r.feedStd[w]);
+  const ks = Object.keys(r.feedStd).map(Number).sort((a,b)=>a-b);
+  return num(r.feedStd[w < ks[0] ? ks[0] : ks[ks.length-1]]);
+}
+function computeRear(r){
+  const birds = num(r.birds);
+  const startD = Math.max(0, Math.floor(num(r.startDay)));
+  const endD = Math.max(startD+1, Math.floor(num(r.endDay)));
+  const days = endD - startD, months = days/30;
+  const mort = Math.min(60, Math.max(0, num(r.mortPct)))/100;
+  const avgLive = birds*(1-mort/2), survivors = birds*(1-mort);
+
+  const weeks = {}; let feedG = 0;
+  for(let d=startD; d<endD; d++){
+    const w = Math.floor(d/7), g = rearFeedAt(r, w);
+    feedG += g;
+    if(!weeks[w]) weeks[w] = {w, days:0, g};
+    weeks[w].days++;
+  }
+  const feedKgBird = feedG/1000;
+  const feedKg = feedKgBird*avgLive*(1+num(r.feedWastePct)/100);
+  const kwh = num(r.lightWatts)*num(r.lightHours)/1000*days;
+  const waterM3 = feedKgBird*avgLive*num(r.waterRatio)*(1+num(r.washPct)/100)/1000;
+  const vaxList = (r.vax||[]).filter(v=>num(v.age)>=startD && num(v.age)<endD);
+
+  const c = {};
+  c.chicks = birds*num(r.chickPrice);
+  c.feed = feedKg*num(r.feedCostPerKg);
+  c.labour = num(r.workers)*num(r.wage)/30*days*num(r.labourSharePct)/100;
+  c.electricity = kwh*num(r.tariff);
+  c.water = waterM3*num(r.waterPerM3);
+  c.vaccination = vaxList.reduce((s,v)=>s+num(v.cost)*avgLive, 0);
+  c.medication = num(r.medPerBirdWeek)*(days/7)*avgLive + num(r.vetFlat);
+  c.other = num(r.litterPerBird)*birds + (num(r.cleaningPerMonth)+num(r.equipPerMonth))*months + num(r.transportFlat) + num(r.miscFlat);
+  const operating = c.feed+c.labour+c.electricity+c.water+c.vaccination+c.medication+c.other;
+  c.contingency = operating*num(r.contingencyPct)/100;
+  c.interest = (c.chicks + 0.5*(operating+c.contingency))*num(r.interestPct)/100*days/365;
+  const total = c.chicks+operating+c.contingency+c.interest;
+  return {birds, days, avgLive, survivors, weeks:Object.values(weeks), feedKgBird, feedKg, kwh, waterM3, vaxList, c, operating, total,
+          perHoused: birds>0 ? total/birds : 0, perSurvivor: survivors>0 ? total/survivors : 0,
+          feedShare: total>0 ? c.feed/total*100 : 0, perDay: days>0 ? (total-c.chicks)/days : 0};
+}
+function rearResultsHtml(){
+  const r = getRear(), x = computeRear(r), c = x.c;
+  const per = v => x.birds>0 ? fmtMoney(v/x.birds) : '—';
+  const pct = v => x.total>0 ? (v/x.total*100).toFixed(1)+'%' : '—';
+  const row = (label, detail, val) => `<tr><td>${escHtml(label)}</td><td class="note" style="margin:0;font-style:normal">${detail}</td><td class="num mono">${fmtMoney(val)}</td><td class="num mono">${per(val)}</td><td class="num mono">${pct(val)}</td></tr>`;
+  const wk = (x.days/7).toFixed(1);
+  return `
+  <div class="section-title">Results — from age ${fmtNum(r.startDay)} days to 80% laying (age ${fmtNum(r.endDay)} days)</div>
+  <div class="kpi-grid">
+    <div class="kpi-card result-highlight"><div class="kpi-label">Total Cost to 80% Laying</div><div class="kpi-value mono">${fmtMoney(x.total)}</div></div>
+    <div class="kpi-card result-clay"><div class="kpi-label">Cost per Bird Bought</div><div class="kpi-value mono">${fmtMoney(x.perHoused)}</div></div>
+    <div class="kpi-card result-clay"><div class="kpi-label">Cost per Surviving Hen</div><div class="kpi-value mono">${fmtMoney(x.perSurvivor)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Period</div><div class="kpi-value mono">${fmtNum(x.days)} d</div><div class="calc-hint">${wk} weeks</div></div>
+    <div class="kpi-card"><div class="kpi-label">Surviving Hens</div><div class="kpi-value mono">${fmtNum(Math.round(x.survivors))}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Feed Share of Cost</div><div class="kpi-value mono">${x.feedShare.toFixed(1)}%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Running Cost / Day (no pullets)</div><div class="kpi-value mono">${fmtMoney(x.perDay)}</div></div>
+  </div>
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">Cost breakdown</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Item</th><th>Basis</th><th class="num">Total</th><th class="num">Per bird bought</th><th class="num">Share</th></tr></thead>
+      <tbody>
+        ${row('Pullets purchased', `${fmtNum(x.birds)} × ${fmtMoney(r.chickPrice)}`, c.chicks)}
+        ${row('Feed', `${fmtNum(x.feedKg.toFixed(0))} kg (${x.feedKgBird.toFixed(2)} kg/bird, incl. ${num(r.feedWastePct)}% waste) × ${fmtMoney(r.feedCostPerKg)}/kg`, c.feed)}
+        ${row('Labour', `${num(r.workers)} worker(s) × ${fmtMoney(r.wage)}/month × ${num(r.labourSharePct)}% for ${x.days} days`, c.labour)}
+        ${row('Electricity', `${x.kwh.toFixed(0)} kWh × ${fmtMoney(r.tariff)}/kWh`, c.electricity)}
+        ${row('Water', `${x.waterM3.toFixed(1)} m³ × ${fmtMoney(r.waterPerM3)}/m³`, c.water)}
+        ${row('Vaccination & deworming', `${x.vaxList.length} treatment(s) in this period`, c.vaccination)}
+        ${row('Medication, vitamins & vet', `${fmtMoney(r.medPerBirdWeek)}/bird/week + vet ${fmtMoney(r.vetFlat)}`, c.medication)}
+        ${row('Litter, cleaning, equipment, transport & other', 'Bedding, disinfectant, depreciation/repairs, delivery, misc.', c.other)}
+        ${row('Contingency', `${num(r.contingencyPct)}% of running costs`, c.contingency)}
+        ${row('Loan interest', `${num(r.interestPct)}% per year`, c.interest)}
+        <tr style="font-weight:700;background:var(--surface-alt)"><td>TOTAL</td><td></td><td class="num mono">${fmtMoney(x.total)}</td><td class="num mono">${per(x.total)}</td><td class="num mono">100%</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin:12px 0 0;">Feed and running costs are calculated on the average number of live birds (deaths are assumed evenly spread). "Cost per surviving hen" spreads the whole cost over the hens still alive when laying reaches 80% — this is the figure to capitalise as the hen's cost in Accounting → Biological Assets.</p>
+  </div></div>
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">Feed schedule used (Bovans Brown standard)</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Age (completed weeks)</th><th class="num">Days in period</th><th class="num">g / bird / day</th><th class="num">kg / bird</th></tr></thead>
+      <tbody>${x.weeks.map(w=>`<tr><td>Week ${w.w}</td><td class="num mono">${w.days}</td><td class="num mono">${w.g}</td><td class="num mono">${(w.days*w.g/1000).toFixed(2)}</td></tr>`).join('')}
+        <tr style="font-weight:700;background:var(--surface-alt)"><td>Total</td><td class="num mono">${x.days}</td><td></td><td class="num mono">${x.feedKgBird.toFixed(2)}</td></tr></tbody>
+    </table></div>
+  </div></div>`;
+}
+function renderRearing(){
+  const r = getRear();
+  const f = (key, label, hint) => `<label class="calc-field">${escHtml(label)}
+      <input type="number" step="any" min="0" data-rear-field="${key}" value="${escHtml(r[key])}">
+      ${hint ? `<span class="calc-hint">${hint}</span>` : ''}</label>`;
+  const feedInputs = Object.keys(r.feedStd).map(Number).sort((a,b)=>a-b).map(w=>
+    `<label class="calc-field">Wk ${w}<input type="number" step="any" min="0" data-rear-feed="${w}" value="${escHtml(r.feedStd[w])}"></label>`).join('');
+  const vaxRows = r.vax.map((v,i)=>`<tr>
+      <td><input type="text" data-rear-vax="${i}" data-vk="name" value="${escHtml(v.name)}" style="width:100%;min-width:150px"></td>
+      <td><input type="number" min="0" data-rear-vax="${i}" data-vk="age" value="${escHtml(v.age)}" style="width:80px"></td>
+      <td><input type="number" step="any" min="0" data-rear-vax="${i}" data-vk="cost" value="${escHtml(v.cost)}" style="width:90px"></td>
+      <td><button class="btn btn-ghost btn-sm" type="button" data-rear-vax-del="${i}">✕</button></td></tr>`).join('');
+  return `
+  <div class="pagehead">
+    <div><h1>Rearing Cost Calculator</h1><p>Total cost of raising pullets from the day you buy them until the flock reaches 80% laying, based on the Bovans Brown standard. Every figure is an editable estimate — replace the defaults with your real prices.</p></div>
+    <button class="btn btn-ghost" id="rearReset" type="button">↺ Reset to defaults</button>
+  </div>
+
+  <div class="section-title" style="margin-top:0">Flock &amp; Timeline</div>
+  <div class="panel"><div class="panel-pad"><div class="calc-grid">
+    ${f('birds','Pullets bought (count)')}
+    ${f('chickPrice','Price per pullet (ETB)')}
+    ${f('mortPct','Mortality until 80% laying (%)','Bovans Brown target is about 2–4% over this stage')}
+    ${f('startDay','Age at purchase (days)','Default 55 days — change if you buy day-old or older birds')}
+    ${f('endDay','Age when laying reaches 80% (days)','Bovans Brown: about 150–160 days (≈ 22 weeks)')}
+  </div></div></div>
+
+  <div class="section-title">Feed</div>
+  <div class="panel"><div class="panel-pad"><div class="calc-grid">
+    ${f('feedCostPerKg','Feed price (ETB/kg)','Quintal price ÷ 100')}
+    ${f('feedWastePct','Feed wastage (%)','Spillage, rodents, wet feed')}
+  </div>
+  <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Edit feed standard (g/bird/day by week of age)</summary>
+    <div class="calc-grid" style="grid-template-columns:repeat(auto-fill,minmax(90px,1fr));margin-top:10px">${feedInputs}</div>
+    <p class="note">Approximate Bovans Brown intake: about 6.3 kg per bird to 18 weeks, rising to ~110 g/day near 80% lay. Check your hatchery's management guide and adjust.</p>
+  </details></div></div>
+
+  <div class="section-title">Labour, Electricity &amp; Water</div>
+  <div class="panel"><div class="panel-pad"><div class="calc-grid">
+    ${f('workers','Workers (count)')}
+    ${f('wage','Monthly wage per worker (ETB)')}
+    ${f('labourSharePct','Share of time spent on this flock (%)')}
+    ${f('lightWatts','Lighting &amp; equipment load (watts)')}
+    ${f('lightHours','Hours of use per day')}
+    ${f('tariff','Electricity tariff (ETB/kWh)')}
+    ${f('waterRatio','Water drunk per kg of feed (litres)','Normally about 2 L per kg; more in hot weather')}
+    ${f('washPct','Extra water for cleaning (%)')}
+    ${f('waterPerM3','Water price (ETB per m³ = 1,000 L)','Enter 0 if you use your own well')}
+  </div></div></div>
+
+  <div class="section-title">Vaccination &amp; Deworming Schedule</div>
+  <div class="panel"><div class="panel-pad">
+    <p class="note" style="margin-top:0">Only items whose age falls inside the period are counted. Prices per bird are rough placeholders — use your vet's schedule and actual doses.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Vaccine / treatment</th><th>Age (days)</th><th>Cost / bird (ETB)</th><th></th></tr></thead>
+      <tbody>${vaxRows}</tbody>
+    </table></div>
+    <button class="btn btn-ghost btn-sm" id="rearAddVax" type="button" style="margin-top:10px">+ Add vaccine / treatment</button>
+    <div class="calc-grid" style="margin-top:14px">
+      ${f('medPerBirdWeek','Medication, vitamins &amp; electrolytes (ETB/bird/week)','Anti-stress, treatments, coccidiostat, etc.')}
+      ${f('vetFlat','Vet visits / lab tests (ETB, total)')}
+    </div>
+  </div></div>
+
+  <div class="section-title">Other Costs</div>
+  <div class="panel"><div class="panel-pad"><div class="calc-grid">
+    ${f('litterPerBird','Litter / bedding (ETB per bird)')}
+    ${f('cleaningPerMonth','Disinfectant &amp; cleaning (ETB/month)')}
+    ${f('equipPerMonth','Equipment depreciation &amp; repairs (ETB/month)')}
+    ${f('transportFlat','Transport of pullets (ETB, total)')}
+    ${f('miscFlat','Other / miscellaneous (ETB, total)')}
+    ${f('contingencyPct','Contingency (% of running costs)')}
+    ${f('interestPct','Loan interest (% per year)','Leave 0 if no loan')}
+  </div></div></div>
+
+  <div id="rearResults">${rearResultsHtml()}</div>
+  <p class="note">This calculator is a planning tool and doesn't change any logged records. Inputs are saved with your calculator settings.</p>`;
+}
+let rearSaveTimer = null;
+function attachRearingEvents(){
+  const r = getRear();
+  const update = ()=>{
+    const el = document.getElementById('rearResults');
+    if(el){ el.innerHTML = rearResultsHtml(); translateDom(el); fitMoneyTexts(el); }
+    clearTimeout(rearSaveTimer); rearSaveTimer = setTimeout(saveCalc, 600);
+  };
+  const bind = (sel, fn)=> document.querySelectorAll(sel).forEach(el=>{ el.addEventListener('input', ()=>{ fn(el); update(); }); el.addEventListener('change', ()=>{ fn(el); update(); }); });
+  bind('[data-rear-field]', el=>{ r[el.dataset.rearField] = num(el.value); });
+  bind('[data-rear-feed]', el=>{ r.feedStd[el.dataset.rearFeed] = num(el.value); });
+  bind('[data-rear-vax]', el=>{
+    const v = r.vax[+el.dataset.rearVax]; if(!v) return;
+    v[el.dataset.vk] = el.dataset.vk==='name' ? el.value : num(el.value);
+  });
+  document.querySelectorAll('[data-rear-vax-del]').forEach(b=>b.addEventListener('click', ()=>{
+    r.vax.splice(+b.dataset.rearVaxDel, 1); saveCalc(); render();
+  }));
+  const add = document.getElementById('rearAddVax');
+  if(add) add.addEventListener('click', ()=>{ r.vax.push({name:'New treatment', age:Math.round(num(r.startDay))+14, cost:0}); saveCalc(); render(); });
+  const reset = document.getElementById('rearReset');
+  if(reset) reset.addEventListener('click', ()=>{
+    if(!ask('Reset all rearing cost inputs to the defaults?')) return;
+    state.calc.rear = defaultRear(); saveCalc(); render(); showToast('Rearing cost inputs reset');
   });
 }
 
@@ -4497,6 +4723,7 @@ function attachTabEvents(){
 
   if(currentTab==='reports') attachReportEvents();
   if(currentTab==='calculator') attachCalculatorEvents();
+  if(currentTab==='rearing') attachRearingEvents();
 }
 
 initApp();
