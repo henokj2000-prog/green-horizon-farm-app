@@ -2037,10 +2037,9 @@ function defaultRear(){
     birds: (livestockByType()['Poultry']||0) || 500, chickPrice:700, startDay:55, endDay:154, mortPct:3,
     feedCostPerKg: num(state.calc.feedCostPerKg) || 89, feedWastePct:3, feedStd: Object.assign({}, BOVANS_FEED_STD),
     workers:1, wage:3500, labourSharePct:100,
-    lightWatts:150, lightHours:12, tariff:3,
-    waterRatio:2, washPct:20, waterPerM3:25,
+    electricityPerMonth:450, waterPerMonth:300,
     medPerBirdWeek:0.6, vetFlat:0,
-    litterPerBird:4, cleaningPerMonth:400, equipPerMonth:300, transportFlat:2000, miscFlat:0,
+    litterPerMonth:800, cleaningPerMonth:400, equipPerMonth:300, transportFlat:2000, miscFlat:0,
     contingencyPct:3, interestPct:0,
     vax: DEFAULT_REAR_VAX.map(v=>Object.assign({}, v))
   };
@@ -2068,24 +2067,23 @@ function computeRear(r){
   }
   const feedKgBird = feedG/1000;
   const feedKg = feedKgBird*avgLive*(1+num(r.feedWastePct)/100);
-  const kwh = num(r.lightWatts)*num(r.lightHours)/1000*days;
-  const waterM3 = feedKgBird*avgLive*num(r.waterRatio)*(1+num(r.washPct)/100)/1000;
   const vaxList = (r.vax||[]).filter(v=>num(v.age)>=startD && num(v.age)<endD);
 
   const c = {};
   c.chicks = birds*num(r.chickPrice);
   c.feed = feedKg*num(r.feedCostPerKg);
   c.labour = num(r.workers)*num(r.wage)/30*days*num(r.labourSharePct)/100;
-  c.electricity = kwh*num(r.tariff);
-  c.water = waterM3*num(r.waterPerM3);
+  c.electricity = num(r.electricityPerMonth)*months;
+  c.water = num(r.waterPerMonth)*months;
+  c.litter = num(r.litterPerMonth)*months;
   c.vaccination = vaxList.reduce((s,v)=>s+num(v.cost)*avgLive, 0);
   c.medication = num(r.medPerBirdWeek)*(days/7)*avgLive + num(r.vetFlat);
-  c.other = num(r.litterPerBird)*birds + (num(r.cleaningPerMonth)+num(r.equipPerMonth))*months + num(r.transportFlat) + num(r.miscFlat);
-  const operating = c.feed+c.labour+c.electricity+c.water+c.vaccination+c.medication+c.other;
+  c.other = (num(r.cleaningPerMonth)+num(r.equipPerMonth))*months + num(r.transportFlat) + num(r.miscFlat);
+  const operating = c.feed+c.labour+c.electricity+c.water+c.litter+c.vaccination+c.medication+c.other;
   c.contingency = operating*num(r.contingencyPct)/100;
   c.interest = (c.chicks + 0.5*(operating+c.contingency))*num(r.interestPct)/100*days/365;
   const total = c.chicks+operating+c.contingency+c.interest;
-  return {birds, days, avgLive, survivors, weeks:Object.values(weeks), feedKgBird, feedKg, kwh, waterM3, vaxList, c, operating, total,
+  return {birds, days, months, avgLive, survivors, weeks:Object.values(weeks), feedKgBird, feedKg, vaxList, c, operating, total,
           perHoused: birds>0 ? total/birds : 0, perSurvivor: survivors>0 ? total/survivors : 0,
           feedShare: total>0 ? c.feed/total*100 : 0, perDay: days>0 ? (total-c.chicks)/days : 0};
 }
@@ -2114,11 +2112,12 @@ function rearResultsHtml(){
         ${row('Pullets purchased', `${fmtNum(x.birds)} × ${fmtMoney(r.chickPrice)}`, c.chicks)}
         ${row('Feed', `${fmtNum(x.feedKg.toFixed(0))} kg (${x.feedKgBird.toFixed(2)} kg/bird, incl. ${num(r.feedWastePct)}% waste) × ${fmtMoney(r.feedCostPerKg)}/kg`, c.feed)}
         ${row('Labour', `${num(r.workers)} worker(s) × ${fmtMoney(r.wage)}/month × ${num(r.labourSharePct)}% for ${x.days} days`, c.labour)}
-        ${row('Electricity', `${x.kwh.toFixed(0)} kWh × ${fmtMoney(r.tariff)}/kWh`, c.electricity)}
-        ${row('Water', `${x.waterM3.toFixed(1)} m³ × ${fmtMoney(r.waterPerM3)}/m³`, c.water)}
+        ${row('Electricity', `${x.months.toFixed(1)} months × ${fmtMoney(r.electricityPerMonth)}/month`, c.electricity)}
+        ${row('Water', `${x.months.toFixed(1)} months × ${fmtMoney(r.waterPerMonth)}/month`, c.water)}
+        ${row('Litter / bedding', `${x.months.toFixed(1)} months × ${fmtMoney(r.litterPerMonth)}/month`, c.litter)}
         ${row('Vaccination & deworming', `${x.vaxList.length} treatment(s) in this period`, c.vaccination)}
         ${row('Medication, vitamins & vet', `${fmtMoney(r.medPerBirdWeek)}/bird/week + vet ${fmtMoney(r.vetFlat)}`, c.medication)}
-        ${row('Litter, cleaning, equipment, transport & other', 'Bedding, disinfectant, depreciation/repairs, delivery, misc.', c.other)}
+        ${row('Cleaning, equipment, transport & other', 'Disinfectant, depreciation/repairs, delivery, misc.', c.other)}
         ${row('Contingency', `${num(r.contingencyPct)}% of running costs`, c.contingency)}
         ${row('Loan interest', `${num(r.interestPct)}% per year`, c.interest)}
         <tr style="font-weight:700;background:var(--surface-alt)"><td>TOTAL</td><td></td><td class="num mono">${fmtMoney(x.total)}</td><td class="num mono">${per(x.total)}</td><td class="num mono">100%</td></tr>
@@ -2129,9 +2128,8 @@ function rearResultsHtml(){
   <div class="panel"><div class="panel-pad">
     <div class="section-title" style="margin-top:0">Feed schedule used (Bovans Brown standard)</div>
     <div class="tablewrap"><table>
-      <thead><tr><th>Age (completed weeks)</th><th class="num">Days in period</th><th class="num">g / bird / day</th><th class="num">kg / bird</th></tr></thead>
-      <tbody>${x.weeks.map(w=>`<tr><td>Week ${w.w}</td><td class="num mono">${w.days}</td><td class="num mono">${w.g}</td><td class="num mono">${(w.days*w.g/1000).toFixed(2)}</td></tr>`).join('')}
-        <tr style="font-weight:700;background:var(--surface-alt)"><td>Total</td><td class="num mono">${x.days}</td><td></td><td class="num mono">${x.feedKgBird.toFixed(2)}</td></tr></tbody>
+      <thead><tr><th>Age (completed weeks)</th><th class="num">g / bird / day</th><th class="num">Total feed / day (kg)</th></tr></thead>
+      <tbody>${x.weeks.map(w=>`<tr><td>Week ${w.w}</td><td class="num mono">${w.g}</td><td class="num mono">${(w.g*x.birds/1000).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table></div>
   </div></div>`;
 }
@@ -2172,17 +2170,14 @@ function renderRearing(){
     <p class="note">Approximate Bovans Brown intake: about 6.3 kg per bird to 18 weeks, rising to ~110 g/day near 80% lay. Check your hatchery's management guide and adjust.</p>
   </details></div></div>
 
-  <div class="section-title">Labour, Electricity &amp; Water</div>
+  <div class="section-title">Labour, Electricity, Water &amp; Litter</div>
   <div class="panel"><div class="panel-pad"><div class="calc-grid">
     ${f('workers','Workers (count)')}
     ${f('wage','Monthly wage per worker (ETB)')}
     ${f('labourSharePct','Share of time spent on this flock (%)')}
-    ${f('lightWatts','Lighting &amp; equipment load (watts)')}
-    ${f('lightHours','Hours of use per day')}
-    ${f('tariff','Electricity tariff (ETB/kWh)')}
-    ${f('waterRatio','Water drunk per kg of feed (litres)','Normally about 2 L per kg; more in hot weather')}
-    ${f('washPct','Extra water for cleaning (%)')}
-    ${f('waterPerM3','Water price (ETB per m³ = 1,000 L)','Enter 0 if you use your own well')}
+    ${f('electricityPerMonth','Electricity (ETB/month)')}
+    ${f('waterPerMonth','Water (ETB/month)')}
+    ${f('litterPerMonth','Litter / bedding (ETB/month)')}
   </div></div></div>
 
   <div class="section-title">Vaccination &amp; Deworming Schedule</div>
@@ -2201,7 +2196,6 @@ function renderRearing(){
 
   <div class="section-title">Other Costs</div>
   <div class="panel"><div class="panel-pad"><div class="calc-grid">
-    ${f('litterPerBird','Litter / bedding (ETB per bird)')}
     ${f('cleaningPerMonth','Disinfectant &amp; cleaning (ETB/month)')}
     ${f('equipPerMonth','Equipment depreciation &amp; repairs (ETB/month)')}
     ${f('transportFlat','Transport of pullets (ETB, total)')}
