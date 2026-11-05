@@ -2442,7 +2442,33 @@ function attachCalculatorEvents(){
 /* ================= REARING COST CALCULATOR =================
    Cost of a pullet from purchase day (default 55 days old) until the flock reaches 80% hen-day laying
    (Bovans Brown reaches ~80% at roughly 22 weeks / 154 days of age). All figures are editable estimates. */
-Object.assign(AM, {'Rearing Cost':'የማሳደጊያ ወጪ'});
+Object.assign(AM, {
+  'Rearing Cost':'የማሳደጊያ ወጪ',
+  'How much does it cost to raise young hens until they start laying well? Fill in your numbers — results update as you type.':'ወጣት ዶሮዎች በደንብ እንቁላል መጣል እስኪጀምሩ ድረስ ለማሳደግ ምን ያህል ያስከፍላል? ቁጥሮችዎን ያስገቡ — ውጤቱ በመተየብ ሂደት ይዘምናል።',
+  'Reset to defaults':'ወደ ነባሪ ይመልሱ',
+  '1. Your birds':'1. ወፎችዎ','2. Feed':'2. መኖ','3. People & running costs (monthly)':'3. ሰዎችና የሥራ ወጪዎች (በወር)','4. Health & other (simple totals)':'4. ጤናና ሌላ (ቀላል ድምር)',
+  'How many birds did you buy?':'ስንት ወፎች ገዙ?','Price of one bird (ETB)':'የአንድ ወፍ ዋጋ (ብር)','Expected deaths (%)':'የሚጠበቅ ሞት (%)','Usually 2–4%':'በተለምዶ 2–4%',
+  'Age when you buy them (days)':'ሲገዙ ያላቸው ዕድሜ (ቀናት)','Example: 1 = day-old chick, 55 = about 8 weeks':'ለምሳሌ: 1 = የቀን ጫጩት፣ 55 = በግምት 8 ሳምንት',
+  'Age when they lay well (days)':'በደንብ እንቁላል የሚጥሉበት ዕድሜ (ቀናት)','Often about 150–160 days (around 22 weeks)':'ብዙ ጊዜ 150–160 ቀናት (በግምት 22 ሳምንት)',
+  'Feed price per kg (ETB)':'የመኖ ዋጋ በኪ.ግ (ብር)','If you buy by quintal: price ÷ 100':'በኩንታል ከገዙ: ዋጋ ÷ 100','Feed waste (%)':'የመኖ ብክነት (%)','Spilled or spoiled feed — try 2–5%':'የፈሰሰ ወይም የተበላሸ መኖ — 2–5% ይሞክሩ',
+  'Feed amount is estimated automatically from a standard growth table. You only need the price and waste %.':'የመኖ መጠን ከመደበኛ የእድገት ሰንጠረዥ በራስ-ሰር ይገመታል። የሚያስፈልግዎት ዋጋና የብክነት % ብቻ ነው።',
+  'Number of workers':'የሠራተኞች ብዛት','Pay per worker per month (ETB)':'የአንድ ሠራተኛ ወርሃዊ ደመወዝ (ብር)','% of their time on this flock':'በዚህ መንጋ ላይ የሚያጠፉት ጊዜ %','100 = full time on these birds':'100 = ሙሉ ጊዜ በእነዚህ ወፎች ላይ',
+  'Electricity per month (ETB)':'ኤሌክትሪክ በወር (ብር)','Water per month (ETB)':'ውሃ በወር (ብር)','Bedding / litter per month (ETB)':'አልጋ / ድርቆሽ በወር (ብር)',
+  'Medicine & vitamins per bird per week (ETB)':'መድኃኒትና ቫይታሚን በአንድ ወፍ በሳምንት (ብር)','Small amount for vitamins, treatments':'ለቫይታሚንና ሕክምና ትንሽ መጠን',
+  'Vet / lab total for the whole period (ETB)':'የእንስሳት ሐኪም / ላብራቶሪ ጠቅላላ (ብር)','Transport of birds (ETB total)':'የወፎች ትራንስፖርት (ጠቅላላ ብር)',
+  'Cleaning & disinfectant per month (ETB)':'ጽዳትና ፀረ-ተህዋሲያን በወር (ብር)','Repairs & equipment per month (ETB)':'ጥገናና መሣሪያ በወር (ብር)','Any other cost (ETB total)':'ማንኛውም ሌላ ወጪ (ጠቅላላ ብር)',
+  'Vaccines are included with a standard schedule in the background. Change medicine and vet totals to match what you really spend.':'ክትባቶች በመደበኛ መርሐግብር ከበስተጀርባ ተካትተዋል። መድኃኒትና የእንስሳት ሐኪም ድምርን በትክክል ከሚያወጡት ጋር ያስተካክሉ።',
+  'More options (optional)':'ተጨማሪ አማራጮች (አማራጭ)','Extra buffer (% of running costs)':'ተጨማሪ መጠባበቂያ (% የሥራ ወጪ)','e.g. 3 for unexpected costs':'ለምሳሌ 3 ለያልተጠበቁ ወጪዎች',
+  'Loan interest % per year':'የብድር ወለድ % በዓመት','0 if you did not borrow':'ካልተበደሩ 0',
+  'This is only a planning tool. It does not change your farm records.':'ይህ የዕቅድ መሣሪያ ብቻ ነው። የእርሻ መዝገቦችዎን አይለውጥም።',
+  'Your results':'ውጤቶችዎ','Total cost to raise the flock':'መንጋውን ለማሳደግ ጠቅላላ ወጪ',
+  'Cost for each bird you buy':'ለእያንዳንዱ የሚገዙት ወፍ ወጪ','Cost for each hen that survives':'ለእያንዳንዱ ለሚተርፈው ዶሮ ወጪ',
+  'How long (weeks)':'ስንት ጊዜ (ሳምንታት)','Hens still alive':'አሁንም ሕያው የሆኑ ዶሮዎች','Feed is this % of total':'መኖ ከጠቅላላው ይህ % ነው',
+  'Simple cost list':'ቀላል የወጪ ዝርዝር','What':'ምን','Buying the birds':'ወፎቹን መግዛት','Workers (labour)':'ሠራተኞች (ሠራተኛ)',
+  'Electricity, water & bedding':'ኤሌክትሪክ፣ ውሃና አልጋ','Vaccines, medicine & vet':'ክትባት፣ መድኃኒትና እንስሳት ሐኪም',
+  'Transport, cleaning & other':'ትራንስፖርት፣ ጽዳትና ሌላ','TOTAL':'ጠቅላላ',
+  'Tip: “Cost for each hen that survives” is the useful number — it is what one ready-to-lay hen really cost you after deaths.':'ምክር: «ለእያንዳንዱ ለሚተርፈው ዶሮ ወጪ» ጠቃሚ ቁጥር ነው — ከሞት በኋላ አንድ ለመጣል ዝግጁ ዶሮ በትክክል ያስከፈለዎት ነው።'
+});
 const BOVANS_FEED_STD = {0:10,1:16,2:22,3:28,4:34,5:38,6:42,7:44,8:46,9:50,10:54,11:57,12:60,13:63,14:66,15:70,16:74,17:80,18:88,19:96,20:104,21:108,22:112,23:114,24:116}; // g/bird/day by completed week of age
 const DEFAULT_REAR_VAX = [
   {name:'Fowl pox (wing-web)', age:63, cost:0.6},
@@ -2510,123 +2536,103 @@ function computeRear(r){
 }
 function rearResultsHtml(){
   const r = getRear(), x = computeRear(r), c = x.c;
-  const per = v => x.birds>0 ? fmtMoney(v/x.birds) : '—';
-  const pct = v => x.total>0 ? (v/x.total*100).toFixed(1)+'%' : '—';
-  const row = (label, detail, val) => `<tr><td>${escHtml(label)}</td><td class="note" style="margin:0;font-style:normal">${detail}</td><td class="num mono">${fmtMoney(val)}</td><td class="num mono">${per(val)}</td><td class="num mono">${pct(val)}</td></tr>`;
   const wk = (x.days/7).toFixed(1);
+  const health = c.vaccination + c.medication;
+  const utilities = c.electricity + c.water + c.litter;
+  const otherAll = c.other + c.contingency + c.interest;
+  const simpleRow = (label, val) => `<tr><td>${escHtml(tr(label))}</td><td class="num mono">${fmtMoney(val)}</td><td class="num mono">${x.birds>0?fmtMoney(val/x.birds):'—'}</td></tr>`;
   return `
-  <div class="section-title">Results — from age ${fmtNum(r.startDay)} days to 80% laying (age ${fmtNum(r.endDay)} days)</div>
+  <div class="section-title">${escHtml(tr('Your results'))}</div>
   <div class="kpi-grid">
-    <div class="kpi-card result-highlight"><div class="kpi-label">Total Cost to 80% Laying</div><div class="kpi-value mono">${fmtMoney(x.total)}</div></div>
-    <div class="kpi-card result-clay"><div class="kpi-label">Cost per Bird Bought</div><div class="kpi-value mono">${fmtMoney(x.perHoused)}</div></div>
-    <div class="kpi-card result-clay"><div class="kpi-label">Cost per Surviving Hen</div><div class="kpi-value mono">${fmtMoney(x.perSurvivor)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Period</div><div class="kpi-value mono">${fmtNum(x.days)} d</div><div class="calc-hint">${wk} weeks</div></div>
-    <div class="kpi-card"><div class="kpi-label">Surviving Hens</div><div class="kpi-value mono">${fmtNum(Math.round(x.survivors))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Feed Share of Cost</div><div class="kpi-value mono">${x.feedShare.toFixed(1)}%</div></div>
-    <div class="kpi-card"><div class="kpi-label">Running Cost / Day (no pullets)</div><div class="kpi-value mono">${fmtMoney(x.perDay)}</div></div>
+    <div class="kpi-card result-highlight"><div class="kpi-label">${escHtml(tr('Total cost to raise the flock'))}</div><div class="kpi-value mono">${fmtMoney(x.total)}</div></div>
+    <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost for each bird you buy'))}</div><div class="kpi-value mono">${fmtMoney(x.perHoused)}</div></div>
+    <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost for each hen that survives'))}</div><div class="kpi-value mono">${fmtMoney(x.perSurvivor)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('How long (weeks)'))}</div><div class="kpi-value mono">${wk}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Hens still alive'))}</div><div class="kpi-value mono">${fmtNum(Math.round(x.survivors))}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Feed is this % of total'))}</div><div class="kpi-value mono">${x.feedShare.toFixed(0)}%</div></div>
   </div>
   <div class="panel"><div class="panel-pad">
-    <div class="section-title" style="margin-top:0">Cost breakdown</div>
+    <div class="section-title" style="margin-top:0">${escHtml(tr('Simple cost list'))}</div>
     <div class="tablewrap"><table>
-      <thead><tr><th>Item</th><th>Basis</th><th class="num">Total</th><th class="num">Per bird bought</th><th class="num">Share</th></tr></thead>
+      <thead><tr><th>${escHtml(tr('What'))}</th><th class="num">${escHtml(tr('Total'))}</th><th class="num">${escHtml(tr('Per bird'))}</th></tr></thead>
       <tbody>
-        ${row('Pullets purchased', `${fmtNum(x.birds)} × ${fmtMoney(r.chickPrice)}`, c.chicks)}
-        ${row('Feed', `${fmtNum(x.feedKg.toFixed(0))} kg (${x.feedKgBird.toFixed(2)} kg/bird, incl. ${num(r.feedWastePct)}% waste) × ${fmtMoney(r.feedCostPerKg)}/kg`, c.feed)}
-        ${row('Labour', `${num(r.workers)} worker(s) × ${fmtMoney(r.wage)}/month × ${num(r.labourSharePct)}% for ${x.days} days`, c.labour)}
-        ${row('Electricity', `${x.months.toFixed(1)} months × ${fmtMoney(r.electricityPerMonth)}/month`, c.electricity)}
-        ${row('Water', `${x.months.toFixed(1)} months × ${fmtMoney(r.waterPerMonth)}/month`, c.water)}
-        ${row('Litter / bedding', `${x.months.toFixed(1)} months × ${fmtMoney(r.litterPerMonth)}/month`, c.litter)}
-        ${row('Vaccination & deworming', `${x.vaxList.length} treatment(s) in this period`, c.vaccination)}
-        ${row('Medication, vitamins & vet', `${fmtMoney(r.medPerBirdWeek)}/bird/week + vet ${fmtMoney(r.vetFlat)}`, c.medication)}
-        ${row('Cleaning, equipment, transport & other', 'Disinfectant, depreciation/repairs, delivery, misc.', c.other)}
-        ${row('Contingency', `${num(r.contingencyPct)}% of running costs`, c.contingency)}
-        ${row('Loan interest', `${num(r.interestPct)}% per year`, c.interest)}
-        <tr style="font-weight:700;background:var(--surface-alt)"><td>TOTAL</td><td></td><td class="num mono">${fmtMoney(x.total)}</td><td class="num mono">${per(x.total)}</td><td class="num mono">100%</td></tr>
+        ${simpleRow('Buying the birds', c.chicks)}
+        ${simpleRow('Feed', c.feed)}
+        ${simpleRow('Workers (labour)', c.labour)}
+        ${simpleRow('Electricity, water & bedding', utilities)}
+        ${simpleRow('Vaccines, medicine & vet', health)}
+        ${simpleRow('Transport, cleaning & other', otherAll)}
+        <tr style="font-weight:700;background:var(--surface-alt)"><td>${escHtml(tr('TOTAL'))}</td><td class="num mono">${fmtMoney(x.total)}</td><td class="num mono">${fmtMoney(x.perHoused)}</td></tr>
       </tbody>
     </table></div>
-    <p class="note" style="margin:12px 0 0;">Feed and running costs are calculated on the average number of live birds (deaths are assumed evenly spread). "Cost per surviving hen" spreads the whole cost over the hens still alive when laying reaches 80% — this is the figure to capitalise as the hen's cost in Accounting → Biological Assets.</p>
-  </div></div>
-  <div class="panel"><div class="panel-pad">
-    <div class="section-title" style="margin-top:0">Feed schedule used (Bovans Brown standard)</div>
-    <div class="tablewrap"><table>
-      <thead><tr><th>Age (completed weeks)</th><th class="num">g / bird / day</th><th class="num">Total feed / day (kg)</th></tr></thead>
-      <tbody>${x.weeks.map(w=>`<tr><td>Week ${w.w}</td><td class="num mono">${w.g}</td><td class="num mono">${(w.g*x.birds/1000).toFixed(2)}</td></tr>`).join('')}</tbody>
-    </table></div>
+    <p class="note" style="margin:12px 0 0;">${escHtml(tr('Tip: “Cost for each hen that survives” is the useful number — it is what one ready-to-lay hen really cost you after deaths.'))}</p>
   </div></div>`;
 }
 function renderRearing(){
   const r = getRear();
-  const f = (key, label, hint) => `<label class="calc-field">${escHtml(label)}
+  const f = (key, label, hint) => `<label class="calc-field">${escHtml(tr(label))}
       <input type="number" step="any" min="0" data-rear-field="${key}" value="${escHtml(r[key])}">
-      ${hint ? `<span class="calc-hint">${hint}</span>` : ''}</label>`;
-  const feedInputs = Object.keys(r.feedStd).map(Number).sort((a,b)=>a-b).map(w=>
-    `<label class="calc-field">Wk ${w}<input type="number" step="any" min="0" data-rear-feed="${w}" value="${escHtml(r.feedStd[w])}"></label>`).join('');
-  const vaxRows = r.vax.map((v,i)=>`<tr>
-      <td><input type="text" data-rear-vax="${i}" data-vk="name" value="${escHtml(v.name)}" style="width:100%;min-width:150px"></td>
-      <td><input type="number" min="0" data-rear-vax="${i}" data-vk="age" value="${escHtml(v.age)}" style="width:80px"></td>
-      <td><input type="number" step="any" min="0" data-rear-vax="${i}" data-vk="cost" value="${escHtml(v.cost)}" style="width:90px"></td>
-      <td><button class="btn btn-ghost btn-sm" type="button" data-rear-vax-del="${i}">✕</button></td></tr>`).join('');
+      ${hint ? `<span class="calc-hint">${escHtml(tr(hint))}</span>` : ''}</label>`;
+  // Simple health total: sum of default vax costs + med + vet shown as one editable “health budget”
+  const healthBudget = (r.vax||[]).reduce((s,v)=>s+num(v.cost),0) + num(r.medPerBirdWeek)*4 + num(r.vetFlat);
   return `
   <div class="pagehead">
-    <div><h1>Rearing Cost Calculator</h1><p>Total cost of raising pullets from the day you buy them until the flock reaches 80% laying, based on the Bovans Brown standard. Every figure is an editable estimate — replace the defaults with your real prices.</p></div>
-    <button class="btn btn-ghost" id="rearReset" type="button">↺ Reset to defaults</button>
-  </div>
-
-  <div class="section-title" style="margin-top:0">Flock &amp; Timeline</div>
-  <div class="panel"><div class="panel-pad"><div class="calc-grid">
-    ${f('birds','Pullets bought (count)')}
-    ${f('chickPrice','Price per pullet (ETB)')}
-    ${f('mortPct','Mortality until 80% laying (%)','Bovans Brown target is about 2–4% over this stage')}
-    ${f('startDay','Age at purchase (days)','Default 55 days — change if you buy day-old or older birds')}
-    ${f('endDay','Age when laying reaches 80% (days)','Bovans Brown: about 150–160 days (≈ 22 weeks)')}
-  </div></div></div>
-
-  <div class="section-title">Feed</div>
-  <div class="panel"><div class="panel-pad"><div class="calc-grid">
-    ${f('feedCostPerKg','Feed price (ETB/kg)','Quintal price ÷ 100')}
-    ${f('feedWastePct','Feed wastage (%)','Spillage, rodents, wet feed')}
-  </div>
-  <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Edit feed standard (g/bird/day by week of age)</summary>
-    <div class="calc-grid" style="grid-template-columns:repeat(auto-fill,minmax(90px,1fr));margin-top:10px">${feedInputs}</div>
-    <p class="note">Approximate Bovans Brown intake: about 6.3 kg per bird to 18 weeks, rising to ~110 g/day near 80% lay. Check your hatchery's management guide and adjust.</p>
-  </details></div></div>
-
-  <div class="section-title">Labour, Electricity, Water &amp; Litter</div>
-  <div class="panel"><div class="panel-pad"><div class="calc-grid">
-    ${f('workers','Workers (count)')}
-    ${f('wage','Monthly wage per worker (ETB)')}
-    ${f('labourSharePct','Share of time spent on this flock (%)')}
-    ${f('electricityPerMonth','Electricity (ETB/month)')}
-    ${f('waterPerMonth','Water (ETB/month)')}
-    ${f('litterPerMonth','Litter / bedding (ETB/month)')}
-  </div></div></div>
-
-  <div class="section-title">Vaccination &amp; Deworming Schedule</div>
-  <div class="panel"><div class="panel-pad">
-    <p class="note" style="margin-top:0">Only items whose age falls inside the period are counted. Prices per bird are rough placeholders — use your vet's schedule and actual doses.</p>
-    <div class="tablewrap"><table>
-      <thead><tr><th>Vaccine / treatment</th><th>Age (days)</th><th>Cost / bird (ETB)</th><th></th></tr></thead>
-      <tbody>${vaxRows}</tbody>
-    </table></div>
-    <button class="btn btn-ghost btn-sm" id="rearAddVax" type="button" style="margin-top:10px">+ Add vaccine / treatment</button>
-    <div class="calc-grid" style="margin-top:14px">
-      ${f('medPerBirdWeek','Medication, vitamins &amp; electrolytes (ETB/bird/week)','Anti-stress, treatments, coccidiostat, etc.')}
-      ${f('vetFlat','Vet visits / lab tests (ETB, total)')}
+    <div>
+      <h1>${escHtml(tr('Rearing Cost'))}</h1>
+      <p>${escHtml(tr('How much does it cost to raise young hens until they start laying well? Fill in your numbers — results update as you type.'))}</p>
     </div>
+    <button class="btn btn-ghost" id="rearReset" type="button">↺ ${escHtml(tr('Reset to defaults'))}</button>
+  </div>
+
+  <div class="section-title" style="margin-top:0">${escHtml(tr('1. Your birds'))}</div>
+  <div class="panel"><div class="panel-pad"><div class="calc-grid">
+    ${f('birds','How many birds did you buy?')}
+    ${f('chickPrice','Price of one bird (ETB)')}
+    ${f('mortPct','Expected deaths (%)','Usually 2–4%')}
+    ${f('startDay','Age when you buy them (days)','Example: 1 = day-old chick, 55 = about 8 weeks')}
+    ${f('endDay','Age when they lay well (days)','Often about 150–160 days (around 22 weeks)')}
+  </div></div></div>
+
+  <div class="section-title">${escHtml(tr('2. Feed'))}</div>
+  <div class="panel"><div class="panel-pad"><div class="calc-grid">
+    ${f('feedCostPerKg','Feed price per kg (ETB)','If you buy by quintal: price ÷ 100')}
+    ${f('feedWastePct','Feed waste (%)','Spilled or spoiled feed — try 2–5%')}
+  </div>
+  <p class="note" style="margin:10px 0 0;">${escHtml(tr('Feed amount is estimated automatically from a standard growth table. You only need the price and waste %.'))}</p>
   </div></div>
 
-  <div class="section-title">Other Costs</div>
+  <div class="section-title">${escHtml(tr('3. People & running costs (monthly)'))}</div>
   <div class="panel"><div class="panel-pad"><div class="calc-grid">
-    ${f('cleaningPerMonth','Disinfectant &amp; cleaning (ETB/month)')}
-    ${f('equipPerMonth','Equipment depreciation &amp; repairs (ETB/month)')}
-    ${f('transportFlat','Transport of pullets (ETB, total)')}
-    ${f('miscFlat','Other / miscellaneous (ETB, total)')}
-    ${f('contingencyPct','Contingency (% of running costs)')}
-    ${f('interestPct','Loan interest (% per year)','Leave 0 if no loan')}
+    ${f('workers','Number of workers')}
+    ${f('wage','Pay per worker per month (ETB)')}
+    ${f('labourSharePct','% of their time on this flock','100 = full time on these birds')}
+    ${f('electricityPerMonth','Electricity per month (ETB)')}
+    ${f('waterPerMonth','Water per month (ETB)')}
+    ${f('litterPerMonth','Bedding / litter per month (ETB)')}
   </div></div></div>
 
+  <div class="section-title">${escHtml(tr('4. Health & other (simple totals)'))}</div>
+  <div class="panel"><div class="panel-pad"><div class="calc-grid">
+    ${f('medPerBirdWeek','Medicine & vitamins per bird per week (ETB)','Small amount for vitamins, treatments')}
+    ${f('vetFlat','Vet / lab total for the whole period (ETB)')}
+    ${f('transportFlat','Transport of birds (ETB total)')}
+    ${f('cleaningPerMonth','Cleaning & disinfectant per month (ETB)')}
+    ${f('equipPerMonth','Repairs & equipment per month (ETB)')}
+    ${f('miscFlat','Any other cost (ETB total)')}
+  </div>
+  <p class="note" style="margin:10px 0 0;">${escHtml(tr('Vaccines are included with a standard schedule in the background. Change medicine and vet totals to match what you really spend.'))}</p>
+  </div></div>
+
+  <details style="margin-bottom:18px;">
+    <summary style="cursor:pointer;font-weight:600;color:var(--green-dark);">${escHtml(tr('More options (optional)'))}</summary>
+    <div class="panel" style="margin-top:10px;"><div class="panel-pad"><div class="calc-grid">
+      ${f('contingencyPct','Extra buffer (% of running costs)','e.g. 3 for unexpected costs')}
+      ${f('interestPct','Loan interest % per year','0 if you did not borrow')}
+    </div></div></div>
+  </details>
+
   <div id="rearResults">${rearResultsHtml()}</div>
-  <p class="note">This calculator is a planning tool and doesn't change any logged records. Inputs are saved with your calculator settings.</p>`;
+  <p class="note">${escHtml(tr('This is only a planning tool. It does not change your farm records.'))}</p>`;
 }
 let rearSaveTimer = null;
 function attachRearingEvents(){
