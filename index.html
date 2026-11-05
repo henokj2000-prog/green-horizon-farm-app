@@ -300,9 +300,10 @@ const STORE_KEYS = {
   production:'gh_production', prodReductions:'gh_prodReductions',
   feedPurchases:'gh_feedPurchases', feeding:'gh_feeding',
   income:'gh_income', expenses:'gh_expenses',
-  vaccinations:'gh_vaccinations', medications:'gh_medications',
+  vaccinations:'gh_vaccinations', medications:'gh_medications', healthSchedule:'gh_healthSchedule',
   calc:'gh_calc', assets:'gh_assets',
   customers:'gh_customers', payments:'gh_payments', comments:'gh_comments', inquiries:'gh_inquiries',
+  orders:'gh_orders',
   acct:'gh_acct', trash:'gh_trash'
 };
 
@@ -332,21 +333,23 @@ const DEFAULT_SETUP = {
 
 const REDUCTION_REASONS = ["Death","Cull","Swarm Lost","Transfer Out","Theft/Loss","Other"];   // sales are recorded in Income only
 const PROD_REDUCTION_REASONS = ["Consumption","Spoilage","Given Away","Broken","Other"];   // sales are recorded in Income only
-const PAYMENT_METHODS = ["Cash","Bank Transfer","Mobile Money","Other"];
+const PAYMENT_METHODS = ["Cash","Bank Transfer","Mobile Money","Telebirr","CBE Birr","Other"];
 const INQUIRY_STATUSES = ["New","Contacted","Quoted","Converted","Lost"];
+const ORDER_STATUSES = ["New","Preparing","Ready","Done","Cancelled"];
+const ORDER_PAY_TYPES = ["Full payment","Advance only","Pay on pickup / later"];
 
 function seedExamples(){ return {}; }   // new version starts with an empty database
 
 let state = {
   setup: JSON.parse(JSON.stringify(DEFAULT_SETUP)),
   livestock:[], reductions:[], production:[], prodReductions:[],
-  feedPurchases:[], feeding:[], income:[], expenses:[], vaccinations:[], medications:[], assets:[],
-  customers:[], payments:[], comments:[], inquiries:[], acct:[],
+  feedPurchases:[], feeding:[], income:[], expenses:[], vaccinations:[], medications:[], healthSchedule:[], assets:[],
+  customers:[], payments:[], comments:[], inquiries:[], orders:[], acct:[],
   calc: JSON.parse(JSON.stringify(DEFAULT_CALC)),
   trash:[]   // soft-deleted records {entity, record, deletedAt}
 };
 let currentTab = 'dashboard';
-let healthSubTab = 'vaccinations';
+let healthSubTab = 'schedule';   // schedule | vaccinations | medications
 let reportsYear = currentEFY();   // Ethiopian fiscal year (EFY), not calendar year
 let showAdvancedAccounting = false;
 try{ showAdvancedAccounting = localStorage.getItem('gh_showAdvanced') === '1'; }catch(e){}
@@ -1208,6 +1211,8 @@ function printBatchCard(batchId){
     <div><strong>Current qty:</strong> ${fmtNum(qty)}</div>
     <div><strong>Purchase cost:</strong> ${fmtMoney(b.purchaseCost)}</div>
     <div><strong>Source:</strong> ${escHtml(b.source||'—')}</div>
+    <div><strong>Current age:</strong> ${escHtml(batchAgePlan(b).ageLabel)}</div>
+    <div><strong>Planned cull:</strong> ${escHtml(batchAgePlan(b).cullDate || '—')} ${batchAgePlan(b).daysLeft!=null ? '('+(batchAgePlan(b).daysLeft<0?'overdue':batchAgePlan(b).daysLeft+' days left')+')' : ''}</div>
   </div>
   <h3>Reductions</h3>
   <table><tr><th>Date</th><th>Reason</th><th>Qty</th><th>Notes</th></tr>
@@ -1499,8 +1504,8 @@ async function initApp(){
   migrateToLinkedSchema();
   loadDriveConfigLocal();
   const [setup, livestock, reductions, production, prodReductions,
-         feedPurchases, feeding, income, expenses, vaccinations, medications, calc, assets,
-         customers, payments, comments, inquiries, acct, trash] = await Promise.all([
+         feedPurchases, feeding, income, expenses, vaccinations, medications, healthSchedule, calc, assets,
+         customers, payments, comments, inquiries, orders, acct, trash] = await Promise.all([
     loadKey(STORE_KEYS.setup, null),
     loadKey(STORE_KEYS.livestock, null),
     loadKey(STORE_KEYS.reductions, null),
@@ -1512,12 +1517,14 @@ async function initApp(){
     loadKey(STORE_KEYS.expenses, null),
     loadKey(STORE_KEYS.vaccinations, null),
     loadKey(STORE_KEYS.medications, null),
+    loadKey(STORE_KEYS.healthSchedule, null),
     loadKey(STORE_KEYS.calc, null),
     loadKey(STORE_KEYS.assets, null),
     loadKey(STORE_KEYS.customers, null),
     loadKey(STORE_KEYS.payments, null),
     loadKey(STORE_KEYS.comments, null),
     loadKey(STORE_KEYS.inquiries, null),
+    loadKey(STORE_KEYS.orders, null),
     loadKey(STORE_KEYS.acct, null),
     loadKey(STORE_KEYS.trash, [])
   ]);
@@ -1539,11 +1546,13 @@ async function initApp(){
   state.expenses = expenses || seeds.expenses || [];
   state.vaccinations = vaccinations || seeds.vaccinations || [];
   state.medications = medications || seeds.medications || [];
+  state.healthSchedule = healthSchedule || [];
   state.assets = assets || [];
   state.customers = customers || [];
   state.payments = payments || [];
   state.comments = comments || [];
   state.inquiries = inquiries || [];
+  state.orders = orders || [];
   state.acct = acct || seeds.acct || [];
   state.calc = calc || calcAutoDefaults();
   state.trash = Array.isArray(trash) ? trash : [];
@@ -1553,7 +1562,7 @@ async function initApp(){
       saveSetup(),
       saveEntity('livestock'), saveEntity('reductions'), saveEntity('production'),
       saveEntity('prodReductions'), saveEntity('feedPurchases'), saveEntity('feeding'),
-      saveEntity('income'), saveEntity('expenses'), saveEntity('vaccinations'), saveEntity('medications'), saveEntity('acct')
+      saveEntity('income'), saveEntity('expenses'), saveEntity('vaccinations'), saveEntity('medications'), saveEntity('healthSchedule'), saveEntity('acct')
     ]);
   }
   if(!calc) await saveCalc();
@@ -1673,14 +1682,102 @@ function batchCurrentQty(batchId, excludeRedId){
   const b = state.livestock.find(x=>x.batchId===batchId); if(!b) return 0;
   return num(b.initialQty) - allReductions().filter(r=>r.batchId===batchId && r.id!==excludeRedId).reduce((t,r)=>t+num(r.qty),0);
 }
+/** Typical productive life after acquisition (months) when not set on the batch. */
+function defaultProductiveMonths(animalType){
+  if(animalType==='Poultry') return DEFAULT_AMORT_MONTHS; // laying life after purchase age
+  if(animalType==='Goats' || animalType==='Sheep') return 60; // ~5 years
+  if(animalType==='Oxen') return 96; // ~8 years
+  if(animalType==='Bees') return 36; // colony productive window
+  return 24;
+}
+/**
+ * Age + cull / replacement planning for one batch.
+ * - currentAge: weeks (poultry) or days (others) from birth/purchase
+ * - cullDate: planned end of productive life
+ * - daysLeft / weeksLeft until cull
+ * - planTag: human status for ordering next stock
+ */
+function batchAgePlan(b){
+  const today = todayISO();
+  const daysOnFarm = validDate(b.dateAcquired)
+    ? Math.max(0, Math.floor((new Date(today+'T12:00:00') - new Date(b.dateAcquired+'T12:00:00'))/86400000))
+    : 0;
+  const ageWeeksAtBuy = weeksAtPurchase(b);
+  const ageWeeksNow = Math.max(0, Math.round(ageWeeksAtBuy + daysOnFarm/7));
+  const ageDaysNow = Math.max(0, Math.round(ageWeeksAtBuy*7 + daysOnFarm)); // approx total age for poultry; farm days for others without birth age
+
+  let productiveMonths = 0;
+  let cullDate = '';
+  let startForCull = b.dateAcquired;
+
+  if(isLayerFlock(b)){
+    // Layers: productive from onset of lay for amortMonths (or default)
+    const P = bioParams(b);
+    const am = num(b.amortMonths)>0 ? Math.round(num(b.amortMonths)) : DEFAULT_AMORT_MONTHS;
+    productiveMonths = am;
+    // Cull after mature + amort months
+    if(P.mature) startForCull = P.mature;
+    else if(validDate(b.dateAcquired)) startForCull = b.dateAcquired;
+    if(validDate(startForCull)) cullDate = addDaysISO(startForCull, Math.round(am * 30.44));
+  } else if(isAssetAnimal(b) && num(b.amortMonthsOther)>0){
+    productiveMonths = Math.round(num(b.amortMonthsOther));
+    if(validDate(b.dateAcquired)) cullDate = addDaysISO(b.dateAcquired, Math.round(productiveMonths * 30.44));
+  } else {
+    productiveMonths = defaultProductiveMonths(b.animalType);
+    // Optional explicit planned cull date on the record
+    if(validDate(b.plannedCullDate)) cullDate = b.plannedCullDate;
+    else if(validDate(b.dateAcquired)) cullDate = addDaysISO(b.dateAcquired, Math.round(productiveMonths * 30.44));
+  }
+  if(validDate(b.plannedCullDate)) cullDate = b.plannedCullDate;
+
+  let daysLeft = null, weeksLeft = null;
+  if(validDate(cullDate)){
+    daysLeft = Math.floor((new Date(cullDate+'T12:00:00') - new Date(today+'T12:00:00'))/86400000);
+    weeksLeft = Math.round(daysLeft / 7);
+  }
+
+  let planTag = '—', planClass = '';
+  if(num(b.initialQty) - allReductions().filter(r=>r.batchId===b.batchId).reduce((s,r)=>s+num(r.qty),0) <= 0){
+    planTag = 'Closed'; planClass = 'tag-closed';
+  } else if(daysLeft === null){
+    planTag = 'No plan'; planClass = '';
+  } else if(daysLeft < 0){
+    planTag = 'Past cull date — replace / cull'; planClass = 'tag-closed';
+  } else if(daysLeft <= 28){
+    planTag = 'Cull soon — order next batch'; planClass = 'tag-closed';
+  } else if(daysLeft <= 90){
+    planTag = 'Plan next order'; planClass = 'tag-active';
+  } else {
+    planTag = 'OK'; planClass = 'tag-active';
+  }
+
+  const ageLabel = b.animalType==='Poultry'
+    ? (ageWeeksNow + ' wk')
+    : (daysOnFarm >= 60 ? (Math.round(daysOnFarm/30.44)+' mo') : (daysOnFarm+' d'));
+
+  return {
+    daysOnFarm, ageWeeks: ageWeeksNow, ageDays: b.animalType==='Poultry' ? Math.round(ageWeeksNow*7) : daysOnFarm,
+    ageLabel, cullDate, daysLeft, weeksLeft, productiveMonths, planTag, planClass
+  };
+}
 function livestockComputed(){
   return state.livestock.map(b=>{
     const reduced = allReductions().filter(r=>r.batchId===b.batchId).reduce((s,r)=>s+num(r.qty),0);
     const current = num(b.initialQty)-reduced;
-    const daysSince = b.dateAcquired ? Math.floor((new Date(todayISO())-new Date(b.dateAcquired))/86400000) : 0;
-    const ageWeeks = Math.max(0, Math.round(weeksAtPurchase(b) + daysSince/7));
-    const ageDays = daysSince;
-    return Object.assign({}, b, {reduced, current, status: current<=0?'Closed':'Active', ageDays, ageWeeks});
+    const plan = batchAgePlan(b);
+    return Object.assign({}, b, {
+      reduced, current,
+      status: current<=0?'Closed':'Active',
+      ageDays: plan.ageDays,
+      ageWeeks: plan.ageWeeks,
+      ageLabel: plan.ageLabel,
+      cullDate: plan.cullDate,
+      daysLeft: plan.daysLeft,
+      weeksLeft: plan.weeksLeft,
+      planTag: plan.planTag,
+      planClass: plan.planClass,
+      productiveMonths: plan.productiveMonths
+    });
   });
 }
 function livestockByType(){
@@ -1850,6 +1947,8 @@ const TABS = [
   {key:'feed', label:'Feed', icon:'🌾'},
   {key:'calculator', label:'Price Calc', icon:'🧮'},
   {key:'rearing', label:'Rearing Cost', icon:'🐥'},
+  {key:'invest', label:'Investment Plan', icon:'📈'},
+  {key:'orders', label:'Orders', icon:'🛒'},
   {key:'income', label:'Income', icon:'💰'},
   {key:'expenses', label:'Expenses & Purchases', icon:'💸'},
   {key:'customers', label:'Customers', icon:'👥'},
@@ -1877,7 +1976,8 @@ function render(){
   const renderers = {
     dashboard: renderDashboard, livestock: renderLivestock,
     production: renderProduction, prodstock: renderProdStock, feed: renderFeed,
-    calculator: renderCalculator, rearing: renderRearing,
+    calculator: renderCalculator, rearing: renderRearing, invest: renderInvest,
+    orders: renderOrders,
     income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
     reports: renderReports, setup: renderSetup
   };
@@ -2099,19 +2199,24 @@ function renderDashboard(){
 /* ================= LIVESTOCK (batches + reductions in one tab) ================= */
 function renderLivestock(){
   const rows = livestockComputed();
-  const body = rows.length ? rows.map(r=>`
+  const active = rows.filter(r=>r.current>0);
+  const needOrder = active.filter(r=>r.daysLeft!==null && r.daysLeft<=90);
+  const body = rows.length ? rows.map(r=>{
+    const leftTxt = r.daysLeft===null ? '—'
+      : r.daysLeft<0 ? tr('Overdue')
+      : (r.daysLeft<=60 ? (r.daysLeft+' '+tr('days')) : (Math.round(r.daysLeft/30.44)+' '+tr('months')));
+    return `
     <tr>
       <td>${escHtml(r.branch||'—')}</td>
       <td>${escHtml(r.animalType)}</td>
       <td class="mono">${escHtml(r.batchId)}</td>
       <td>${escHtml(r.breed)}</td>
       <td>${fmtDate(r.dateAcquired)}</td>
-      <td>${escHtml(r.source)}</td>
+      <td class="num mono"><strong>${escHtml(r.ageLabel)}</strong></td>
+      <td>${r.cullDate ? fmtDate(r.cullDate) : '—'}</td>
+      <td class="num mono">${leftTxt}</td>
+      <td><span class="tag ${r.planClass||''}">${escHtml(tr(r.planTag))}</span></td>
       <td class="num mono">${fmtNum(r.initialQty)}</td>
-      <td class="num mono">${fmtMoney(r.purchaseCost)}</td>
-      <td>${isLayerFlock(r)?'Asset — layers':isAssetAnimal(r)?'Asset — livestock':'Expensed'}</td>
-      <td class="num mono">${r.animalType==='Poultry'?r.ageWeeks:r.ageDays}</td>
-      <td class="num mono">${fmtNum(r.reduced)}</td>
       <td class="num mono"><strong>${fmtNum(r.current)}</strong></td>
       <td><span class="tag ${r.status==='Active'?'tag-active':'tag-closed'}">${r.status}</span></td>
       <td class="notes-cell">${escHtml(r.notes)}</td>
@@ -2120,8 +2225,21 @@ function renderLivestock(){
         <button class="btn btn-ghost btn-sm" data-batch-card="${escHtml(r.batchId)}">📄</button>
         <button class="btn btn-danger btn-sm" data-del="livestock" data-id="${r.id}">${escHtml(tr('Remove'))}</button>
       </td>
-    </tr>`).join('') : emptyRow(15,tr('No batches yet. Buy animals under Expenses & Purchases → Livestock (choose branch; batch code is auto).'));
+    </tr>`;
+  }).join('') : emptyRow(14,tr('No batches yet. Buy animals under Expenses & Purchases → Livestock (choose branch; batch code is auto).'));
 
+  const planPanel = needOrder.length ? `
+  <div class="panel" style="margin-bottom:16px;border-color:var(--clay);"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">⏰ ${escHtml(tr('Age & replacement reminders'))}</div>
+    <p class="note" style="margin:0 0 10px;">${escHtml(tr('These batches are within 3 months of their planned cull / end of productive life. Plan or order the next livestock so production does not stop.'))}</p>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;">
+      ${needOrder.map(r=>`<li><strong class="mono">${escHtml(r.batchId)}</strong> — ${escHtml(r.animalType)}${r.breed?' ('+escHtml(r.breed)+')':''}:
+        ${escHtml(tr('Age'))} <strong>${escHtml(r.ageLabel)}</strong> ·
+        ${r.daysLeft<0 ? escHtml(tr('past cull date')) : escHtml(tr('about'))+' <strong>'+(r.daysLeft<=60 ? r.daysLeft+' '+tr('days') : Math.round(r.daysLeft/30.44)+' '+tr('months'))+'</strong> '+escHtml(tr('left'))}
+        ${r.cullDate ? ' ('+fmtDate(r.cullDate)+')' : ''}
+      </li>`).join('')}
+    </ul>
+  </div></div>` : '';
 
   const redRows = allReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const wo = bioWriteOffByReduction();
@@ -2140,13 +2258,15 @@ function renderLivestock(){
   <div class="pagehead">
     <div>
       <h1>${t('Livestock')}</h1>
-      <p>${escHtml(tr('Batches are created automatically when you buy animals under Expenses & Purchases. Batch codes are auto-generated from the animal type (e.g. POU-001, GOA-001).'))}</p>
+      <p>${escHtml(tr('See each batch’s current age and how long until the planned cull date — so you know when to order the next animals.'))}</p>
     </div>
     <button class="btn btn-ghost csv-btn" data-csv="livestock">⬇ CSV</button>
   </div>
+  ${planPanel}
   ${tableShell([
-    {label:'Branch'},{label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
-    {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (weeks for poultry / days others)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
+    {label:'Branch'},{label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},
+    {label:'Current age'},{label:'Planned cull'},{label:'Time left'},{label:'Plan'},
+    {label:'Initial Qty',num:true},{label:'Current Qty',num:true},
     {label:'Status'},{label:'Notes'},{label:''}
   ], body, {id:'tbl_livestock_batches'})}
 
@@ -2467,7 +2587,19 @@ Object.assign(AM, {
   'Simple cost list':'ቀላል የወጪ ዝርዝር','What':'ምን','Buying the birds':'ወፎቹን መግዛት','Workers (labour)':'ሠራተኞች (ሠራተኛ)',
   'Electricity, water & bedding':'ኤሌክትሪክ፣ ውሃና አልጋ','Vaccines, medicine & vet':'ክትባት፣ መድኃኒትና እንስሳት ሐኪም',
   'Transport, cleaning & other':'ትራንስፖርት፣ ጽዳትና ሌላ','TOTAL':'ጠቅላላ',
-  'Tip: “Cost for each hen that survives” is the useful number — it is what one ready-to-lay hen really cost you after deaths.':'ምክር: «ለእያንዳንዱ ለሚተርፈው ዶሮ ወጪ» ጠቃሚ ቁጥር ነው — ከሞት በኋላ አንድ ለመጣል ዝግጁ ዶሮ በትክክል ያስከፈለዎት ነው።'
+  'Tip: “Cost for each hen that survives” is the useful number — it is what one ready-to-lay hen really cost you after deaths.':'ምክር: «ለእያንዳንዱ ለሚተርፈው ዶሮ ወጪ» ጠቃሚ ቁጥር ነው — ከሞት በኋላ አንድ ለመጣል ዝግጁ ዶሮ በትክክል ያስከፈለዎት ነው።',
+  'Investment Plan':'የኢንቨስትመንት ዕቅድ',
+  'How many birds can you buy and raise until they start producing, with the money you have today?':'በዛሬው ገንዘብዎ ምን ያህል ወፎች መግዛትና እስከ ምርት ድረስ ማሳደግ ይችላሉ?',
+  '1. Money available':'1. ያለዎት ገንዘብ','2. Cost to buy & raise one bird':'2. አንድ ወፍ ለመግዛትና ለማሳደግ ወጪ',
+  'Use this as your budget':'ይህን እንደ በጀትዎ ይጠቀሙ','Cash & bank today':'ዛሬ ያለ ጥሬ ገንዘብና ባንክ',
+  'YTD net profit after tax':'እስከ አሁን የዓመቱ የተጣራ ትርፍ ከግብር በኋላ','Type a budget myself':'በጀት እራሴ ልጻፍ',
+  'Manual budget (ETB)':'በእጅ የተጻፈ በጀት (ብር)','Keep this much in reserve (ETB)':'ይህን ያህል በመጠባበቂያ ያቆዩ (ብር)',
+  'Birds you can buy & raise':'መግዛትና ማሳደግ የሚችሉት ወፎች','Cost per bird (to production)':'ወጪ በአንድ ወፍ (እስከ ምርት)',
+  'Total to spend':'ለማውጣት ጠቅላላ','Money left after plan':'ከዕቅዱ በኋላ የሚቀረው ገንዘብ',
+  'Time until they lay well':'በደንብ እስኪጥሉ ያለው ጊዜ','weeks':'ሳምንታት','Spend breakdown':'የወጪ ዝርዝር',
+  'Raising until production':'እስከ ምርት ድረስ ማሳደግ','Extra (transport, buffer)':'ተጨማሪ (ትራንስፖርት፣ መጠባበቂያ)',
+  'What you can do with the money you have':'ባለዎት ገንዘብ ምን ማድረግ እንደሚችሉ',
+  'This is a planning tool only. It does not buy animals or change your books.':'ይህ የዕቅድ መሣሪያ ብቻ ነው። እንስሳትን አይገዛም ወይም መዝገቦችዎን አይለውጥም።'
 });
 const BOVANS_FEED_STD = {0:10,1:16,2:22,3:28,4:34,5:38,6:42,7:44,8:46,9:50,10:54,11:57,12:60,13:63,14:66,15:70,16:74,17:80,18:88,19:96,20:104,21:108,22:112,23:114,24:116}; // g/bird/day by completed week of age
 const DEFAULT_REAR_VAX = [
@@ -2661,6 +2793,206 @@ function attachRearingEvents(){
   });
 }
 
+/* ================= INVESTMENT PROJECTION ================= */
+function defaultInvest(){
+  return {
+    fundSource: 'cash',   // cash | profit | manual
+    manualBudget: 0,
+    keepReserve: 0,       // cash to leave in the bank
+    useRearingCalc: 'Yes',
+    birdPrice: 700,
+    raiseCostPerBird: 0,  // used when not using rearing calc
+    extraPerBird: 0,      // transport, unexpected
+    targetBirds: 0        // 0 = max affordable
+  };
+}
+function getInvest(){
+  if(!state.calc.invest) state.calc.invest = defaultInvest();
+  return state.calc.invest;
+}
+/** Realized net profit after tax for current EFY (from tax report). */
+function realizedNetAfterTax(){
+  try{
+    return num(fyReport(currentEFY()).netAfter);
+  }catch(e){ return 0; }
+}
+function investAvailableFunds(inv){
+  let gross = 0;
+  if(inv.fundSource==='profit') gross = Math.max(0, realizedNetAfterTax());
+  else if(inv.fundSource==='manual') gross = Math.max(0, num(inv.manualBudget));
+  else {
+    try{ gross = Math.max(0, num(balanceSheet(currentEFY()).cash)); }
+    catch(e){ gross = 0; }
+  }
+  return Math.max(0, gross - Math.max(0, num(inv.keepReserve)));
+}
+function investCostPerBird(inv){
+  let buy = 0, raise = 0;
+  if(inv.useRearingCalc==='Yes'){
+    try{
+      const x = computeRear(getRear());
+      buy = num(getRear().chickPrice);
+      // perHoused already includes purchase + raise; raise-only = perHoused - chickPrice
+      raise = Math.max(0, num(x.perHoused) - buy);
+    }catch(e){
+      buy = num(inv.birdPrice); raise = num(inv.raiseCostPerBird);
+    }
+  } else {
+    buy = num(inv.birdPrice);
+    raise = num(inv.raiseCostPerBird);
+  }
+  const extra = num(inv.extraPerBird);
+  return { buy, raise, extra, total: buy + raise + extra };
+}
+function computeInvest(inv){
+  const budget = investAvailableFunds(inv);
+  const costs = investCostPerBird(inv);
+  const per = costs.total;
+  let maxBirds = per > 0 ? Math.floor(budget / per) : 0;
+  let birds = num(inv.targetBirds) > 0 ? Math.min(maxBirds, Math.floor(num(inv.targetBirds))) : maxBirds;
+  if(birds < 0) birds = 0;
+  const spendBuy = birds * costs.buy;
+  const spendRaise = birds * costs.raise;
+  const spendExtra = birds * costs.extra;
+  const spendTotal = spendBuy + spendRaise + spendExtra;
+  const leftover = budget - spendTotal;
+  let daysToLay = 0, weeksToLay = 0;
+  try{
+    const r = getRear();
+    daysToLay = Math.max(0, Math.floor(num(r.endDay) - num(r.startDay)));
+    weeksToLay = Math.round(daysToLay / 7);
+  }catch(e){}
+  // Rough egg income after production starts (optional illustration)
+  let eggsPerDay = 0, dailyFeedCost = 0, dailyGross = 0;
+  try{
+    const c = state.calc || {};
+    const rate = Math.min(100, Math.max(0, num(c.layingRatePct) || 70)) / 100;
+    eggsPerDay = birds * rate;
+    const feedKgDay = birds * (FEED_PER_BIRD_KG || 0.112);
+    dailyFeedCost = feedKgDay * (num(c.feedCostPerKg) || num(getRear().feedCostPerKg) || 0);
+    // Use calculator selling price if any
+    let eggPrice = 0;
+    if(num(c.marginPct) >= 0){
+      // approximate crate-based selling from price calc if present
+      const eggsPerCrate = num(c.eggsPerCrate) || 30;
+      const costPerEgg = (dailyFeedCost + num(c.otherCostPerDay||0)) / Math.max(1, eggsPerDay);
+      const markup = num(c.marginPct)/100;
+      eggPrice = c.marginBasis==='margin' ? costPerEgg/(1-Math.min(0.9,markup)) : costPerEgg*(1+markup);
+    }
+    dailyGross = eggsPerDay * eggPrice;
+  }catch(e){}
+  return {
+    budget, costs, maxBirds, birds, spendBuy, spendRaise, spendExtra, spendTotal, leftover,
+    daysToLay, weeksToLay, eggsPerDay, dailyFeedCost, dailyGross
+  };
+}
+function investResultsHtml(){
+  const inv = getInvest(), x = computeInvest(inv);
+  const fundLabel = inv.fundSource==='profit' ? tr('YTD net profit after tax')
+    : inv.fundSource==='manual' ? tr('Manual budget')
+    : tr('Cash & bank today');
+  return `
+  <div class="section-title">${escHtml(tr('What you can do with the money you have'))}</div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">${escHtml(fundLabel)}</div><div class="kpi-value mono">${fmtMoney(x.budget + num(inv.keepReserve))}</div>
+      ${num(inv.keepReserve)>0?`<div class="calc-hint">${escHtml(tr('Reserve kept'))}: ${fmtMoney(inv.keepReserve)} → ${escHtml(tr('Usable'))}: ${fmtMoney(x.budget)}</div>`:''}</div>
+    <div class="kpi-card result-highlight"><div class="kpi-label">${escHtml(tr('Birds you can buy & raise'))}</div><div class="kpi-value mono">${fmtNum(x.birds)}</div>
+      <div class="calc-hint">${escHtml(tr('Max possible'))}: ${fmtNum(x.maxBirds)}</div></div>
+    <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost per bird (to production)'))}</div><div class="kpi-value mono">${fmtMoney(x.costs.total)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Total to spend'))}</div><div class="kpi-value mono">${fmtMoney(x.spendTotal)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Money left after plan'))}</div><div class="kpi-value mono">${fmtMoney(x.leftover)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Time until they lay well'))}</div><div class="kpi-value mono">${x.weeksToLay || '—'} ${escHtml(tr('weeks'))}</div>
+      <div class="calc-hint">${x.daysToLay?x.daysToLay+' '+tr('days'):''}</div></div>
+  </div>
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">${escHtml(tr('Spend breakdown'))}</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>${escHtml(tr('What'))}</th><th class="num">${escHtml(tr('Per bird'))}</th><th class="num">${escHtml(tr('Total'))}</th></tr></thead>
+      <tbody>
+        <tr><td>${escHtml(tr('Buying the birds'))}</td><td class="num mono">${fmtMoney(x.costs.buy)}</td><td class="num mono">${fmtMoney(x.spendBuy)}</td></tr>
+        <tr><td>${escHtml(tr('Raising until production'))}</td><td class="num mono">${fmtMoney(x.costs.raise)}</td><td class="num mono">${fmtMoney(x.spendRaise)}</td></tr>
+        <tr><td>${escHtml(tr('Extra (transport, buffer)'))}</td><td class="num mono">${fmtMoney(x.costs.extra)}</td><td class="num mono">${fmtMoney(x.spendExtra)}</td></tr>
+        <tr style="font-weight:700;background:var(--surface-alt)"><td>${escHtml(tr('TOTAL'))}</td><td class="num mono">${fmtMoney(x.costs.total)}</td><td class="num mono">${fmtMoney(x.spendTotal)}</td></tr>
+      </tbody>
+    </table></div>
+    ${x.birds>0 && x.eggsPerDay>0 ? `<p class="note" style="margin:12px 0 0;">${escHtml(tr('After they start laying (rough):'))} ~${fmtNum(x.eggsPerDay.toFixed(0))} ${escHtml(tr('eggs/day'))}. ${escHtml(tr('This is only a guide — use Price Calc for selling prices.'))}</p>` : ''}
+    ${x.birds===0 ? `<p class="note" style="margin:12px 0 0;color:var(--clay);">${escHtml(tr('Not enough funds for even one bird at this cost. Lower the cost per bird, reduce the reserve, or add capital / wait for more profit.'))}</p>` : ''}
+  </div></div>`;
+}
+function renderInvest(){
+  const inv = getInvest();
+  let cash = 0, profit = 0;
+  try{ cash = Math.max(0, num(balanceSheet(currentEFY()).cash)); }catch(e){}
+  try{ profit = realizedNetAfterTax(); }catch(e){}
+  const f = (key, label, hint, opts)=>{
+    opts = opts || {};
+    return `<label class="calc-field">${escHtml(tr(label))}
+      <input type="number" step="any" min="0" data-invest-field="${key}" value="${escHtml(inv[key])}" ${opts.disabled?'disabled':''}>
+      ${hint?`<span class="calc-hint">${escHtml(tr(hint))}</span>`:''}</label>`;
+  };
+  return `
+  <div class="pagehead">
+    <div>
+      <h1>${escHtml(tr('Investment Plan'))}</h1>
+      <p>${escHtml(tr('How many birds can you buy and raise until they start producing, with the money you have today?'))}</p>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:0">${escHtml(tr('1. Money available'))}</div>
+  <div class="panel"><div class="panel-pad">
+    <div class="calc-grid">
+      <label class="calc-field">${escHtml(tr('Use this as your budget'))}
+        <select data-invest-field="fundSource">
+          <option value="cash" ${inv.fundSource==='cash'?'selected':''}>${escHtml(tr('Cash & bank today'))} (${fmtMoney(cash)})</option>
+          <option value="profit" ${inv.fundSource==='profit'?'selected':''}>${escHtml(tr('YTD net profit after tax'))} (${fmtMoney(profit)})</option>
+          <option value="manual" ${inv.fundSource==='manual'?'selected':''}>${escHtml(tr('Type a budget myself'))}</option>
+        </select>
+      </label>
+      ${f('manualBudget','Manual budget (ETB)','Only used if you chose “type a budget”')}
+      ${f('keepReserve','Keep this much in reserve (ETB)','Money you do not want to spend on birds')}
+    </div>
+    <p class="note" style="margin:10px 0 0;">${escHtml(tr('“YTD net profit after tax” comes from your Reports tax figure for this Ethiopian fiscal year. Cash is what is in the bank/cash book today.'))}</p>
+  </div></div>
+
+  <div class="section-title">${escHtml(tr('2. Cost to buy & raise one bird'))}</div>
+  <div class="panel"><div class="panel-pad">
+    <div class="calc-grid">
+      <label class="calc-field">${escHtml(tr('Cost source'))}
+        <select data-invest-field="useRearingCalc">
+          <option value="Yes" ${inv.useRearingCalc==='Yes'?'selected':''}>${escHtml(tr('Use Rearing Cost calculator'))}</option>
+          <option value="No" ${inv.useRearingCalc==='No'?'selected':''}>${escHtml(tr('Enter costs myself'))}</option>
+        </select>
+      </label>
+      ${f('birdPrice','Buy price per bird (ETB)','Used when not using the rearing calculator')}
+      ${f('raiseCostPerBird','Raise cost per bird until production (ETB)','Feed, labour, health — if not using rearing calculator')}
+      ${f('extraPerBird','Extra per bird (ETB)','Transport, unexpected')}
+      ${f('targetBirds','Target number of birds (0 = maximum you can afford)','Leave 0 to see the maximum')}
+    </div>
+    <p class="note" style="margin:10px 0 0;">${escHtml(tr('Tip: open Rearing Cost first and set your real prices. This plan can reuse that cost per bird automatically.'))}</p>
+  </div></div>
+
+  <div id="investResults">${investResultsHtml()}</div>
+  <p class="note">${escHtml(tr('This is a planning tool only. It does not buy animals or change your books.'))}</p>`;
+}
+let investSaveTimer = null;
+function attachInvestEvents(){
+  const inv = getInvest();
+  const update = ()=>{
+    const el = document.getElementById('investResults');
+    if(el){ el.innerHTML = investResultsHtml(); translateDom(el); fitMoneyTexts(el); }
+    clearTimeout(investSaveTimer); investSaveTimer = setTimeout(saveCalc, 600);
+  };
+  document.querySelectorAll('[data-invest-field]').forEach(el=>{
+    const apply = ()=>{
+      const k = el.dataset.investField;
+      inv[k] = (el.tagName==='SELECT' || el.type==='text') ? el.value : num(el.value);
+      update();
+    };
+    el.addEventListener('input', apply);
+    el.addEventListener('change', apply);
+  });
+}
+
 /* ================= INCOME ================= */
 /* ---------------- Customers / receivables computed values ---------------- */
 function incomePaidAmt(r){ return r.paymentStatus==='Partial / Credit' ? num(r.amountPaid) : incomeAmount(r); }
@@ -2670,6 +3002,171 @@ function customerPaidAtSale(cid){ return state.income.filter(r=>r.customerId===c
 function customerPaymentsTotal(cid){ return state.payments.filter(p=>p.customerId===cid).reduce((s,p)=>s+num(p.amount),0); }
 function customerBalance(cid){ return customerSales(cid) - customerPaidAtSale(cid) - customerPaymentsTotal(cid); }
 function totalReceivables(){ return state.customers.reduce((s,c)=>s+Math.max(0,customerBalance(c.id)),0); }
+
+/* ================= ORDERS (FIFO queue → Customers, Income, Payments, Stock) ================= */
+function nextOrderNo(){
+  const n = (state.orders||[]).length + 1;
+  return 'ORD-'+String(n).padStart(3,'0');
+}
+function orderTotal(o){ return money2(num(o.qty)*num(o.unitPrice)); }
+function orderBalance(o){ return money2(Math.max(0, orderTotal(o) - num(o.amountPaid))); }
+function saleCategoryForProduct(product){
+  const map = {'Eggs':'Egg Sales','Honey':'Honey Sales','Milk':'Milk Sales','Wool':'Wool Sales','Manure':'Manure Sales'};
+  return map[product] || 'Other Income';
+}
+/** Ensure customer exists; return customer id. */
+async function ensureOrderCustomer(o){
+  if(o.customerId && state.customers.some(c=>c.id===o.customerId)) return o.customerId;
+  const name = String(o.customerName||'').trim();
+  const phone = String(o.phone||'').trim();
+  if(!name && !phone) return '';
+  let c = state.customers.find(x=>phone && x.phone===phone);
+  if(!c && name) c = state.customers.find(x=>x.name===name && (!phone || !x.phone || x.phone===phone));
+  if(c) return c.id;
+  const id = uid();
+  state.customers.push({id, name: name||('Customer '+phone), phone, type:'Retail / Walk-in', notes:'From order '+(o.orderNo||'')});
+  await saveEntity('customers');
+  return id;
+}
+/**
+ * Mark order Done: create Income (reduces product stock) + Payment if amount paid.
+ * Idempotent if already fulfilled (incomeId set).
+ */
+async function fulfillOrder(orderId){
+  const o = state.orders.find(x=>x.id===orderId);
+  if(!o) return 'Order not found.';
+  if(o.status==='Cancelled') return 'Cancelled orders cannot be fulfilled.';
+  if(o.incomeId){ o.status='Done'; await saveEntity('orders'); return ''; }
+
+  const cid = await ensureOrderCustomer(o);
+  o.customerId = cid;
+
+  const total = orderTotal(o);
+  const paid = num(o.amountPaid);
+  const product = o.product || '';
+  const qty = num(o.qty);
+
+  // Stock check for product sales
+  if(product && qty>0 && ['Eggs','Honey','Milk','Wool','Manure'].includes(product)){
+    const avail = productStock(product, o.branch||undefined);
+    if(qty > avail + 1e-9){
+      return tr('Not enough stock for')+' '+product+': '+tr('available')+' '+fmtNum(avail)+', '+tr('order needs')+' '+fmtNum(qty)+'. '+tr('Add production first or reduce order qty.');
+    }
+  }
+
+  const incId = uid();
+  const payStatus = paid <= 0 ? 'Partial / Credit' : (paid + 0.005 >= total ? 'Paid in full' : 'Partial / Credit');
+  const incomeRec = {
+    id: incId,
+    date: o.date || todayISO(),
+    branch: o.branch || (ensureBranches()[0]||'Main'),
+    category: product ? saleCategoryForProduct(product) : 'Other Income',
+    description: (o.description||'') || ((o.orderNo||'')+' — '+(product||'Order')),
+    qty: qty || 1,
+    unitPrice: num(o.unitPrice) || total,
+    customerId: cid,
+    paymentStatus: payStatus,
+    amountPaid: payStatus==='Partial / Credit' ? paid : 0,
+    refNo: o.refNo || '',
+    notes: 'From order '+(o.orderNo||'')+(o.fulfillment?(' · '+o.fulfillment):'')+(o.address?(' · '+o.address):'')
+  };
+  state.income.push(incomeRec);
+  await saveEntity('income');
+
+  let paymentId = '';
+  if(paid > 0){
+    paymentId = uid();
+    state.payments.push({
+      id: paymentId,
+      date: o.date || todayISO(),
+      customerId: cid,
+      amount: paid,
+      method: o.payMethod || 'Mobile Money',
+      refNo: o.refNo || '',
+      notes: 'Order '+(o.orderNo||'')+' · '+(o.payType||'')
+    });
+    await saveEntity('payments');
+  }
+
+  o.incomeId = incId;
+  o.paymentId = paymentId;
+  o.status = 'Done';
+  o.fulfilledAt = new Date().toISOString();
+  await saveEntity('orders');
+  return '';
+}
+async function setOrderStatus(orderId, status){
+  const o = state.orders.find(x=>x.id===orderId);
+  if(!o) return;
+  if(status==='Done'){
+    const err = await fulfillOrder(orderId);
+    if(err){ say(err); return; }
+    showToast(tr('Order fulfilled — sale & payment recorded'));
+    render();
+    return;
+  }
+  o.status = status;
+  await saveEntity('orders');
+  render();
+  showToast(tr('Status updated'));
+}
+function renderOrders(){
+  const rows = (state.orders||[]).slice().sort((a,b)=>{
+    // Active queue first (FIFO by date/created), then Done/Cancelled
+    const rank = s => (s==='Done'||s==='Cancelled') ? 1 : 0;
+    const ra = rank(a.status), rb = rank(b.status);
+    if(ra!==rb) return ra-rb;
+    const ta = a.createdAt || a.date || '';
+    const tb = b.createdAt || b.date || '';
+    return ta.localeCompare(tb);
+  });
+  const open = rows.filter(r=>r.status!=='Done'&&r.status!=='Cancelled');
+  const body = rows.length ? rows.map(r=>{
+    const total = orderTotal(r);
+    const bal = orderBalance(r);
+    const stCls = r.status==='New'?'tag-active': r.status==='Done'?'tag-active': r.status==='Cancelled'?'tag-closed':'tag-active';
+    return `<tr>
+      <td class="mono">${escHtml(r.orderNo||'')}</td>
+      <td>${fmtDate(r.date)}</td>
+      <td>${escHtml(customerName(r.customerId)||r.customerName||'—')}<div class="calc-hint">${escHtml(r.phone||'')}</div></td>
+      <td>${escHtml(r.product||'—')} ${num(r.qty)?('× '+fmtNum(r.qty)):''}<div class="calc-hint notes-cell">${escHtml(r.description||'')}</div></td>
+      <td class="num mono">${fmtMoney(total)}</td>
+      <td class="num mono">${fmtMoney(r.amountPaid)}</td>
+      <td class="num mono">${fmtMoney(bal)}</td>
+      <td>${escHtml(r.payMethod||'')}<div class="calc-hint mono">${escHtml(r.refNo||'')}</div></td>
+      <td><span class="tag ${stCls}">${escHtml(tr(r.status||'New'))}</span></td>
+      <td class="rowactions">
+        ${r.status!=='Done'&&r.status!=='Cancelled'?`
+          <select data-order-status="${r.id}" class="btn btn-ghost btn-sm" style="max-width:120px">
+            ${ORDER_STATUSES.map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${escHtml(tr(s))}</option>`).join('')}
+          </select>`:''}
+        <button class="btn btn-ghost btn-sm" data-edit="orders" data-id="${r.id}">${escHtml(tr('Edit'))}</button>
+        <button class="btn btn-danger btn-sm" data-del="orders" data-id="${r.id}">${escHtml(tr('Remove'))}</button>
+      </td>
+    </tr>`;
+  }).join('') : emptyRow(10, tr('No orders yet. Add an order from a phone call, WhatsApp, Telegram or walk-in.'));
+
+  return `
+  <div class="pagehead">
+    <div>
+      <h1>${escHtml(tr('Orders'))}</h1>
+      <p>${escHtml(tr('First order first served. When status becomes Done, the app records the sale (Income + stock) and payment, and links the customer.'))}</p>
+    </div>
+    <button class="btn btn-primary" id="addOrders">+ ${escHtml(tr('Add order'))}</button>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:14px;">
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Open orders'))}</div><div class="kpi-value mono">${open.length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Waiting (New)'))}</div><div class="kpi-value mono">${rows.filter(r=>r.status==='New').length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Preparing / Ready'))}</div><div class="kpi-value mono">${rows.filter(r=>r.status==='Preparing'||r.status==='Ready').length}</div></div>
+  </div>
+  ${tableShell([
+    {label:'Order #'},{label:'Date'},{label:'Customer'},{label:'Items'},
+    {label:'Total',num:true},{label:'Paid',num:true},{label:'Balance',num:true},
+    {label:'Payment'},{label:'Status'},{label:''}
+  ], body)}
+  <p class="note">${escHtml(tr('Stock is reduced only when you set status to Done (sale is posted to Income). Enter product + qty for eggs, honey, milk, etc. Use description for free-text detail.'))}</p>
+  `;
+}
 
 function renderCustomers(){
   const dirRows = state.customers.length ? state.customers.map(c=>{
@@ -2821,45 +3318,141 @@ function renderAssets(){
 }
 
 /* ================= HEALTH ================= */
+function scheduleStatus(item){
+  if(item.status==='Done') return {label:'Done', cls:'tag-active', days:null};
+  if(item.status==='Skipped') return {label:'Skipped', cls:'tag-closed', days:null};
+  if(!validDate(item.dueDate)) return {label:'No date', cls:'', days:null};
+  const days = Math.floor((new Date(item.dueDate+'T12:00:00') - new Date(todayISO()+'T12:00:00'))/86400000);
+  if(days < 0) return {label:'Overdue', cls:'tag-closed', days};
+  if(days === 0) return {label:'Due today', cls:'tag-closed', days};
+  if(days <= 7) return {label:'Due in '+days+' d', cls:'tag-active', days};
+  return {label:'Upcoming', cls:'tag-active', days};
+}
+async function markScheduleDone(id){
+  const item = (state.healthSchedule||[]).find(x=>x.id===id);
+  if(!item) return;
+  item.status = 'Done';
+  item.doneDate = todayISO();
+  await saveEntity('healthSchedule');
+  // Offer to also log a vaccination record when type is vaccination
+  if(item.type==='Vaccination' && item.batchId && ask(tr('Also log this as a completed vaccination in the Vaccinations list?'))){
+    const b = state.livestock.find(x=>x.batchId===item.batchId);
+    state.vaccinations.push({
+      id:uid(), date:todayISO(), branch:(b&&b.branch)||'Main', animalType:(b&&b.animalType)||item.animalType||'',
+      batchId:item.batchId, vaccine:item.title||'Vaccination', dose:'', cost:0, payStatus:PAY_PAID,
+      administeredBy:'', notes:(item.notes||'')+' [from schedule]'
+    });
+    await saveEntity('vaccinations');
+  }
+  render();
+  showToast(tr('Marked done'));
+}
+async function markScheduleSkipped(id){
+  const item = (state.healthSchedule||[]).find(x=>x.id===id);
+  if(!item) return;
+  if(!ask(tr('Mark this scheduled item as skipped?'))) return;
+  item.status = 'Skipped';
+  item.doneDate = todayISO();
+  await saveEntity('healthSchedule');
+  render();
+  showToast(tr('Skipped'));
+}
 function renderHealth(){
-  const isVax = healthSubTab==='vaccinations';
+  const tab = healthSubTab || 'schedule';
   const toggle = `
     <div class="toggle-row">
-      <button class="toggle-btn${isVax?' active':''}" id="toggleVax">💉 Vaccinations</button>
-      <button class="toggle-btn${!isVax?' active':''}" id="toggleMed">💊 Medications</button>
+      <button class="toggle-btn${tab==='schedule'?' active':''}" id="toggleSched">📅 ${escHtml(tr('Schedule'))}</button>
+      <button class="toggle-btn${tab==='vaccinations'?' active':''}" id="toggleVax">💉 ${escHtml(tr('Vaccinations'))}</button>
+      <button class="toggle-btn${tab==='medications'?' active':''}" id="toggleMed">💊 ${escHtml(tr('Medications'))}</button>
     </div>`;
 
-  if(isVax){
+  if(tab==='schedule'){
+    const items = (state.healthSchedule||[]).slice().sort((a,b)=>{
+      const sa = a.status==='Done'||a.status==='Skipped' ? 1 : 0;
+      const sb = b.status==='Done'||b.status==='Skipped' ? 1 : 0;
+      if(sa!==sb) return sa-sb;
+      return (a.dueDate||'').localeCompare(b.dueDate||'');
+    });
+    const overdue = items.filter(i=>i.status!=='Done'&&i.status!=='Skipped'&&validDate(i.dueDate)&&i.dueDate<todayISO());
+    const soon = items.filter(i=>{
+      if(i.status==='Done'||i.status==='Skipped'||!validDate(i.dueDate)) return false;
+      const d = Math.floor((new Date(i.dueDate+'T12:00:00')-new Date(todayISO()+'T12:00:00'))/86400000);
+      return d>=0 && d<=14;
+    });
+    const alert = (overdue.length||soon.length) ? `
+      <div class="panel" style="margin-bottom:14px;border-color:var(--clay);"><div class="panel-pad">
+        <div class="section-title" style="margin-top:0">⏰ ${escHtml(tr('Reminders'))}</div>
+        ${overdue.length?`<p style="margin:0 0 6px;font-size:13.5px;"><strong>${overdue.length}</strong> ${escHtml(tr('overdue'))}: ${overdue.slice(0,5).map(i=>escHtml((i.title||i.type)+' ('+fmtDate(i.dueDate)+')')).join(', ')}${overdue.length>5?'…':''}</p>`:''}
+        ${soon.length?`<p style="margin:0;font-size:13.5px;"><strong>${soon.length}</strong> ${escHtml(tr('due in the next 14 days'))}.</p>`:''}
+      </div></div>` : '';
+    const body = items.length ? items.map(r=>{
+      const st = scheduleStatus(r);
+      const open = r.status!=='Done' && r.status!=='Skipped';
+      return `<tr>
+        <td>${fmtDate(r.dueDate)}</td>
+        <td>${escHtml(tr(r.type||'Vaccination'))}</td>
+        <td>${escHtml(r.title||'—')}</td>
+        <td class="mono">${escHtml(r.batchId||'—')}</td>
+        <td>${escHtml(r.animalType||'—')}</td>
+        <td><span class="tag ${st.cls}">${escHtml(tr(st.label))}</span></td>
+        <td class="notes-cell">${escHtml(r.notes||'')}</td>
+        <td class="rowactions">
+          ${open?`<button class="btn btn-primary btn-sm" data-sched-done="${r.id}">${escHtml(tr('Done'))}</button>
+          <button class="btn btn-ghost btn-sm" data-sched-skip="${r.id}">${escHtml(tr('Skip'))}</button>`:''}
+          <button class="btn btn-ghost btn-sm" data-edit="healthSchedule" data-id="${r.id}">${escHtml(tr('Edit'))}</button>
+          <button class="btn btn-danger btn-sm" data-del="healthSchedule" data-id="${r.id}">${escHtml(tr('Remove'))}</button>
+        </td>
+      </tr>`;
+    }).join('') : emptyRow(8, tr('No scheduled vaccinations or vet visits yet. Add one to get reminders.'));
+    return `
+    <div class="pagehead">
+      <div>
+        <h1>${escHtml(tr('Health'))}</h1>
+        <p>${escHtml(tr('Plan vaccinations and vet visits so you remember when they are due.'))}</p>
+      </div>
+      <button class="btn btn-primary" id="addHealthSchedule">+ ${escHtml(tr('Add to schedule'))}</button>
+    </div>
+    ${toggle}
+    ${alert}
+    ${tableShell([
+      {label:'Due date'},{label:'Type'},{label:'What'},{label:'Batch'},{label:'Animal'},
+      {label:'Status'},{label:'Notes'},{label:''}
+    ], body)}
+    <p class="note">${escHtml(tr('When you mark a vaccination as Done, you can also save it in the Vaccinations log (with cost if you edit later).'))}</p>
+    `;
+  }
+
+  if(tab==='vaccinations'){
     const rows = state.vaccinations.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     const body = rows.length ? rows.map(r=>`
       <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
       <td>${escHtml(r.vaccine)}</td><td>${escHtml(r.dose)}</td><td class="num mono">${fmtMoney(r.cost)}</td>
       <td>${escHtml(r.administeredBy)}</td><td>${r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : ''}</td><td class="notes-cell">${escHtml(r.notes)}</td>
-      ${rowActionsHtml('vaccinations', r.id)}</tr>`).join('') : emptyRow(10,'No vaccinations logged yet.');
+      ${rowActionsHtml('vaccinations', r.id)}</tr>`).join('') : emptyRow(10,tr('No vaccinations logged yet.'));
     return `
     <div class="pagehead">
-      <div><h1>Health</h1><p>Vaccinations and medications — any species. Their cost is booked automatically as an expense (or capitalised into a young layer flock).</p></div>
-      <button class="btn btn-primary" id="addVaccinations">+ Add vaccination</button>
+      <div><h1>${escHtml(tr('Health'))}</h1><p>${escHtml(tr('Completed vaccinations — costs are booked as expenses (or capitalised into a young layer flock).'))}</p></div>
+      <button class="btn btn-primary" id="addVaccinations">+ ${escHtml(tr('Add vaccination'))}</button>
     </div>
     ${toggle}
     ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Vaccine'},{label:'Dose/Route'},{label:'Cost',num:true},{label:'Administered By'},{label:'Payment'},{label:'Notes'}], body)}
     `;
-  }else{
-    const rows = state.medications.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-    const body = rows.length ? rows.map(r=>`
-      <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
-      <td>${escHtml(r.disease)}</td><td>${escHtml(r.medication)}</td><td>${escHtml(r.dosage)}</td>
-      <td class="num mono">${fmtMoney(r.cost)}</td><td>${r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : ''}</td><td class="notes-cell">${escHtml(r.notes)}</td>
-      ${rowActionsHtml('medications', r.id)}</tr>`).join('') : emptyRow(10,'No medications logged yet.');
-    return `
-    <div class="pagehead">
-      <div><h1>Health</h1><p>Vaccinations and medications — any species. Their cost is booked automatically as an expense (or capitalised into a young layer flock).</p></div>
-      <button class="btn btn-primary" id="addMedications">+ Add medication</button>
-    </div>
-    ${toggle}
-    ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Disease'},{label:'Medication'},{label:'Dosage'},{label:'Cost',num:true},{label:'Payment'},{label:'Notes'}], body)}
-    `;
   }
+
+  const rows = state.medications.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const body = rows.length ? rows.map(r=>`
+    <tr><td>${fmtDate(r.date)}</td><td>${escHtml(r.animalType)}</td><td class="mono">${escHtml(r.batchId)}</td>
+    <td>${escHtml(r.disease)}</td><td>${escHtml(r.medication)}</td><td>${escHtml(r.dosage)}</td>
+    <td class="num mono">${fmtMoney(r.cost)}</td><td>${r.payStatus && r.payStatus!==PAY_PAID ? escHtml(r.payStatus) : ''}</td><td class="notes-cell">${escHtml(r.notes)}</td>
+    ${rowActionsHtml('medications', r.id)}</tr>`).join('') : emptyRow(10,tr('No medications logged yet.'));
+  return `
+  <div class="pagehead">
+    <div><h1>${escHtml(tr('Health'))}</h1><p>${escHtml(tr('Medications given — costs are booked as expenses.'))}</p></div>
+    <button class="btn btn-primary" id="addMedications">+ ${escHtml(tr('Add medication'))}</button>
+  </div>
+  ${toggle}
+  ${tableShell([{label:'Date'},{label:'Animal Type'},{label:'Batch/Herd ID'},{label:'Disease'},{label:'Medication'},{label:'Dosage'},{label:'Cost',num:true},{label:'Payment'},{label:'Notes'}], body)}
+  `;
 }
 
 /* ================= REPORTS (formal financial report) ================= */
@@ -4447,10 +5040,11 @@ function FORM_CONFIGS(){
       {name:'purchaseCost', label:'Total purchase cost (ETB) — enter 0 if not bought (e.g. born on the farm)', type:'number', required:true, default:0},
       {name:'fundedBy', label:'How was it paid for?', type:'select', options:[FUND_PAID,FUND_CREDIT,FUND_OWNER,FUND_OPEN], default:FUND_PAID, required:true},
       {name:'bio', label:'Track as layer flock (biological asset)?', type:'select', options:['No','Yes'], default:'No', showWhen:{name:'animalType',values:['Poultry']}},
-      {name:'ageWeeksAtPurchase', label:'Age of the birds when acquired (weeks)', type:'number', default:0, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
-      {name:'layingAgeWeeks', label:'Age at onset of laying (weeks) — about 20–24 is typical', type:'number', default:DEFAULT_LAYING_AGE_WEEKS, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
-      {name:'amortMonths', label:'Amortise the locked cost over (months) — 12 to 18 is typical', type:'number', default:DEFAULT_AMORT_MONTHS, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
-      {name:'amortMonthsOther', label:'Amortise over (months) — 0 = keep at cost until sold or lost', type:'number', default:0, showWhen:{name:'animalType',values:ASSET_ANIMALS}},
+      {name:'ageWeeksAtPurchase', label:'Age when acquired (weeks) — for poultry', type:'number', default:0, showWhen:{name:'animalType',values:['Poultry']}},
+      {name:'layingAgeWeeks', label:'Age when they start laying well (weeks)', type:'number', default:DEFAULT_LAYING_AGE_WEEKS, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
+      {name:'amortMonths', label:'How long they stay productive after laying starts (months)', type:'number', default:DEFAULT_AMORT_MONTHS, showWhen:[{name:'animalType',values:['Poultry']},{name:'bio',values:['Yes']}]},
+      {name:'amortMonthsOther', label:'Expected productive life (months)', type:'number', default:0, showWhen:{name:'animalType',values:ASSET_ANIMALS}},
+      {name:'plannedCullDate', label:'Planned cull / replace date (optional — overrides auto plan)', type:'date'},
       {name:'notes', label:'Notes', type:'textarea'}
     ], validate:livestockValidate},
     reductions: { title:'Livestock Reduction (Death / Cull / Transfer — sales go in Income)', entity:'reductions', validate:reductionValidate, fields:[
@@ -4631,6 +5225,35 @@ function FORM_CONFIGS(){
       {name:'followUpDate', label:'Follow-up date', type:'date'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
+    orders: { title:'Customer Order', entity:'orders', fields:[
+      {name:'date', label:'Order date', type:'date', required:true, default:todayISO()},
+      {name:'customerId', label:'Existing customer (optional)', type:'select', options:[{value:'',label:'— New / type name below —'}].concat(customerOptions())},
+      {name:'customerName', label:'Customer name', type:'text', required:true, placeholder:'If not selected above'},
+      {name:'phone', label:'WhatsApp / phone', type:'text'},
+      {name:'fulfillment', label:'Pickup or delivery', type:'select', options:['Pickup','Delivery'], default:'Pickup'},
+      {name:'address', label:'Delivery address / area', type:'text'},
+      {name:'branch', label:'Branch', type:'select', options:ensureBranches(), default:(ensureBranches()[0]||'Main')},
+      {name:'product', label:'Product (for stock)', type:'select', options:[''].concat(state.setup.productTypes||[])},
+      {name:'qty', label:'Quantity', type:'number', default:1},
+      {name:'unitPrice', label:'Unit price (ETB)', type:'number', default:0},
+      {name:'description', label:'Order details / other items', type:'textarea', placeholder:'e.g. 2 crates eggs + 1 kg honey'},
+      {name:'payType', label:'Payment type', type:'select', options:ORDER_PAY_TYPES, default:'Full payment', required:true},
+      {name:'payMethod', label:'Payment method', type:'select', options:PAYMENT_METHODS, default:'Mobile Money'},
+      {name:'amountPaid', label:'Amount paid now (ETB)', type:'number', default:0},
+      {name:'refNo', label:'Transaction reference number', type:'text', placeholder:'Telebirr / CBE ref'},
+      {name:'status', label:'Status', type:'select', options:ORDER_STATUSES, default:'New', required:true},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ], validate:(r)=>{
+      if(!String(r.customerName||'').trim() && !r.customerId) return 'Enter customer name or choose an existing customer.';
+      if(!(num(r.qty)>0) && !String(r.description||'').trim()) return 'Enter quantity or describe the order.';
+      if(!r.orderNo) r.orderNo = nextOrderNo();
+      if(!r.createdAt) r.createdAt = new Date().toISOString();
+      if(r.customerId){
+        const c = state.customers.find(x=>x.id===r.customerId);
+        if(c){ if(!r.customerName) r.customerName = c.name; if(!r.phone) r.phone = c.phone||''; }
+      }
+      return '';
+    }},
     assets: { title:'Fixed Asset', entity:'assets', fields:[
       {name:'name', label:'Asset name', type:'text', required:true, placeholder:'e.g. Layer house, feed mixer'},
       {name:'assetClass', label:'Class', type:'select', options:ASSET_CLASSES, required:true},
@@ -4665,7 +5288,21 @@ function FORM_CONFIGS(){
       {name:'cost', label:'Cost (ETB)', type:'number', default:0},
       {name:'payStatus', label:'Payment status', type:'select', options:[PAY_PAID,PAY_UNPAID,PAY_OWNER], default:PAY_PAID},
       {name:'notes', label:'Notes', type:'textarea'}
-    ]}
+    ]},
+    healthSchedule: { title:'Schedule vaccination or vet visit', entity:'healthSchedule', fields:[
+      {name:'type', label:'Type', type:'select', options:['Vaccination','Vet visit'], required:true, default:'Vaccination'},
+      {name:'title', label:'What (vaccine name or visit reason)', type:'text', required:true, placeholder:'e.g. Newcastle, routine check'},
+      {name:'dueDate', label:'Due date', type:'date', required:true, default:todayISO()},
+      {name:'animalType', label:'Animal type', type:'select', options:state.setup.animalTypes},
+      {name:'batchId', label:'Batch / herd (optional)', type:'select', options:[{value:'',label:'— Any / whole farm —'}].concat(batchOptions())},
+      {name:'status', label:'Status', type:'select', options:['Pending','Done','Skipped'], default:'Pending'},
+      {name:'notes', label:'Notes / reminder', type:'textarea'}
+    ], validate:(r)=>{
+      if(!String(r.title||'').trim()) return 'Enter what the vaccination or visit is for.';
+      if(!validDate(r.dueDate)) return 'Due date is required.';
+      if(!r.status) r.status = 'Pending';
+      return '';
+    }}
   };
 }
 
@@ -4771,6 +5408,10 @@ async function submitForm(formKey, existingId, cfg, formEl){
   if(idx>=0) arr[idx]=record; else arr.push(record);
   if(cfg.entity==='expenses' || cfg.entity==='livestock') await refreshCapFlags();
   await saveEntity(cfg.entity);
+  if(cfg.entity==='orders' && record.status==='Done' && !record.incomeId){
+    const err = await fulfillOrder(record.id);
+    if(err){ say(err); record.status='Ready'; await saveEntity('orders'); }
+  }
   closeForm();
   render();
   showToast('Saved');
@@ -4966,14 +5607,14 @@ function exportBackup(){
   showToast('Backup downloaded');
 }
 
-const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','assets','customers','payments','comments','inquiries','acct'];
+const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','healthSchedule','assets','customers','payments','comments','inquiries','orders','acct'];
 
 /* Entities with a date field that can be archived by fiscal year */
 const ARCHIVE_DATE_FIELDS = {
   reductions:'date', production:'date', prodReductions:'date',
   feedPurchases:'date', feeding:'date', income:'date', expenses:'date',
-  vaccinations:'date', medications:'date', payments:'date', comments:'date',
-  inquiries:'date', acct:'date'
+  vaccinations:'date', medications:'date', healthSchedule:'dueDate', payments:'date', comments:'date',
+  inquiries:'date', orders:'date', acct:'date'
 };
 
 function downloadJson(obj, filename){
@@ -5078,6 +5719,7 @@ function attachTabEvents(){
     addReductions:'reductions', addProduction:'production',
     addProdReductions:'prodReductions', addFeedPurchases:'feedPurchases', addFeeding:'feeding',
     addIncome:'income', addExpenses:'purchase', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
+    addHealthSchedule:'healthSchedule', addOrders:'orders',
     addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries', addAcct:'acct'
   };
   Object.keys(addBtnMap).forEach(btnId=>{
@@ -5121,8 +5763,21 @@ function attachTabEvents(){
   // Health sub-toggle
   const tVax = document.getElementById('toggleVax');
   const tMed = document.getElementById('toggleMed');
+  const tSched = document.getElementById('toggleSched');
+  if(tSched) tSched.addEventListener('click', ()=>{ healthSubTab='schedule'; render(); });
   if(tVax) tVax.addEventListener('click', ()=>{ healthSubTab='vaccinations'; render(); });
   if(tMed) tMed.addEventListener('click', ()=>{ healthSubTab='medications'; render(); });
+  document.querySelectorAll('[data-sched-done]').forEach(btn=>{
+    btn.addEventListener('click', ()=>markScheduleDone(btn.dataset.schedDone));
+  });
+  document.querySelectorAll('[data-sched-skip]').forEach(btn=>{
+    btn.addEventListener('click', ()=>markScheduleSkipped(btn.dataset.schedSkip));
+  });
+  document.querySelectorAll('[data-order-status]').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      await setOrderStatus(sel.dataset.orderStatus, sel.value);
+    });
+  });
 
   // Reports year selector
   const yearSel = document.getElementById('reportsYearSelect');
@@ -5267,6 +5922,7 @@ function attachTabEvents(){
   if(currentTab==='reports') attachReportEvents();
   if(currentTab==='calculator') attachCalculatorEvents();
   if(currentTab==='rearing') attachRearingEvents();
+  if(currentTab==='invest') attachInvestEvents();
 }
 
 initApp();
