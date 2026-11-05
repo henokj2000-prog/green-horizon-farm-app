@@ -10,8 +10,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GH Farm">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -237,7 +239,37 @@ details.section-fold>summary .fold-hint{font-weight:500;font-size:12px;color:var
   .topbar,.weave,.sidenav,.no-print,.toast{display:none!important;}
   body{background:#fff;} .content{padding:0!important;} .rep-sheet{border:none;padding:0;}
 }
+
+/* ---- Improvements: tooltips, wizard, recycle, batch card, help ---- */
+.help-tip{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--surface-alt);color:var(--ink-soft);font-size:11px;font-weight:700;cursor:help;margin-left:4px;vertical-align:middle;border:1px solid var(--rule);}
+.help-tip:hover{background:var(--gold-soft);color:var(--green-dark);}
+.tooltip-box{position:relative;}
+.tooltip-box .tip-text{display:none;position:absolute;z-index:40;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--green-dark);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:400;max-width:260px;width:max-content;box-shadow:var(--shadow);line-height:1.4;}
+.tooltip-box:hover .tip-text{display:block;}
+.wizard-overlay{position:fixed;inset:0;background:rgba(18,51,37,0.55);z-index:90;display:flex;align-items:center;justify-content:center;padding:16px;}
+.wizard{background:var(--surface);border-radius:16px;max-width:440px;width:100%;padding:24px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.18);}
+.wizard h2{margin:0 0 6px;font-size:18px;color:var(--green-dark);}
+.wizard p{margin:0 0 16px;color:var(--ink-soft);font-size:13px;}
+.wizard label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:12px;}
+.wizard input,.wizard select{font-family:inherit;font-size:14px;padding:9px 10px;border-radius:8px;border:1px solid var(--rule);background:#fff;}
+.wizard-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}
+.dash-note{background:var(--gold-soft);border:1px solid #e0c98a;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#5c4500;margin-bottom:14px;line-height:1.45;}
+.dash-note strong{color:var(--green-dark);}
+.recycle-badge{display:inline-block;background:var(--clay-soft);color:var(--clay);font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:6px;}
+.batch-card-print{display:none;}
+@media print{
+  .batch-card-print{display:block!important;padding:20px;font-family:Inter,sans-serif;}
+  .batch-card-print h1{color:var(--green-dark);margin:0 0 4px;}
+  .batch-card-print table{width:100%;border-collapse:collapse;margin-top:12px;}
+  .batch-card-print th,.batch-card-print td{border:1px solid #ccc;padding:6px 10px;text-align:left;}
+}
+.quick-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.quick-btn{padding:8px 12px;border-radius:20px;border:1px solid var(--rule);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--green-dark);}
+.quick-btn:hover{background:var(--surface-alt);}
+.csv-btn{font-size:12px;padding:5px 10px;}
+.advanced-only{opacity:0.92;}
 </style>
+
 </head>
 <body>
 <div id="app">
@@ -271,7 +303,7 @@ const STORE_KEYS = {
   vaccinations:'gh_vaccinations', medications:'gh_medications',
   calc:'gh_calc', assets:'gh_assets',
   customers:'gh_customers', payments:'gh_payments', comments:'gh_comments', inquiries:'gh_inquiries',
-  acct:'gh_acct'
+  acct:'gh_acct', trash:'gh_trash'
 };
 
 const FEED_PER_BIRD_KG = 0.112; // 112 g per bird per day — standard layer feed intake assumption
@@ -310,11 +342,14 @@ let state = {
   livestock:[], reductions:[], production:[], prodReductions:[],
   feedPurchases:[], feeding:[], income:[], expenses:[], vaccinations:[], medications:[], assets:[],
   customers:[], payments:[], comments:[], inquiries:[], acct:[],
-  calc: JSON.parse(JSON.stringify(DEFAULT_CALC))
+  calc: JSON.parse(JSON.stringify(DEFAULT_CALC)),
+  trash:[]   // soft-deleted records {entity, record, deletedAt}
 };
 let currentTab = 'dashboard';
 let healthSubTab = 'vaccinations';
 let reportsYear = currentEFY();   // Ethiopian fiscal year (EFY), not calendar year
+let showAdvancedAccounting = false;
+try{ showAdvancedAccounting = localStorage.getItem('gh_showAdvanced') === '1'; }catch(e){}
 /* Layer accounting policy for financial statements:
    'amort' = amortise mature layers over productive life (matching principle)
    'cost'  = hold at cost until sold/die (no amortisation) — use if tax authority rejects amortisation */
@@ -328,6 +363,8 @@ function setBioPolicy(p){
 }
 let lang = 'en';
 try{ lang = localStorage.getItem('gh_lang') || 'en'; }catch(e){}
+let needsFirstRunWizard = false;
+
 
 /* ---------------- Language (English / Amharic) ---------------- */
 const AM = {
@@ -484,6 +521,26 @@ const AM = {
   /* --- messages (toasts / dialogs) --- */
   '⚠ Could not save — device storage may be full':'⚠ ማስቀመጥ አልተቻለም — የመሣሪያው ማከማቻ ሞልቶ ሊሆን ይችላል','Filled from your current farm records':'ከአሁኑ የእርሻ መዝገቦችዎ ተሞልቷል',
   'Saved':'ተቀምጧል','Deleted':'ተሰርዟል','Delete this entry? This cannot be undone.':'ይህ መዝገብ ይሰረዝ? ይህ ወደ ኋላ አይመለስም።',
+  'Remove':'አስወግድ','Restore':'መልስ','Recycle bin':'የመልሶ ማግኛ ቅርጫት','Recycle bin is empty.':'የመልሶ ማግኛ ቅርጫት ባዶ ነው።',
+  'Empty recycle bin':'የመልሶ ማግኛ ቅርጫት ባዶ አድርግ','Moved to recycle bin':'ወደ የመልሶ ማግኛ ቅርጫት ተዛውሯል','Restored':'ተመልሷል',
+  'Welcome to Green Horizon Farm':'ወደ ግሪን ሆራይዘን እርሻ እንኳን በደህና መጡ','Start':'ጀምር','Skip':'ዝለል',
+  "Owner's name":'የባለቤት ስም','Opening cash & bank balance (ETB)':'መክፈቻ የጥሬ ገንዘብና ባንክ ቀሪ (ብር)',
+  'Main branch / farm site name':'የዋና ቅርንጫፍ / የእርሻ ቦታ ስም','Add a small sample layer flock (demo data)':'ትንሽ የናሙና እንቁላል ጣይ መንጋ ጨምር (ለማሳያ)',
+  'Farm / business name':'የእርሻ / የንግድ ስም','Preferences':'ምርጫዎች',
+  'Show advanced accounting (ledger, trial balance, detailed tax adjustments)':'የላቀ ሂሳብ አያያዝ አሳይ (የሂሳብ መዝገብ፣ የሙከራ ሚዛን፣ ዝርዝር የግብር ማስተካከያዎች)',
+  'When off, Reports focuses on Profit & Loss and Balance Sheet — enough for most farms.':'ሲጠፋ ሪፖርቶች በትርፍና ኪሳራ እና በሂሳብ ሚዛን ላይ ያተኩራሉ — ለአብዛኛዎቹ እርሻዎች በቂ ነው።',
+  'Why is Cash negative?':'ጥሬ ገንዘብ ለምን አሉታዊ ነው?','CSV downloaded':'CSV ወርዷል',
+  'Cash stays non-negative':'ጥሬ ገንዘብ አሉታዊ አይሆንም',
+  'Not enough cash (available ':'በቂ ጥሬ ገንዘብ የለም (ያለው: ',
+  '). Recorded as Unpaid on credit so cash stays non-negative.':')። ጥሬ ገንዘብ አሉታዊ እንዳይሆን እንደ ያልተከፈለ (ብድር) ተመዝግቧል።',
+  '). Recorded on supplier credit so cash stays non-negative.':')። ጥሬ ገንዘብ አሉታዊ እንዳይሆን በአቅራቢ ብድር ተመዝግቧል።',
+  'Some purchases were recorded as Paid when there was not enough cash. Those are treated as Unpaid (credit) / supplier payables so Cash never goes below zero. You can still record any expense — if cash is short, choose Unpaid on credit or Paid by owner. Add opening cash or owner investment under Accounting if you started with money in the bank.':'አንዳንድ ግዢዎች ጥሬ ገንዘብ በቂ ባልነበረበት ጊዜ እንደ ተከፈለ ተመዝግበዋል። ጥሬ ገንዘብ ከዜሮ በታች እንዳይወርድ እንደ ያልተከፈለ (ብድር) ይቆጠራሉ። ማንኛውንም ወጪ ማስመዝገብ ይችላሉ — ጥሬ ገንዘብ ካጡ «ያልተከፈለ» ወይም «በባለቤት ተከፍሏል» ይምረጡ። በባንክ ገንዘብ ከጀመሩ በሂሳብ አያያዝ ስር መክፈቻ ጥሬ ገንዘብ ወይም የባለቤት ካፒታል ያስገቡ።',
+
+  'Ready — start by recording a purchase or production':'ዝግጁ — በግዢ ወይም በምርት መመዝገብ ይጀምሩ',
+  'Set a few basics so the books start correctly. You can change everything later in Setup.':'መጽሐፎቹ በትክክል እንዲጀምሩ ጥቂት መሰረታዊ ነገሮችን ያስገቡ። በኋላ በቅንብር ሁሉንም መቀየር ይችላሉ።',
+  'Removed records stay here for up to 45 days (max 80 items). Restore any time, or empty permanently.':'የተወገዱ መዝገቦች እዚህ እስከ 45 ቀናት (ከፍተኛ 80) ይቆያሉ። በማንኛውም ጊዜ መመለስ ወይም እስከመጨረሻው ማጽዳት ይችላሉ።',
+  'Type':'ዓይነት','Summary':'ማጠቃለያ','Removed':'ተወግዷል',
+
   'Google sign-in was cancelled or failed':'የ Google መግቢያ ተሰርዟል ወይም አልተሳካም','Connected, but the first sync failed — try "Sync now"':'ተገናኝቷል፣ ነገር ግን የመጀመሪያው ማመሳሰል አልተሳካም — "አሁን አመሳስል" ይሞክሩ',
   'Paste your Google Client ID first.':'መጀመሪያ Google Client ID ያስገቡ።','Still loading Google sign-in — try again in a moment':'የ Google መግቢያ አሁንም እየተጫነ ነው — ከጥቂት ቆይታ በኋላ ይሞክሩ',
   'Could not start Google sign-in':'የ Google መግቢያን ማስጀመር አልተቻለም','Disconnected — your data stays safely on this device':'ግንኙነት ተቋርጧል — መረጃዎ በዚህ መሣሪያ ላይ በደኅንነት ይቆያል',
@@ -850,6 +907,214 @@ function showToast(msg){
   t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
+/* ---------------- Soft-delete (recycle bin) ---------------- */
+const TRASH_MAX = 80;
+const TRASH_DAYS = 45;
+async function softDelete(entityKey, id){
+  const arr = state[entityKey];
+  if(!arr) return;
+  const idx = arr.findIndex(r=>r.id===id);
+  if(idx<0) return;
+  const blocked = deleteGuard(entityKey, id);
+  if(blocked){ say(blocked); return; }
+  if(!ask('Move this entry to the recycle bin? You can restore it later from Setup.')) return;
+  const rec = arr[idx];
+  arr.splice(idx,1);
+  state.trash = state.trash || [];
+  state.trash.unshift({ entity: entityKey, record: rec, deletedAt: new Date().toISOString() });
+  // prune old / excess
+  const cutoff = Date.now() - TRASH_DAYS*24*3600*1000;
+  state.trash = state.trash.filter(t=> new Date(t.deletedAt).getTime() > cutoff).slice(0, TRASH_MAX);
+  await saveEntity(entityKey);
+  await saveKey(STORE_KEYS.trash, state.trash);
+  render();
+  showToast('Moved to recycle bin');
+}
+async function restoreFromTrash(trashIdx){
+  const item = state.trash[trashIdx];
+  if(!item) return;
+  const arr = state[item.entity];
+  if(!arr) return;
+  // avoid ID collision
+  if(arr.some(r=>r.id===item.record.id)) item.record.id = uid();
+  arr.push(item.record);
+  state.trash.splice(trashIdx,1);
+  await saveEntity(item.entity);
+  await saveKey(STORE_KEYS.trash, state.trash);
+  if(item.entity==='livestock' || item.entity==='expenses') await refreshCapFlags();
+  render();
+  showToast('Restored');
+}
+async function emptyTrash(){
+  if(!state.trash || !state.trash.length){ showToast('Recycle bin is empty'); return; }
+  if(!ask('Permanently delete all '+state.trash.length+' items in the recycle bin? This cannot be undone.')) return;
+  state.trash = [];
+  await saveKey(STORE_KEYS.trash, state.trash);
+  render();
+  showToast('Recycle bin emptied');
+}
+
+/* ---------------- CSV export ---------------- */
+function downloadCsv(filename, rows){
+  // rows: array of arrays (first row = headers)
+  const esc = (v)=>{
+    const s = (v===undefined||v===null) ? '' : String(v);
+    if(/[",\n\r]/.test(s)) return '"'+s.replace(/"/g,'""')+'"';
+    return s;
+  };
+  const csv = rows.map(r=>r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1500);
+  showToast('CSV downloaded');
+}
+function exportTableCsv(entityKey){
+  const map = {
+    livestock: ()=>{
+      const headers = ['Branch','Animal Type','Batch ID','Breed','Date Acquired','Source','Initial Qty','Purchase Cost','Current Qty','Notes'];
+      const rows = state.livestock.map(b=>[b.branch||'Main',b.animalType,b.batchId,b.breed||'',b.dateAcquired,b.source||'',b.initialQty,b.purchaseCost,batchCurrentQty(b.batchId),b.notes||'']);
+      return {name:'livestock', headers, rows};
+    },
+    income: ()=>{
+      const headers = ['Date','Branch','Category','Description','Qty','Unit Price','Amount','Customer','Payment Status','Ref No','Notes'];
+      const rows = state.income.map(r=>[r.date,r.branch||'',r.category,r.description||'',r.qty,r.unitPrice,incomeGross(r),customerName(r.customerId)||r.buyer||'',r.paymentStatus||'',r.refNo||'',r.notes||'']);
+      return {name:'income', headers, rows};
+    },
+    expenses: ()=>{
+      const headers = ['Date','Category','Branch','Description','Amount','Payment','Ref No','Supplier','Non-deductible','Notes'];
+      const rows = costRows().map(r=>[r.date,r.category,r.branch||'',r.description||'',r.amount,r.payStatus||'',r.refNo||'',r.supplier||'',r.nonDeductible||'No',r.notes||'']);
+      return {name:'expenses', headers, rows};
+    },
+    production: ()=>{
+      const headers = ['Date','Batch','Animal Type','Product','Qty Produced','Waste','Unit','Notes'];
+      const rows = state.production.map(r=>[r.date,r.batchId,r.animalType,r.product,r.qtyProduced,r.waste||0,r.unit||'',r.notes||'']);
+      return {name:'production', headers, rows};
+    },
+    feedPurchases: ()=>{
+      const headers = ['Date','Branch','Feed Type','Qty kg','Unit Cost','Total','Supplier','Notes'];
+      const rows = state.feedPurchases.map(r=>[r.date,r.branch||'',r.feedType,r.qty,r.unitCost,num(r.qty)*num(r.unitCost),r.supplier||'',r.notes||'']);
+      return {name:'feed-purchases', headers, rows};
+    },
+    customers: ()=>{
+      const headers = ['Name','Phone','Type','Address','TIN','Notes'];
+      const rows = state.customers.map(c=>[c.name,c.phone||'',c.type||'',c.address||'',c.tin||'',c.notes||'']);
+      return {name:'customers', headers, rows};
+    }
+  };
+  const fn = map[entityKey];
+  if(!fn){ showToast('Export not available for this list'); return; }
+  const {name, headers, rows} = fn();
+  downloadCsv(`gh-farm-${name}-${todayISO()}.csv`, [headers, ...rows]);
+}
+
+/* ---------------- First-run wizard ---------------- */
+function showFirstRunWizard(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="wizard-overlay" id="wizardOverlay">
+    <div class="wizard">
+      <h2>${escHtml(tr('Welcome to Green Horizon Farm'))}</h2>
+      <p>${escHtml(tr('Set a few basics so the books start correctly. You can change everything later in Setup.'))}</p>
+      <label>${escHtml(tr('Farm / business name'))}<input type="text" id="wizName" value="Green Horizon" placeholder="e.g. Green Horizon Farm"></label>
+      <label>${escHtml(tr("Owner's name"))}<input type="text" id="wizOwner" placeholder="e.g. Abebe Kebede"></label>
+      <label>${escHtml(tr('Opening cash & bank balance (ETB)'))}<input type="number" id="wizCash" value="0" step="any" min="0"></label>
+      <label>${escHtml(tr('Main branch / farm site name'))}<input type="text" id="wizBranch" value="Main"></label>
+      <label style="flex-direction:row;align-items:center;gap:8px;font-weight:500;">
+        <input type="checkbox" id="wizSample"> ${escHtml(tr('Add a small sample layer flock (demo data)'))}
+
+      </label>
+      <div class="wizard-actions">
+        <button class="btn btn-ghost" id="wizSkip">${escHtml(tr('Skip'))}</button>
+        <button class="btn btn-primary" id="wizSave">${escHtml(tr('Start'))}</button>
+      </div>
+    </div>
+  </div>`;
+  const finish = async (useValues)=>{
+    if(useValues){
+      const name = (document.getElementById('wizName').value||'').trim() || 'Green Horizon';
+      const owner = (document.getElementById('wizOwner').value||'').trim();
+      const cash = num(document.getElementById('wizCash').value);
+      const branch = (document.getElementById('wizBranch').value||'').trim() || 'Main';
+      const sample = document.getElementById('wizSample').checked;
+      taxProfile().businessName = name;
+      if(!state.setup.acctOpts) state.setup.acctOpts = {};
+      state.setup.acctOpts.ownerName = owner;
+      state.setup.branches = [branch];
+      if(cash > 0){
+        state.acct.push({id:uid(), date:todayISO(), type:'Owner investment (cash)', party:owner||'Owner', amount:cash, notes:'Opening cash from first-run wizard'});
+        await saveEntity('acct');
+      }
+      if(sample){
+        const bid = nextBatchId('Poultry', branch);
+        state.livestock.push({
+          id:uid(), animalType:'Poultry', branch, batchId:bid, breed:'Sample layers', dateAcquired:todayISO(),
+          source:'Demo', initialQty:50, purchaseCost:0, fundedBy:'Opening balance / gift', bio:'Yes',
+          ageWeeksAtPurchase:20, layingAgeWeeks:22, amortMonths:14, notes:'Demo flock — replace with real data'
+        });
+        await saveEntity('livestock');
+      }
+      await saveSetup();
+    }
+    needsFirstRunWizard = false;
+    try{ localStorage.setItem('gh_wizardDone','1'); }catch(e){}
+    root.innerHTML = '';
+    render();
+    showToast(tr('Ready — start by recording a purchase or production'));
+  };
+  document.getElementById('wizSkip').onclick = ()=>finish(false);
+  document.getElementById('wizSave').onclick = ()=>finish(true);
+}
+
+/* ---------------- Printable batch card ---------------- */
+function printBatchCard(batchId){
+  const b = state.livestock.find(x=>x.batchId===batchId);
+  if(!b) return;
+  const qty = batchCurrentQty(batchId);
+  const reds = allReductions().filter(r=>r.batchId===batchId);
+  const prods = state.production.filter(p=>p.batchId===batchId);
+  const feeds = state.feeding.filter(f=>f.batchId===batchId);
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Batch ${escHtml(batchId)}</title>
+  <style>body{font-family:Inter,system-ui,sans-serif;padding:24px;color:#23261F;} h1{color:#123325;margin:0 0 4px;}
+  table{border-collapse:collapse;width:100%;margin-top:12px;font-size:13px;} th,td{border:1px solid #DEDCC9;padding:6px 10px;text-align:left;}
+  th{background:#EAEEE3;} .meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;font-size:13px;margin:10px 0 16px;}
+  @media print{button{display:none}}</style></head><body>
+  <button onclick="window.print()">Print</button>
+  <h1>Batch Card — ${escHtml(batchId)}</h1>
+  <div class="meta">
+    <div><strong>Branch:</strong> ${escHtml(b.branch||'Main')}</div>
+    <div><strong>Animal:</strong> ${escHtml(b.animalType)}</div>
+    <div><strong>Breed:</strong> ${escHtml(b.breed||'—')}</div>
+    <div><strong>Acquired:</strong> ${escHtml(b.dateAcquired)} (${escHtml(ethDateStr(b.dateAcquired))})</div>
+    <div><strong>Initial qty:</strong> ${fmtNum(b.initialQty)}</div>
+    <div><strong>Current qty:</strong> ${fmtNum(qty)}</div>
+    <div><strong>Purchase cost:</strong> ${fmtMoney(b.purchaseCost)}</div>
+    <div><strong>Source:</strong> ${escHtml(b.source||'—')}</div>
+  </div>
+  <h3>Reductions</h3>
+  <table><tr><th>Date</th><th>Reason</th><th>Qty</th><th>Notes</th></tr>
+  ${reds.length? reds.map(r=>`<tr><td>${r.date}</td><td>${escHtml(r.reason)}</td><td>${fmtNum(r.qty)}</td><td>${escHtml(r.notes||'')}</td></tr>`).join('') : '<tr><td colspan="4">None</td></tr>'}
+  </table>
+  <h3>Production</h3>
+  <table><tr><th>Date</th><th>Product</th><th>Qty</th><th>Waste</th></tr>
+  ${prods.length? prods.map(r=>`<tr><td>${r.date}</td><td>${escHtml(r.product)}</td><td>${fmtNum(r.qtyProduced)}</td><td>${fmtNum(r.waste||0)}</td></tr>`).join('') : '<tr><td colspan="4">None</td></tr>'}
+  </table>
+  <h3>Feeding (recent)</h3>
+  <table><tr><th>Date</th><th>Feed</th><th>Qty (kg)</th><th>Period</th></tr>
+  ${feeds.slice(-15).map(r=>`<tr><td>${r.date}</td><td>${escHtml(r.feedType)}</td><td>${fmtNum(r.qtyUsed)}</td><td>${escHtml(r.period||'Day')}</td></tr>`).join('') || '<tr><td colspan="4">None</td></tr>'}
+  </table>
+  <p style="margin-top:24px;font-size:12px;color:#6E7266;">Green Horizon Farm Manager · printed ${todayISO()}</p>
+  </body></html>`);
+  win.document.close();
+}
+
+function helpIcon(text){
+  return `<span class="tooltip-box"><span class="help-tip">?</span><span class="tip-text">${escHtml(tr(text))}</span></span>`;
+}
+
 /* ---------------- Storage (browser localStorage — works fully offline, no account needed) ---------------- */
 async function loadKey(key, fallback){
   try{
@@ -1120,7 +1385,7 @@ async function initApp(){
   loadDriveConfigLocal();
   const [setup, livestock, reductions, production, prodReductions,
          feedPurchases, feeding, income, expenses, vaccinations, medications, calc, assets,
-         customers, payments, comments, inquiries, acct] = await Promise.all([
+         customers, payments, comments, inquiries, acct, trash] = await Promise.all([
     loadKey(STORE_KEYS.setup, null),
     loadKey(STORE_KEYS.livestock, null),
     loadKey(STORE_KEYS.reductions, null),
@@ -1138,7 +1403,8 @@ async function initApp(){
     loadKey(STORE_KEYS.payments, null),
     loadKey(STORE_KEYS.comments, null),
     loadKey(STORE_KEYS.inquiries, null),
-    loadKey(STORE_KEYS.acct, null)
+    loadKey(STORE_KEYS.acct, null),
+    loadKey(STORE_KEYS.trash, [])
   ]);
 
   const isFirstRun = livestock === null;
@@ -1165,6 +1431,7 @@ async function initApp(){
   state.inquiries = inquiries || [];
   state.acct = acct || seeds.acct || [];
   state.calc = calc || calcAutoDefaults();
+  state.trash = Array.isArray(trash) ? trash : [];
 
   if(isFirstRun){
     await Promise.all([
@@ -1181,6 +1448,14 @@ async function initApp(){
   renderNav();
   render();
   fbStart();
+
+  // First-run wizard (only once, when truly empty)
+  let wizardDone = false;
+  try{ wizardDone = localStorage.getItem('gh_wizardDone') === '1'; }catch(e){}
+  if(isFirstRun && !wizardDone){
+    needsFirstRunWizard = true;
+    setTimeout(()=>showFirstRunWizard(), 400);
+  }
 }
 async function saveCalc(){
   await saveKey(STORE_KEYS.calc, state.calc);
@@ -1566,7 +1841,8 @@ function emptyRow(colspan, msg){
   return `<tr class="empty-row"><td colspan="${colspan}">${msg}</td></tr>`;
 }
 function rowActionsHtml(entity, id){
-  return `<td class="rowactions"><button class="btn btn-ghost btn-sm" data-edit="${entity}" data-id="${id}">Edit</button><button class="btn btn-danger btn-sm" data-del="${entity}" data-id="${id}">Delete</button></td>`;
+  return `<td class="rowactions"><button class="btn btn-ghost btn-sm" data-edit="${entity}" data-id="${id}">${escHtml(tr('Edit'))}</button><button class="btn btn-danger btn-sm" data-del="${entity}" data-id="${id}">${escHtml(tr('Remove'))}</button></td>`;
+
 }
 function wireTableTools(){
   document.querySelectorAll('.table-search').forEach(inp=>{
@@ -1633,7 +1909,11 @@ function renderDashboard(){
   ];
   try{
     const bsNow = balanceSheet(currentEFY());
-    kpis.push(['Cash & bank', fmtMoney(bsNow.rawCash), bsNow.rawCash<0], ['Loans', fmtMoney(bsNow.loans), false], ["Owner's equity", fmtMoney(bsNow.te), bsNow.te<0]);
+    // Cash never displays as negative — overdraft is a liability (supplier credit / unpaid bills)
+    kpis.push(['Cash & bank', fmtMoney(bsNow.cash), false], ['Loans', fmtMoney(bsNow.loans), false], ["Owner's equity", fmtMoney(bsNow.te), bsNow.te<0]);
+    if(bsNow.overdraft > 0){
+      kpis.push(['Unpaid / overdraft', fmtMoney(bsNow.overdraft), true]);
+    }
   }catch(err){ console.error(err); }
 
   const kpiHtml = kpis.map(([label,val,neg])=>
@@ -1664,20 +1944,40 @@ function renderDashboard(){
     `<tr><td>${escHtml(p)}</td><td class="num mono">${fmtNum(productStock(p))}</td></tr>`
   ).join('') || emptyRow(2,'No product types configured.');
 
+  let cashNote = '';
+  try{
+    const bsNow = balanceSheet(currentEFY());
+    if(bsNow.overdraft > 0 || bsNow.rawCash < 0){
+      cashNote = `<div class="dash-note"><strong>${escHtml(tr('Cash stays non-negative'))}</strong> ${escHtml(tr('Some purchases were recorded as Paid when there was not enough cash. Those are treated as Unpaid (credit) / supplier payables so Cash never goes below zero. You can still record any expense — if cash is short, choose Unpaid on credit or Paid by owner. Add opening cash or owner investment under Accounting if you started with money in the bank.'))}</div>`;
+    } else if(state.livestock.length && state.acct.filter(a=>/investment|opening/i.test(a.type||'')).length===0 && bsNow.cash===0){
+      cashNote = `<div class="dash-note">${escHtml(tr('Tip: record an opening cash / owner investment under Accounting so Cash & bank reflects money you actually started with.'))}</div>`;
+    }
+  }catch(e){}
+
+  const quick = `
+  <div class="quick-bar no-print">
+    <button class="quick-btn" data-quick="purchase">+ ${escHtml(tr('Purchase / Expense'))}</button>
+    <button class="quick-btn" data-quick="income">+ ${escHtml(tr('Income / Sale'))}</button>
+    <button class="quick-btn" data-quick="production">+ ${escHtml(tr('Production'))}</button>
+    <button class="quick-btn" data-quick="feeding">+ ${escHtml(tr('Feeding'))}</button>
+  </div>`;
+
   return `
-  <div class="pagehead"><div><h1>${t('Dashboard')}</h1><p>Farm-wide overview and status by branch.</p></div></div>
+  <div class="pagehead"><div><h1>${t('Dashboard')}</h1><p>${escHtml(tr('Farm-wide overview and status by branch.'))}</p></div></div>
+  ${quick}
+  ${cashNote}
   <div class="kpi-grid">${kpiHtml}</div>
-  <div class="section-title">Status by branch</div>
-  <div class="branch-status-grid">${branchCards || '<p class="note">Add branches in Setup to see per-site status.</p>'}</div>
+  <div class="section-title">${escHtml(tr('Status by branch'))}</div>
+  <div class="branch-status-grid">${branchCards || '<p class="note">'+escHtml(tr('Add branches in Setup to see per-site status.'))+'</p>'}</div>
   <div class="two-col">
-    <div class="panel"><div class="panel-pad"><div class="section-title" style="margin-top:0">Livestock by Type</div></div>
-      <div class="tablewrap"><table><thead><tr><th>Animal Type</th><th class="num">Current Qty</th></tr></thead><tbody>${byTypeRows}</tbody></table></div>
+    <div class="panel"><div class="panel-pad"><div class="section-title" style="margin-top:0">${escHtml(tr('Livestock by Type'))}</div></div>
+      <div class="tablewrap"><table><thead><tr><th>${escHtml(tr('Animal Type'))}</th><th class="num">${escHtml(tr('Current Qty'))}</th></tr></thead><tbody>${byTypeRows}</tbody></table></div>
     </div>
-    <div class="panel"><div class="panel-pad"><div class="section-title" style="margin-top:0">Product Stock Summary</div></div>
-      <div class="tablewrap"><table><thead><tr><th>Product</th><th class="num">Current Stock</th></tr></thead><tbody>${prodRows}</tbody></table></div>
+    <div class="panel"><div class="panel-pad"><div class="section-title" style="margin-top:0">${escHtml(tr('Product Stock Summary'))}</div></div>
+      <div class="tablewrap"><table><thead><tr><th>${escHtml(tr('Product'))}</th><th class="num">${escHtml(tr('Current Stock'))}</th></tr></thead><tbody>${prodRows}</tbody></table></div>
     </div>
   </div>
-  <p class="note">Data is stored privately on this device only (nothing sent to any server). Use Setup → Backup &amp; Restore to move data between devices or save a copy to Google Drive.</p>
+  <p class="note">${escHtml(tr('Data is stored privately on this device only (nothing sent to any server). Use Setup → Backup & Restore to move data between devices or save a copy to Google Drive.'))}</p>
   `;
 }
 
@@ -1700,8 +2000,13 @@ function renderLivestock(){
       <td class="num mono"><strong>${fmtNum(r.current)}</strong></td>
       <td><span class="tag ${r.status==='Active'?'tag-active':'tag-closed'}">${r.status}</span></td>
       <td class="notes-cell">${escHtml(r.notes)}</td>
-      ${rowActionsHtml('livestock', r.id)}
-    </tr>`).join('') : emptyRow(15,'No batches yet. Buy animals under Expenses & Purchases → Livestock (choose branch; batch code is auto).');
+      <td class="rowactions">
+        <button class="btn btn-ghost btn-sm" data-edit="livestock" data-id="${r.id}">${escHtml(tr('Edit'))}</button>
+        <button class="btn btn-ghost btn-sm" data-batch-card="${escHtml(r.batchId)}">📄</button>
+        <button class="btn btn-danger btn-sm" data-del="livestock" data-id="${r.id}">${escHtml(tr('Remove'))}</button>
+      </td>
+    </tr>`).join('') : emptyRow(15,tr('No batches yet. Buy animals under Expenses & Purchases → Livestock (choose branch; batch code is auto).'));
+
 
   const redRows = allReductions().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const wo = bioWriteOffByReduction();
@@ -1719,14 +2024,15 @@ function renderLivestock(){
   return `
   <div class="pagehead">
     <div>
-      <h1>Livestock</h1>
-      <p>Batches are created automatically when you buy animals under <strong>Expenses &amp; Purchases</strong>. Batch codes are auto-generated from the animal type (e.g. POU-001, GOA-001).</p>
+      <h1>${t('Livestock')}</h1>
+      <p>${escHtml(tr('Batches are created automatically when you buy animals under Expenses & Purchases. Batch codes are auto-generated from the animal type (e.g. POU-001, GOA-001).'))}</p>
     </div>
+    <button class="btn btn-ghost csv-btn" data-csv="livestock">⬇ CSV</button>
   </div>
   ${tableShell([
     {label:'Branch'},{label:'Animal Type'},{label:'Batch code'},{label:'Breed/Type'},{label:'Date Acquired'},{label:'Source'},
     {label:'Initial Qty',num:true},{label:'Purchase cost',num:true},{label:'Book treatment'},{label:'Age (weeks for poultry / days others)',num:true},{label:'Reductions',num:true},{label:'Current Qty',num:true},
-    {label:'Status'},{label:'Notes'}
+    {label:'Status'},{label:'Notes'},{label:''}
   ], body, {id:'tbl_livestock_batches'})}
 
   <div class="pagehead" style="margin-top:28px">
@@ -2306,8 +2612,11 @@ function renderIncome(){
 
   return `
   <div class="pagehead">
-    <div><h1>Income</h1><p>Choose what you are selling — the form adapts (eggs, honey, milk, wool, manure, birds, goats/sheep/oxen) and the stock is reduced automatically. For lump sums use Other Income.</p></div>
-    <button class="btn btn-primary" id="addIncome">+ Add income</button>
+    <div><h1>${t('Income')}</h1><p>${escHtml(tr('Choose what you are selling — the form adapts (eggs, honey, milk, wool, manure, birds, goats/sheep/oxen) and the stock is reduced automatically. For lump sums use Other Income.'))}</p></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost csv-btn" data-csv="income">⬇ CSV</button>
+      <button class="btn btn-primary" id="addIncome">+ ${escHtml(tr('Add income'))}</button>
+    </div>
   </div>
   ${tableShell([{label:'Date'},{label:'Category'},{label:'Description'},{label:'Customer'},{label:'Ref No.'},{label:'Qty',num:true},{label:'Unit Price',num:true},{label:'Amount',num:true},{label:'Balance Due',num:true},{label:'WHT',num:true},{label:'Stock effect'},{label:'Notes'}], body)}
   `;
@@ -2329,7 +2638,7 @@ function renderExpenses(){
     const r = {date:f.date, category:'Feed Purchase', batchId:'', description:'Bought '+fmtNum(f.qty)+' kg '+f.feedType+(f.supplier?' — '+f.supplier:''), notes:f.notes};
     row(f.date, cell(r, money2(num(f.qty)*num(f.unitCost)), f.payStatus && f.payStatus!==PAY_PAID ? escHtml(f.payStatus) : '', 'Feed stock (expensed when used)'), rowActionsHtml('feedPurchases', f.id), 'auto-row');
   });
-  state.livestock.filter(b=>isBioBatch(b) && num(b.purchaseCost)>0 && String(b.fundedBy||'').indexOf('Owned before')!==0).forEach(b=>{
+  state.livestock.filter(b=>isBioBatch(b) && num(b.purchaseCost)>0 && String(b.fundedBy||'').indexOf('Owned before')!==0 && String(b.fundedBy||'').indexOf('Opening balance')!==0).forEach(b=>{
     const r = {date:b.dateAcquired, category:'Livestock Purchase', batchId:b.batchId, description:'Bought '+fmtNum(b.initialQty)+' '+(b.breed||b.animalType), notes:b.notes};
     row(b.dateAcquired, cell(r, b.purchaseCost, b.fundedBy && b.fundedBy!==FUND_PAID ? escHtml(b.fundedBy) : '', isLayerFlock(b)?'Asset — layer flock':'Asset — livestock'), rowActionsHtml('livestock', b.id), 'auto-row');
   });
@@ -2456,7 +2765,47 @@ const ACCT_TYPE_LIST = Object.keys(AT).map(k=>AT[k]);
 const OPEN_DATE = '0000-01-01';   // opening balances always sit before the first fiscal year
 const TERM_LONG = 'Long-term (over 1 year)', TERM_SHORT = 'Short-term (within 1 year)';
 const PAY_PAID = 'Paid (cash / bank)', PAY_UNPAID = 'Unpaid (on credit)', PAY_OWNER = 'Paid personally by owner';
-const FUND_PAID = 'Paid (cash / bank)', FUND_CREDIT = 'Supplier credit (unpaid)', FUND_OWNER = 'Contributed by owner (in kind)', FUND_OPEN = 'Owned before using this app (opening balance)';
+const FUND_PAID = 'Paid (cash / bank)', FUND_CREDIT = 'Supplier credit (unpaid)', FUND_OWNER = 'Contributed by owner (in kind)', FUND_OPEN = 'Opening balance / gift';
+
+/** Current cash & bank balance (can be negative if past data was over-paid). */
+function availableCash(){
+  try{
+    const bs = balanceSheet(currentEFY());
+    return num(bs.rawCash);
+  }catch(e){ return 0; }
+}
+
+/**
+ * Cash cannot go negative. If the user chose "Paid from farm cash" but there is not
+ * enough cash, keep the expense and switch funding to Unpaid (credit) so books stay valid.
+ * Returns the (possibly adjusted) payment status string.
+ */
+function coercePayIfNoCash(payStatus, amount){
+  const ps = payStatus || PAY_PAID;
+  const amt = num(amount);
+  if(amt <= 0) return ps;
+  // Only explicit cash/bank payments reduce the bank balance
+  const paysFromCash = ps === PAY_PAID || ps === FUND_PAID || String(ps).startsWith('Paid (cash');
+  if(!paysFromCash) return ps;
+  const cash = availableCash();
+  if(amt <= cash + 1e-6) return ps;
+  // Not enough cash — still record the expense, funded as supplier credit
+  showToast(tr('Not enough cash (available ') + fmtMoney(Math.max(0, cash)) + tr('). Recorded as Unpaid on credit so cash stays non-negative.'));
+  return PAY_UNPAID;
+}
+
+/** Same for livestock/asset fundedBy field. */
+function coerceFundIfNoCash(fundedBy, amount){
+  const fb = fundedBy || FUND_PAID;
+  const paysFromCash = fb === FUND_PAID || String(fb).startsWith('Paid (cash');
+  if(!paysFromCash) return fb;
+  const amt = num(amount);
+  if(amt <= 0) return fb;
+  const cash = availableCash();
+  if(amt <= cash + 1e-6) return fb;
+  showToast(tr('Not enough cash (available ') + fmtMoney(Math.max(0, cash)) + tr('). Recorded on supplier credit so cash stays non-negative.'));
+  return FUND_CREDIT;
+}
 const ACCT_NAMES = {
   '1000':'Cash and bank', '1100':'Accounts receivable (net of customer advances)', '1150':'Withholding tax receivable', '1200':'Feed inventory', '1250':'Agricultural produce inventory (eggs, honey, etc.)',
   '1500':'Fixed assets — cost', '1510':'Accumulated depreciation',
@@ -2800,7 +3149,7 @@ function buildJournal(sel){
     let credit, date = a.dateAcquired, kind = 'asset';
     if(fb.indexOf('Supplier credit')===0){ credit = drcr('2050',-cost); kind = 'assetCredit'; }
     else if(fb.indexOf('Contributed')===0){ credit = drcr('3000',-cost,partyName('')); kind = 'assetInKind'; }
-    else if(fb.indexOf('Owned before')===0){ credit = drcr('3000',-cost,partyName('')); date = OPEN_DATE; kind = 'assetOpen'; }
+    else if(fb.indexOf('Owned before')===0 || fb.indexOf('Opening balance')===0){ credit = drcr('3000',-cost,partyName('')); date = OPEN_DATE; kind = 'assetOpen'; }
     else credit = drcr('1000',-cost);
     add(date, 'Asset acquired: '+(a.name||''), 'asset', kind, 'inv', [drcr('1500',cost), credit]);
     const lastFY = a.disposedDate ? Math.min(sel, efyOf(a.disposedDate)) : sel;
@@ -2823,7 +3172,7 @@ function buildJournal(sel){
       let credit, date = bu.date, kind = 'bioBuy';
       if(fb.indexOf('Supplier credit')===0){ credit = drcr('2050',-bu.amount); kind = 'bioCredit'; }
       else if(fb.indexOf('Contributed')===0){ credit = drcr('3000',-bu.amount,partyName('')); kind = 'bioInKind'; }
-      else if(fb.indexOf('Owned before')===0){ credit = drcr('3000',-bu.amount,partyName('')); date = OPEN_DATE; kind = 'bioOpen'; }
+      else if(fb.indexOf('Owned before')===0 || fb.indexOf('Opening balance')===0){ credit = drcr('3000',-bu.amount,partyName('')); date = OPEN_DATE; kind = 'bioOpen'; }
       else credit = drcr('1000',-bu.amount);
       add(date, 'Flock acquired: '+(b.batchId||''), 'bio', kind, 'inv', [drcr(bu.acct,bu.amount), credit]);
     }
@@ -3636,39 +3985,63 @@ function renderSetup(){
     </div></div>`;
   }).join('');
 
+  const trash = state.trash || [];
+  const trashRows = trash.length ? trash.map((t,i)=>`
+    <tr>
+      <td>${escHtml(t.entity)}</td>
+      <td>${escHtml((t.record && (t.record.batchId || t.record.name || t.record.category || t.record.description || t.record.id || '')).toString().slice(0,40))}</td>
+      <td>${escHtml((t.deletedAt||'').slice(0,10))}</td>
+      <td><button class="btn btn-primary btn-sm" data-restore-trash="${i}">${escHtml(tr('Restore'))}</button></td>
+    </tr>`).join('') : `<tr><td colspan="4" class="empty-row">${escHtml(tr('Recycle bin is empty.'))}</td></tr>`;
+
   return `
-  <div class="pagehead"><div><h1>Setup</h1><p>Customize the dropdown options used throughout the app.</p></div></div>
+  <div class="pagehead"><div><h1>${t('Setup')}</h1><p>${escHtml(tr('Customize the dropdown options used throughout the app.'))}</p></div></div>
   ${renderFirebasePanel()}
   ${renderDriveSyncPanel()}
   <div class="panel"><div class="panel-pad">
-    <div class="section-title" style="margin-top:0">Backup &amp; Restore</div>
-    <p class="note" style="margin:4px 0 12px;">Download a backup file any time and save it to Google Drive, Dropbox, or email it to yourself. Import it later on any device to restore everything.</p>
+    <div class="section-title" style="margin-top:0">${escHtml(tr('Preferences'))}</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;">
+      <input type="checkbox" id="toggleAdvancedAcct" ${showAdvancedAccounting?'checked':''}>
+      ${escHtml(tr('Show advanced accounting (ledger, trial balance, detailed tax adjustments)'))}
+
+    </label>
+    <p class="note" style="margin:8px 0 0;">${escHtml(tr('When off, Reports focuses on Profit & Loss and Balance Sheet — enough for most farms.'))}</p>
+  </div></div>
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">${escHtml(tr('Recycle bin'))} ${trash.length?`<span class="recycle-badge">${trash.length}</span>`:''}</div>
+    <p class="note" style="margin:4px 0 10px;">${escHtml(tr('Removed records stay here for up to 45 days (max 80 items). Restore any time, or empty permanently.'))}</p>
+    <div class="tablewrap"><table><thead><tr><th>${escHtml(tr('Type'))}</th><th>${escHtml(tr('Summary'))}</th><th>${escHtml(tr('Removed'))}</th><th></th></tr></thead><tbody>${trashRows}</tbody></table></div>
+    ${trash.length?`<div style="margin-top:10px;"><button class="btn btn-danger btn-sm" id="emptyTrashBtn">${escHtml(tr('Empty recycle bin'))}</button></div>`:''}
+  </div></div>
+  <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">${escHtml(tr('Backup & Restore'))}</div>
+    <p class="note" style="margin:4px 0 12px;">${escHtml(tr('Download a backup file any time and save it to Google Drive, Dropbox, or email it to yourself. Import it later on any device to restore everything.'))}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="exportBackupBtn">⬇ Export backup (.json)</button>
-      <button class="btn btn-ghost" id="importBackupBtn">⬆ Import backup (.json)</button>
+      <button class="btn btn-primary" id="exportBackupBtn">⬇ ${escHtml(tr('Export backup (.json)'))}</button>
+      <button class="btn btn-ghost" id="importBackupBtn">⬆ ${escHtml(tr('Import backup (.json)'))}</button>
       <input type="file" id="importFileInput" accept="application/json" style="display:none;">
     </div>
   </div></div>
   <div class="panel"><div class="panel-pad">
-    <div class="section-title" style="margin-top:0">Archive old years</div>
-    <p class="note" style="margin:4px 0 12px;">Keep the live app light: download a file of everything up to the end of a fiscal year, then optionally remove those old transactions from this device. Batches, customers and assets stay; livestock quantities are adjusted so current stock stays correct.</p>
+    <div class="section-title" style="margin-top:0">${escHtml(tr('Archive old years'))}</div>
+    <p class="note" style="margin:4px 0 12px;">${escHtml(tr('Keep the live app light: download a file of everything up to the end of a fiscal year, then optionally remove those old transactions from this device. Batches, customers and assets stay; livestock quantities are adjusted so current stock stays correct.'))}</p>
     <div class="calc-grid" style="margin-bottom:12px;">
-      <label class="calc-field">Archive through end of EFY
+      <label class="calc-field">${escHtml(tr('Archive through end of EFY'))}
         <select id="archiveEfySelect">${fyList().map(y=>`<option value="${y}" ${y===currentEFY()-1?'selected':''}>${fyLabel(y)} · ends Sene 30 (${fyRange(y)[1]})</option>`).join('')}
         </select>
       </label>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="archiveExportBtn">⬇ Download archive only</button>
-      <button class="btn btn-danger" id="archivePurgeBtn">⬇ Download archive &amp; remove from this device</button>
+      <button class="btn btn-primary" id="archiveExportBtn">⬇ ${escHtml(tr('Download archive only'))}</button>
+      <button class="btn btn-danger" id="archivePurgeBtn">⬇ ${escHtml(tr('Download archive & remove from this device'))}</button>
     </div>
-    <p class="note" style="margin:10px 0 0;">Always keep the downloaded archive file somewhere safe. Removal cannot be undone except by importing a backup.</p>
+    <p class="note" style="margin:10px 0 0;">${escHtml(tr('Always keep the downloaded archive file somewhere safe. Removal cannot be undone except by importing a backup.'))}</p>
   </div></div>
   ${lists}
   <div class="danger-zone">
-    <h3>Danger zone</h3>
-    <p class="note" style="margin:0 0 10px;">This permanently clears all farm data (livestock, logs, income/expenses) from this device/account. Category lists are kept.</p>
-    <button class="btn btn-danger" id="clearAllData">Clear all farm data</button>
+    <h3>${escHtml(tr('Danger zone'))}</h3>
+    <p class="note" style="margin:0 0 10px;">${escHtml(tr('This permanently clears all farm data (livestock, logs, income/expenses) from this device/account. Category lists are kept.'))}</p>
+    <button class="btn btn-danger" id="clearAllData">${escHtml(tr('Clear all farm data'))}</button>
   </div>
   `;
 }
@@ -3791,7 +4164,8 @@ async function submitPurchase(rec){
   let msg = '';
   if(k==='Feed'){
     const branch = String(rec.f_branch||'').trim() || (ensureBranches()[0]||'Main');
-    const r = {id:uid(), date:rec.date, branch:branch, feedType:rec.f_type, qty:num(rec.f_qty), unitCost:num(rec.f_unit), payStatus:rec.f_pay||PAY_PAID, supplier:rec.f_supplier||'', notes:rec.f_notes||''};
+    const amt = money2(num(rec.f_qty)*num(rec.f_unit));
+    const r = {id:uid(), date:rec.date, branch:branch, feedType:rec.f_type, qty:num(rec.f_qty), unitCost:num(rec.f_unit), payStatus:coercePayIfNoCash(rec.f_pay||PAY_PAID, amt), supplier:rec.f_supplier||'', notes:rec.f_notes||''};
     if(!r.feedType) return 'Choose the feed type.';
     msg = feedPurchaseValidate(r); if(msg) return msg;
     state.feedPurchases.push(r); await saveEntity('feedPurchases');
@@ -3805,8 +4179,10 @@ async function submitPurchase(rec){
     if(state.livestock.some(b=>b.batchId===batchCode)) batchCode = nextBatchId(rec.l_type, branch);
     const qty = num(rec.l_qty), unit = num(rec.l_unit);
     if(!(qty>0)) return 'Enter how many animals were bought.';
+    const cost = money2(qty*unit);
+    const funded = coerceFundIfNoCash(fundFromPay(rec.l_pay), cost);
     const r = {id:uid(), animalType:rec.l_type, branch:branch, batchId:batchCode, breed:rec.l_breed||'', dateAcquired:rec.date, source:rec.l_source||'', initialQty:qty,
-      purchaseCost:money2(qty*unit), fundedBy:fundFromPay(rec.l_pay), bio:rec.l_type==='Poultry' ? (rec.l_bio||'No') : 'No',
+      purchaseCost:cost, fundedBy:funded, bio:rec.l_type==='Poultry' ? (rec.l_bio||'No') : 'No',
       ageWeeksAtPurchase:num(rec.l_age), layingAgeWeeks:num(rec.l_lay)||DEFAULT_LAYING_AGE_WEEKS, amortMonths:num(rec.l_amort), amortMonthsOther:num(rec.l_amortO), notes:rec.l_notes||''};
     msg = livestockValidate(r); if(msg) return msg;
     state.livestock.push(r); await refreshCapFlags(); await saveEntity('livestock');
@@ -3815,21 +4191,23 @@ async function submitPurchase(rec){
     const b = state.livestock.find(x=>x.batchId===rec.v_batch);
     if(!b) return 'Choose the batch that was vaccinated.';
     if(!String(rec.v_name||'').trim()) return 'Enter the vaccine name.';
-    state.vaccinations.push({id:uid(), date:rec.date, branch:b.branch||'Main', animalType:b.animalType, batchId:b.batchId, vaccine:rec.v_name, dose:rec.v_dose||'', cost:num(rec.v_cost), payStatus:rec.v_pay||PAY_PAID, administeredBy:rec.v_by||'', notes:rec.v_notes||''});
+    const cost = num(rec.v_cost);
+    state.vaccinations.push({id:uid(), date:rec.date, branch:b.branch||'Main', animalType:b.animalType, batchId:b.batchId, vaccine:rec.v_name, dose:rec.v_dose||'', cost:cost, payStatus:coercePayIfNoCash(rec.v_pay||PAY_PAID, cost), administeredBy:rec.v_by||'', notes:rec.v_notes||''});
     await refreshCapFlags(); await saveEntity('vaccinations');
   }
   else if(k==='Medication'){
     const b = state.livestock.find(x=>x.batchId===rec.m_batch);
     if(!b) return 'Choose the batch that was treated.';
     if(!String(rec.m_name||'').trim()) return 'Enter the medication name.';
-    state.medications.push({id:uid(), date:rec.date, branch:b.branch||'Main', animalType:b.animalType, batchId:b.batchId, disease:rec.m_disease||'', medication:rec.m_name, dosage:rec.m_dose||'', cost:num(rec.m_cost), payStatus:rec.m_pay||PAY_PAID, notes:rec.m_notes||''});
+    const cost = num(rec.m_cost);
+    state.medications.push({id:uid(), date:rec.date, branch:b.branch||'Main', animalType:b.animalType, batchId:b.batchId, disease:rec.m_disease||'', medication:rec.m_name, dosage:rec.m_dose||'', cost:cost, payStatus:coercePayIfNoCash(rec.m_pay||PAY_PAID, cost), notes:rec.m_notes||''});
     await refreshCapFlags(); await saveEntity('medications');
   }
   else{
     let branch = String(rec.o_branch||'').trim();
     if(!branch && rec.o_batch) branch = branchOfBatch(rec.o_batch);
     if(!branch) branch = ensureBranches()[0]||'Main';
-    const r = {id:uid(), date:rec.date, branch:branch, category:String(rec.o_cat||'').trim(), description:rec.o_desc||'', amount:num(rec.o_amount), payStatus:rec.o_pay||PAY_PAID, refNo:rec.o_ref||'', supplier:rec.o_supplier||'',
+    const r = {id:uid(), date:rec.date, branch:branch, category:String(rec.o_cat||'').trim(), description:rec.o_desc||'', amount:num(rec.o_amount), payStatus:coercePayIfNoCash(rec.o_pay||PAY_PAID, num(rec.o_amount)), refNo:rec.o_ref||'', supplier:rec.o_supplier||'',
       nonDeductible:rec.o_nonded||'No', batchId:rec.o_batch||'', capMode:rec.o_cap||'No', notes:rec.o_notes||''};
     if(!r.category) return 'Choose the expense category (e.g. Labor, Utilities).';
     if(!(r.amount>0)) return 'Amount must be greater than zero.';
@@ -4243,6 +4621,22 @@ async function submitForm(formKey, existingId, cfg, formEl){
   });
   if(cfg.custom){ const msg = await cfg.custom(record); if(msg){ say(msg); return; } closeForm(); render(); showToast('Saved'); return; }
   if(cfg.validate){ const msg = cfg.validate(record); if(msg){ say(msg); return; } }
+  // Cash cannot go negative: force credit / owner funding when "Paid from cash" exceeds available cash
+  if(cfg.entity==='expenses' && record.payStatus){
+    record.payStatus = coercePayIfNoCash(record.payStatus, record.amount);
+  }
+  if(cfg.entity==='feedPurchases' && record.payStatus){
+    record.payStatus = coercePayIfNoCash(record.payStatus, money2(num(record.qty)*num(record.unitCost)));
+  }
+  if((cfg.entity==='vaccinations' || cfg.entity==='medications') && record.payStatus){
+    record.payStatus = coercePayIfNoCash(record.payStatus, record.cost);
+  }
+  if(cfg.entity==='livestock' && record.fundedBy){
+    record.fundedBy = coerceFundIfNoCash(record.fundedBy, record.purchaseCost);
+  }
+  if(cfg.entity==='assets' && record.fundedBy){
+    record.fundedBy = coerceFundIfNoCash(record.fundedBy, record.cost);
+  }
   const arr = state[cfg.entity];
   const idx = arr.findIndex(r=>r.id===record.id);
   if(idx>=0) arr[idx]=record; else arr.push(record);
@@ -4276,14 +4670,8 @@ function deleteGuard(entityKey, id){
   return '';
 }
 async function deleteRecord(entityKey, id){
-  const blocked = deleteGuard(entityKey, id);
-  if(blocked){ say(blocked); return; }
-  if(!ask('Delete this entry? This cannot be undone.')) return;
-  state[entityKey] = state[entityKey].filter(r=>r.id!==id);
-  if(entityKey==='livestock') await refreshCapFlags();
-  await saveEntity(entityKey);
-  render();
-  showToast('Deleted');
+  // Soft-delete by default (recycle bin). Permanent only from the bin itself.
+  await softDelete(entityKey, id);
 }
 
 /* ---------------- Google Drive sync (optional, client-side OAuth) ---------------- */
@@ -4571,6 +4959,32 @@ function attachTabEvents(){
   });
   document.querySelectorAll('[data-del]').forEach(btn=>{
     btn.addEventListener('click', ()=>deleteRecord(btn.dataset.del, btn.dataset.id));
+  });
+  document.querySelectorAll('[data-batch-card]').forEach(btn=>{
+    btn.addEventListener('click', ()=>printBatchCard(btn.dataset.batchCard));
+  });
+  document.querySelectorAll('[data-csv]').forEach(btn=>{
+    btn.addEventListener('click', ()=>exportTableCsv(btn.dataset.csv));
+  });
+  document.querySelectorAll('[data-quick]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const q = btn.dataset.quick;
+      if(q==='purchase') openForm('purchase', null);
+      else if(q==='income') openForm('income', null);
+      else if(q==='production') openForm('production', null);
+      else if(q==='feeding') openForm('feeding', null);
+    });
+  });
+  document.querySelectorAll('[data-restore-trash]').forEach(btn=>{
+    btn.addEventListener('click', ()=>restoreFromTrash(parseInt(btn.dataset.restoreTrash,10)));
+  });
+  const emptyTrashBtn = document.getElementById('emptyTrashBtn');
+  if(emptyTrashBtn) emptyTrashBtn.addEventListener('click', emptyTrash);
+  const advToggle = document.getElementById('toggleAdvancedAcct');
+  if(advToggle) advToggle.addEventListener('change', (e)=>{
+    showAdvancedAccounting = e.target.checked;
+    try{ localStorage.setItem('gh_showAdvanced', showAdvancedAccounting ? '1' : '0'); }catch(err){}
+    render();
   });
 
   // Health sub-toggle
