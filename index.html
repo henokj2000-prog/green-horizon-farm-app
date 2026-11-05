@@ -3029,8 +3029,49 @@ async function ensureOrderCustomer(o){
   return id;
 }
 /**
- * Mark order Done: create Income (reduces product stock) + Payment if amount paid.
- * Idempotent if already fulfilled (incomeId set).
+ * Money from the customer is recorded when received — even if goods are not delivered yet.
+ * That is an advance / deposit: Cash ↑, customer balance credited (not sales revenue yet).
+ */
+async function recordOrderPaymentOnReceipt(orderId){
+  const o = state.orders.find(x=>x.id===orderId);
+  if(!o) return 'Order not found.';
+  const paid = num(o.amountPaid);
+  if(paid <= 0) return '';
+  // Already posted this payment
+  if(o.paymentId && state.payments.some(p=>p.id===o.paymentId)){
+    // Keep payment row in sync if amount/ref changed before fulfillment
+    const p = state.payments.find(x=>x.id===o.paymentId);
+    if(p && !o.incomeId){
+      p.amount = paid;
+      p.method = o.payMethod || p.method;
+      p.refNo = o.refNo || p.refNo;
+      p.date = o.date || p.date;
+      await saveEntity('payments');
+    }
+    return '';
+  }
+  const cid = await ensureOrderCustomer(o);
+  o.customerId = cid;
+  const paymentId = uid();
+  state.payments.push({
+    id: paymentId,
+    date: o.date || todayISO(),
+    customerId: cid,
+    amount: paid,
+    method: o.payMethod || 'Mobile Money',
+    refNo: o.refNo || '',
+    notes: 'Order '+(o.orderNo||'')+' · '+(o.payType||'Payment')+' (before delivery / advance)'
+  });
+  o.paymentId = paymentId;
+  await saveEntity('payments');
+  await saveEntity('orders');
+  return '';
+}
+/**
+ * Mark order Done = goods delivered / ready taken:
+ * - Post Income (sales revenue + reduce product stock)
+ * - Do NOT post payment again if already recorded on receipt
+ * - If nothing was paid yet, income stays on credit
  */
 async function fulfillOrder(orderId){
   const o = state.orders.find(x=>x.id===orderId);
@@ -3041,12 +3082,14 @@ async function fulfillOrder(orderId){
   const cid = await ensureOrderCustomer(o);
   o.customerId = cid;
 
+  // Ensure any amount already on the order is in Payments (cash) before/with delivery
+  await recordOrderPaymentOnReceipt(orderId);
+
   const total = orderTotal(o);
   const paid = num(o.amountPaid);
   const product = o.product || '';
   const qty = num(o.qty);
 
-  // Stock check for product sales
   if(product && qty>0 && ['Eggs','Honey','Milk','Wool','Manure'].includes(product)){
     const avail = productStock(product, o.branch||undefined);
     if(qty > avail + 1e-9){
@@ -3055,41 +3098,40 @@ async function fulfillOrder(orderId){
   }
 
   const incId = uid();
+  // Payment was already booked in Payments tab → sale is "Paid in full" or partial via amountPaid on income
+  // Use Partial/Credit + amountPaid so journal does not double-count cash (cash already in via Payments)
   const payStatus = paid <= 0 ? 'Partial / Credit' : (paid + 0.005 >= total ? 'Paid in full' : 'Partial / Credit');
+  // If payment already exists as a separate Payments row, do not also put cash on the income line
+  // (incomePaidAmt for "Paid in full" would book cash again). Force Partial path with amountPaid=0
+  // when paymentId exists so only AR is cleared by the existing payment entry.
+  const incomeAmountPaid = o.paymentId ? 0 : (payStatus==='Partial / Credit' ? paid : 0);
+  const incomePayStatus = o.paymentId
+    ? (paid + 0.005 >= total ? 'Paid in full' : 'Partial / Credit')
+    : payStatus;
+  // When payment already recorded: mark income Paid in full only if paid covers total, but
+  // incomePaidAmt for Paid in full books cash — problem. Better: always Partial/Credit with amountPaid 0
+  // when payment is separate; AR opens for full gross then payment reduces AR.
   const incomeRec = {
     id: incId,
-    date: o.date || todayISO(),
+    date: todayISO(), // delivery / fulfillment date
     branch: o.branch || (ensureBranches()[0]||'Main'),
     category: product ? saleCategoryForProduct(product) : 'Other Income',
     description: (o.description||'') || ((o.orderNo||'')+' — '+(product||'Order')),
     qty: qty || 1,
-    unitPrice: num(o.unitPrice) || total,
+    unitPrice: num(o.unitPrice) || (qty>0 ? total/qty : total),
     customerId: cid,
-    paymentStatus: payStatus,
-    amountPaid: payStatus==='Partial / Credit' ? paid : 0,
+    // Always Partial/Credit with amountPaid 0 when money was already in Payments — avoids double cash
+    // If no separate payment, book paid amount on the sale line
+    paymentStatus: o.paymentId ? 'Partial / Credit' : payStatus,
+    amountPaid: o.paymentId ? 0 : (payStatus==='Partial / Credit' ? paid : 0),
     refNo: o.refNo || '',
-    notes: 'From order '+(o.orderNo||'')+(o.fulfillment?(' · '+o.fulfillment):'')+(o.address?(' · '+o.address):'')
+    notes: 'From order '+(o.orderNo||'')+(o.fulfillment?(' · '+o.fulfillment):'')+(o.address?(' · '+o.address):'')+(o.paymentId?' · payment already recorded as advance':'')
   };
+  // If fully paid via advance payment row, still Partial with 0 on income so AR = gross, then payment clears AR
   state.income.push(incomeRec);
   await saveEntity('income');
 
-  let paymentId = '';
-  if(paid > 0){
-    paymentId = uid();
-    state.payments.push({
-      id: paymentId,
-      date: o.date || todayISO(),
-      customerId: cid,
-      amount: paid,
-      method: o.payMethod || 'Mobile Money',
-      refNo: o.refNo || '',
-      notes: 'Order '+(o.orderNo||'')+' · '+(o.payType||'')
-    });
-    await saveEntity('payments');
-  }
-
   o.incomeId = incId;
-  o.paymentId = paymentId;
   o.status = 'Done';
   o.fulfilledAt = new Date().toISOString();
   await saveEntity('orders');
@@ -3101,7 +3143,7 @@ async function setOrderStatus(orderId, status){
   if(status==='Done'){
     const err = await fulfillOrder(orderId);
     if(err){ say(err); return; }
-    showToast(tr('Order fulfilled — sale & payment recorded'));
+    showToast(tr('Order fulfilled — sale recorded (stock reduced). Payment was kept as already received.'));
     render();
     return;
   }
@@ -3164,7 +3206,7 @@ function renderOrders(){
     {label:'Total',num:true},{label:'Paid',num:true},{label:'Balance',num:true},
     {label:'Payment'},{label:'Status'},{label:''}
   ], body)}
-  <p class="note">${escHtml(tr('Stock is reduced only when you set status to Done (sale is posted to Income). Enter product + qty for eggs, honey, milk, etc. Use description for free-text detail.'))}</p>
+  <p class="note">${escHtml(tr('Payment (advance or full) is recorded in Payments and Cash as soon as you save an amount + reference — even before delivery. Sales revenue and stock reduction happen only when status is Done.'))}</p>
   `;
 }
 
@@ -5408,9 +5450,15 @@ async function submitForm(formKey, existingId, cfg, formEl){
   if(idx>=0) arr[idx]=record; else arr.push(record);
   if(cfg.entity==='expenses' || cfg.entity==='livestock') await refreshCapFlags();
   await saveEntity(cfg.entity);
-  if(cfg.entity==='orders' && record.status==='Done' && !record.incomeId){
-    const err = await fulfillOrder(record.id);
-    if(err){ say(err); record.status='Ready'; await saveEntity('orders'); }
+  if(cfg.entity==='orders'){
+    // Money received now (advance or full) → Payments + cash immediately, before delivery
+    if(num(record.amountPaid)>0){
+      await recordOrderPaymentOnReceipt(record.id);
+    }
+    if(record.status==='Done' && !record.incomeId){
+      const err = await fulfillOrder(record.id);
+      if(err){ say(err); record.status='Ready'; await saveEntity('orders'); }
+    }
   }
   closeForm();
   render();
