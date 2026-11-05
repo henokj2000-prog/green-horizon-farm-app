@@ -36,38 +36,56 @@
   --shadow:0 1px 2px rgba(35,38,31,0.06), 0 4px 14px rgba(35,38,31,0.06);
 }
 *{box-sizing:border-box;}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter','Noto Sans Ethiopic',sans-serif;font-size:14px;line-height:1.45;}
+html,body{height:100%;margin:0;overflow:hidden;}
+body{background:var(--bg);color:var(--ink);font-family:'Inter','Noto Sans Ethiopic',sans-serif;font-size:14px;line-height:1.45;}
 h1,h2,h3,.brand,.navlabel,.kpi-label{font-family:'Space Grotesk',sans-serif;}
 .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
 button{font-family:inherit;cursor:pointer;}
 a{color:var(--green);}
 
+/* App fills the window exactly — only the content pane scrolls */
+#app{
+  height:100dvh;height:100vh;
+  max-height:100dvh;max-height:100vh;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+
 /* ---------- Header ---------- */
 .topbar{
   background:var(--green-dark);
   color:#F5F6F0;
-  padding:14px 20px;
+  padding:12px 20px;
   display:flex;
   align-items:center;
   gap:12px;
-  position:sticky;top:0;z-index:20;
+  flex-shrink:0;
+  z-index:20;
 }
 .topbar .brand{font-size:19px;font-weight:700;letter-spacing:0.2px;display:flex;align-items:center;gap:8px;}
 .topbar .tagline{font-size:11px;color:#C9D6C2;margin-left:auto;display:none;}
 @media(min-width:640px){ .topbar .tagline{display:block;} }
 .weave{
-  height:8px;width:100%;
+  height:6px;width:100%;flex-shrink:0;
   background:repeating-linear-gradient(115deg, var(--gold) 0 8px, var(--clay) 8px 16px, var(--green) 16px 24px);
   opacity:0.9;
 }
 
 /* ---------- Layout shell ---------- */
-.shell{display:flex;min-height:calc(100vh - 62px);}
+.shell{
+  flex:1;
+  min-height:0;
+  display:flex;
+  overflow:hidden;
+}
 .sidenav{
   background:var(--surface);
   border-right:1px solid var(--rule);
   padding:14px 10px;
   display:flex;flex-direction:column;gap:4px;
+  flex-shrink:0;
+  overflow-y:auto;
+  overflow-x:hidden;
 }
 .navbtn{
   display:flex;align-items:center;gap:10px;
@@ -78,17 +96,26 @@ a{color:var(--green);}
 .navbtn .ic{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
 .navbtn:hover{background:var(--surface-alt);color:var(--ink);}
 .navbtn.active{background:var(--green);color:#fff;}
-.content{flex:1;padding:18px 18px 40px;min-width:0;}
+.content{
+  flex:1;
+  min-width:0;
+  min-height:0;
+  padding:18px 18px 24px;
+  overflow-y:auto;
+  overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+}
 
 @media(min-width:900px){
-  .sidenav{position:sticky;top:62px;height:calc(100vh - 62px);width:230px;overflow-y:auto;}
-  .content{padding:24px 28px 48px;}
+  .sidenav{width:230px;}
+  .content{padding:20px 28px 28px;}
 }
 @media(max-width:899px){
   .shell{flex-direction:column;}
   .sidenav{
     position:fixed;bottom:0;left:0;right:0;top:auto;
-    flex-direction:row;overflow-x:auto;
+    flex-direction:row;overflow-x:auto;overflow-y:hidden;
+    height:auto;max-height:none;
     padding:6px 6px calc(6px + env(safe-area-inset-bottom));
     border-right:none;border-top:1px solid var(--rule);
     z-index:30; box-shadow:0 -2px 10px rgba(0,0,0,0.06);
@@ -96,7 +123,7 @@ a{color:var(--green);}
   }
   .navbtn{flex-direction:column;gap:2px;padding:8px 10px;font-size:10.5px;min-width:64px;text-align:center;border-radius:10px;}
   .navbtn .ic{font-size:18px;width:auto;}
-  .content{padding-bottom:88px;}
+  .content{padding-bottom:calc(88px + env(safe-area-inset-bottom));}
 }
 
 /* ---------- Page header ---------- */
@@ -236,8 +263,10 @@ details.section-fold>summary .fold-hint{font-weight:500;font-size:12px;color:var
 .langbtn{margin-left:auto;background:transparent;color:#F5F6F0;border:1px solid #6d8f7c;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;}
 @media(min-width:640px){ .langbtn{margin-left:14px;} }
 @media print{
+  html,body,#app{height:auto!important;max-height:none!important;overflow:visible!important;}
   .topbar,.weave,.sidenav,.no-print,.toast{display:none!important;}
-  body{background:#fff;} .content{padding:0!important;} .rep-sheet{border:none;padding:0;}
+  body{background:#fff;} .shell{display:block!important;overflow:visible!important;}
+  .content{padding:0!important;overflow:visible!important;} .rep-sheet{border:none;padding:0;}
 }
 
 /* ---- Improvements: tooltips, wizard, recycle, batch card, help ---- */
@@ -268,6 +297,41 @@ details.section-fold>summary .fold-hint{font-weight:500;font-size:12px;color:var
 .quick-btn:hover{background:var(--surface-alt);}
 .csv-btn{font-size:12px;padding:5px 10px;}
 .advanced-only{opacity:0.92;}
+
+/* ---------- Fit-to-window pages (Dashboard, Price Calc, Rearing Cost, Investment Plan) ---------- */
+@media(min-width:760px){
+  .content.fit{padding:10px 18px 6px;}
+  .content.fit .pagehead{margin-bottom:6px;gap:6px;}
+  .content.fit .pagehead h1{font-size:17px;}
+  .content.fit .pagehead p{display:none;}
+  .content.fit .pagehead .btn{padding:5px 10px;font-size:12px;}
+  .content.fit .section-title{margin:8px 0 4px;font-size:12.5px;}
+  .content.fit .panel{margin-bottom:8px;}
+  .content.fit .panel-pad{padding:8px 12px;}
+  .content.fit .calc-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:6px 10px;}
+  .content.fit .calc-field{gap:2px;font-size:11.5px;}
+  .content.fit .calc-field input,.content.fit .calc-field select{padding:5px 8px;font-size:13px;}
+  .content.fit .calc-hint{display:none;}
+  .content.fit .kpi-grid{gap:8px;margin-bottom:8px;}
+  .content.fit .kpi-card{padding:7px 10px;}
+  .content.fit .kpi-label{font-size:10.5px;line-height:1.25;}
+  .content.fit .kpi-value{font-size:17px;margin-top:2px;}
+  .content.fit th,.content.fit td{padding:4px 8px;}
+  .content.fit .note{margin:4px 0;font-size:11px;}
+  .content.fit .panel-pad .note{margin:6px 0 0 !important;}
+  .content.fit .toggle-row{margin-bottom:6px;}
+  .content.fit .toggle-btn{padding:4px 12px;}
+  .content.fit .quick-bar{margin-bottom:8px;gap:6px;}
+  .content.fit .quick-btn{padding:5px 10px;font-size:12px;}
+  .content.fit .dash-note{padding:6px 10px;margin-bottom:8px;font-size:12px;}
+  .content.fit .branch-status-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-bottom:8px;}
+  .content.fit .branch-card{padding:8px 10px;}
+  .content.fit .branch-card h3{margin:0 0 4px;font-size:13.5px;}
+  .content.fit .branch-card .br-row{padding:2px 0;font-size:12px;}
+  .content.fit .branch-card .br-status{margin-top:4px;}
+  .content.fit .two-col{gap:8px;}
+  .content.fit details{margin-bottom:8px !important;}
+}
 </style>
 
 </head>
@@ -1983,12 +2047,67 @@ function render(){
   };
   // Old "reductions" tab redirects into Livestock
   if(currentTab==='reductions') currentTab = 'livestock';
-  c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
+  const html = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
+  const fitPage = FIT_TABS.indexOf(currentTab) >= 0;
+  c.innerHTML = fitPage ? '<div id="fitRoot">'+html+'</div>' : html;
   translateDom(c);
   attachTabEvents();
   wireTableTools();
   fitMoneyTexts(c);
+  fitToWindow();
 }
+
+/* ---------------- Fit-to-window (no scrolling) ----------------
+ * Dashboard, Price Calc, Rearing Cost and Investment Plan are scaled to fill the
+ * window exactly, so the whole page is visible without scrolling. Pages that are
+ * still too tall at the minimum scale fall back to normal scrolling. */
+const FIT_TABS = ['dashboard','calculator','rearing','invest'];
+const FIT_MIN_ZOOM = 0.6;
+function fitToWindow(){
+  const c = document.getElementById('content');
+  if(!c) return;
+  const root = document.getElementById('fitRoot');
+  if(!root || FIT_TABS.indexOf(currentTab) < 0 || window.innerWidth < 760){
+    c.classList.remove('fit'); c.style.overflowY = '';
+    if(root) root.style.zoom = '';
+    return;
+  }
+  c.classList.add('fit');
+  c.style.overflowY = 'hidden';                       // measure without a scrollbar
+  const fits = () => c.scrollHeight <= c.clientHeight + 1;
+  const setZ = z => { root.style.zoom = z >= 0.999 ? '' : String(z); };
+  setZ(1);
+  let ok = fits();
+  if(!ok){
+    setZ(FIT_MIN_ZOOM);
+    if(!fits()){ ok = false; }                        // too tall even at minimum: allow scrolling
+    else {
+      let lo = FIT_MIN_ZOOM, hi = 1;
+      for(let i=0;i<7;i++){
+        const mid = (lo+hi)/2;
+        setZ(mid);
+        if(fits()) lo = mid; else hi = mid;
+      }
+      setZ(lo);
+      ok = true;
+    }
+  }
+  c.style.overflowY = ok ? 'hidden' : 'auto';
+  c.scrollTop = 0;
+}
+(function(){
+  let t = null;
+  const schedule = ()=>{ clearTimeout(t); t = setTimeout(fitToWindow, 60); };
+  window.addEventListener('resize', schedule);
+  window.addEventListener('load', schedule);
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const c = document.getElementById('content');
+    if(!c) return;
+    // Live result updates (typing in a calculator) and opened <details> change the height
+    new MutationObserver(schedule).observe(c, {childList:true, subtree:true, characterData:true});
+    c.addEventListener('toggle', schedule, true);
+  });
+})();
 
 /** Shrink ETB / number text so it stays on one line inside its card. */
 function fitMoneyTexts(root){
