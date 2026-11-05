@@ -531,6 +531,24 @@ const AM = {
   'When off, Reports focuses on Profit & Loss and Balance Sheet — enough for most farms.':'ሲጠፋ ሪፖርቶች በትርፍና ኪሳራ እና በሂሳብ ሚዛን ላይ ያተኩራሉ — ለአብዛኛዎቹ እርሻዎች በቂ ነው።',
   'Why is Cash negative?':'ጥሬ ገንዘብ ለምን አሉታዊ ነው?','CSV downloaded':'CSV ወርዷል',
   'Cash stays non-negative':'ጥሬ ገንዘብ አሉታዊ አይሆንም',
+  'Enter PIN':'ፒን ያስገቡ','PIN / password':'ፒን / የይለፍ ቃል','Confirm':'አረጋግጥ',
+  'This action requires your farm PIN.':'ይህ እርምጃ የእርሻዎን ፒን ይፈልጋል።',
+  'Enter your PIN':'ፒንዎን ያስገቡ','Wrong PIN. Try again.':'የተሳሳተ ፒን። እንደገና ይሞክሩ።',
+  'Set a farm PIN':'የእርሻ ፒን ያዘጋጁ','Change or remove PIN':'ፒን ይቀይሩ ወይም ያስወግዱ',
+  'Optional protection for deleting records, emptying the recycle bin, importing backups, and clearing data. Stored only on this device.':'መዝገቦችን ለመሰረዝ፣ ቅርጫቱን ለማጽዳት፣ ምትኬ ለማስገባትና ውሂብ ለማጽዳት አማራጭ ጥበቃ። በዚህ መሣሪያ ላይ ብቻ ይቀመጣል።',
+  'Current PIN':'አሁን ያለ ፒን','New PIN (leave blank to remove)':'አዲስ ፒን (ለማስወገድ ባዶ ይተው)','New PIN (4+ characters)':'አዲስ ፒን (ከ4 ቁምፊ በላይ)','Confirm new PIN':'አዲሱን ፒን ያረጋግጡ',
+  'PIN removed':'ፒን ተወግዷል','PIN saved':'ፒን ተቀምጧል','Wrong current PIN.':'የአሁኑ ፒን ተሳስቷል።',
+  'PIN must be at least 4 characters.':'ፒን ቢያንስ 4 ቁምፊ መሆን አለበት።','New PIN and confirmation do not match.':'አዲሱ ፒንና ማረጋገጫው አይዛመዱም።',
+  'Security / PIN':'ደህንነት / ፒን',
+  'Optional PIN for removing records, emptying the recycle bin, importing backups, and clearing all data. Stored only on this device — not sent to any server.':'መዝገቦችን ለማስወገድ፣ ቅርጫቱን ለማጽዳት፣ ምትኬ ለማስገባትና ሁሉንም ውሂብ ለማጽዳት አማራጭ ፒን። በዚህ መሣሪያ ላይ ብቻ ይቀመጣል — ወደ ምንም አገልጋይ አይላክም።',
+  'PIN is active — destructive actions require it.':'ፒን ንቁ ነው — ጎጂ እርምጃዎች ይፈልጉታል።',
+  'No PIN set — anyone using this device can remove records.':'ፒን አልተዘጋጀም — ይህን መሣሪያ የሚጠቀም ማንኛውም ሰው መዝገቦችን ማስወገድ ይችላል።',
+  'Enter PIN to remove this record.':'ይህን መዝገብ ለማስወገድ ፒን ያስገቡ።',
+  'Enter PIN to permanently empty the recycle bin.':'ቅርጫቱን እስከመጨረሻው ለማጽዳት ፒን ያስገቡ።',
+  'Enter PIN to permanently clear all farm data.':'ሁሉንም የእርሻ ውሂብ ለማጽዳት ፒን ያስገቡ።',
+  'Enter PIN to import a backup and replace all data.':'ምትኬ ለማስገባትና ሁሉንም ውሂብ ለመተካት ፒን ያስገቡ።',
+  'Enter PIN to remove archived years from this device.':'የተመረጡ ዓመታትን ከዚህ መሣሪያ ለማስወገድ ፒን ያስገቡ።',
+
   'Not enough cash (available ':'በቂ ጥሬ ገንዘብ የለም (ያለው: ',
   '). Recorded as Unpaid on credit so cash stays non-negative.':')። ጥሬ ገንዘብ አሉታዊ እንዳይሆን እንደ ያልተከፈለ (ብድር) ተመዝግቧል።',
   '). Recorded on supplier credit so cash stays non-negative.':')። ጥሬ ገንዘብ አሉታዊ እንዳይሆን በአቅራቢ ብድር ተመዝግቧል።',
@@ -910,6 +928,101 @@ function showToast(msg){
 /* ---------------- Soft-delete (recycle bin) ---------------- */
 const TRASH_MAX = 80;
 const TRASH_DAYS = 45;
+/* ---------------- PIN / password protection (optional, local device only) ---------------- */
+function pinHash(pin){
+  // Lightweight hash — enough to stop casual snooping on a shared farm tablet; not bank-grade crypto
+  let h = 2166136261;
+  const s = 'gh-farm|' + String(pin) + '|v1';
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h>>>0).toString(16);
+}
+function getPinHash(){ try{ return localStorage.getItem('gh_pinHash') || ''; }catch(e){ return ''; } }
+function isPinSet(){ return !!getPinHash(); }
+function setPin(pin){
+  try{ localStorage.setItem('gh_pinHash', pinHash(pin)); localStorage.setItem('gh_pinSetAt', new Date().toISOString()); }catch(e){}
+}
+function clearPin(){ try{ localStorage.removeItem('gh_pinHash'); localStorage.removeItem('gh_pinSetAt'); }catch(e){} }
+function checkPin(pin){ return pinHash(pin) === getPinHash(); }
+
+/** Ask for PIN if one is configured. Resolves true if allowed, false if cancelled/wrong. */
+function requirePin(reason){
+  if(!isPinSet()) return Promise.resolve(true);
+  return new Promise((resolve)=>{
+    const root = document.getElementById('modalRoot');
+    const prev = root.innerHTML;
+    root.innerHTML = `
+    <div class="wizard-overlay" id="pinOverlay">
+      <div class="wizard" style="max-width:360px;">
+        <h2>${escHtml(tr('Enter PIN'))}</h2>
+        <p>${escHtml(tr(reason || 'This action requires your farm PIN.'))}</p>
+        <label>${escHtml(tr('PIN / password'))}<input type="password" id="pinInput" autocomplete="current-password" inputmode="numeric" style="letter-spacing:3px;"></label>
+        <p id="pinErr" class="note" style="color:var(--clay);margin:0;display:none;"></p>
+        <div class="wizard-actions">
+          <button class="btn btn-ghost" id="pinCancel">${escHtml(tr('Cancel'))}</button>
+          <button class="btn btn-primary" id="pinOk">${escHtml(tr('Confirm'))}</button>
+        </div>
+      </div>
+    </div>`;
+    const input = document.getElementById('pinInput');
+    const err = document.getElementById('pinErr');
+    const done = (ok)=>{ root.innerHTML = ''; resolve(ok); };
+    const tryOk = ()=>{
+      const v = (input.value||'').trim();
+      if(!v){ err.style.display='block'; err.textContent = tr('Enter your PIN'); return; }
+      if(!checkPin(v)){ err.style.display='block'; err.textContent = tr('Wrong PIN. Try again.'); input.value=''; input.focus(); return; }
+      done(true);
+    };
+    document.getElementById('pinCancel').onclick = ()=>done(false);
+    document.getElementById('pinOk').onclick = tryOk;
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); tryOk(); }});
+    setTimeout(()=>input.focus(), 50);
+  });
+}
+
+function openPinSetup(){
+  const has = isPinSet();
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="wizard-overlay">
+    <div class="wizard" style="max-width:400px;">
+      <h2>${escHtml(tr(has ? 'Change or remove PIN' : 'Set a farm PIN'))}</h2>
+      <p>${escHtml(tr('Optional protection for deleting records, emptying the recycle bin, importing backups, and clearing data. Stored only on this device.'))}</p>
+      ${has ? `<label>${escHtml(tr('Current PIN'))}<input type="password" id="pinCur" autocomplete="current-password"></label>` : ''}
+      <label>${escHtml(tr(has ? 'New PIN (leave blank to remove)' : 'New PIN (4+ characters)'))}<input type="password" id="pinNew" autocomplete="new-password"></label>
+      <label>${escHtml(tr('Confirm new PIN'))}<input type="password" id="pinNew2" autocomplete="new-password"></label>
+      <p id="pinSetupErr" class="note" style="color:var(--clay);margin:0;display:none;"></p>
+      <div class="wizard-actions">
+        <button class="btn btn-ghost" id="pinSetupCancel">${escHtml(tr('Cancel'))}</button>
+        <button class="btn btn-primary" id="pinSetupSave">${escHtml(tr('Save'))}</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('pinSetupCancel').onclick = ()=>{ root.innerHTML=''; };
+  document.getElementById('pinSetupSave').onclick = ()=>{
+    const err = document.getElementById('pinSetupErr');
+    const show = (m)=>{ err.style.display='block'; err.textContent = tr(m); };
+    if(has){
+      const cur = (document.getElementById('pinCur').value||'').trim();
+      if(!checkPin(cur)){ show('Wrong current PIN.'); return; }
+    }
+    const n1 = (document.getElementById('pinNew').value||'').trim();
+    const n2 = (document.getElementById('pinNew2').value||'').trim();
+    if(has && !n1 && !n2){
+      clearPin();
+      root.innerHTML='';
+      showToast(tr('PIN removed'));
+      if(currentTab==='setup') render();
+      return;
+    }
+    if(n1.length < 4){ show('PIN must be at least 4 characters.'); return; }
+    if(n1 !== n2){ show('New PIN and confirmation do not match.'); return; }
+    setPin(n1);
+    root.innerHTML='';
+    showToast(tr('PIN saved'));
+    if(currentTab==='setup') render();
+  };
+}
+
 async function softDelete(entityKey, id){
   const arr = state[entityKey];
   if(!arr) return;
@@ -918,6 +1031,7 @@ async function softDelete(entityKey, id){
   const blocked = deleteGuard(entityKey, id);
   if(blocked){ say(blocked); return; }
   if(!ask('Move this entry to the recycle bin? You can restore it later from Setup.')) return;
+  if(!(await requirePin('Enter PIN to remove this record.'))) return;
   const rec = arr[idx];
   arr.splice(idx,1);
   state.trash = state.trash || [];
@@ -948,6 +1062,7 @@ async function restoreFromTrash(trashIdx){
 async function emptyTrash(){
   if(!state.trash || !state.trash.length){ showToast('Recycle bin is empty'); return; }
   if(!ask('Permanently delete all '+state.trash.length+' items in the recycle bin? This cannot be undone.')) return;
+  if(!(await requirePin('Enter PIN to permanently empty the recycle bin.'))) return;
   state.trash = [];
   await saveKey(STORE_KEYS.trash, state.trash);
   render();
@@ -4008,6 +4123,14 @@ function renderSetup(){
     <p class="note" style="margin:8px 0 0;">${escHtml(tr('When off, Reports focuses on Profit & Loss and Balance Sheet — enough for most farms.'))}</p>
   </div></div>
   <div class="panel"><div class="panel-pad">
+    <div class="section-title" style="margin-top:0">🔒 ${escHtml(tr('Security / PIN'))}</div>
+    <p class="note" style="margin:4px 0 12px;">${escHtml(tr('Optional PIN for removing records, emptying the recycle bin, importing backups, and clearing all data. Stored only on this device — not sent to any server.'))}</p>
+    <p style="font-size:13px;margin:0 0 10px;">${isPinSet()
+      ? '🟢 '+escHtml(tr('PIN is active — destructive actions require it.'))
+      : '⚪ '+escHtml(tr('No PIN set — anyone using this device can remove records.'))}</p>
+    <button class="btn btn-primary btn-sm" id="pinSetupBtn">${escHtml(tr(isPinSet() ? 'Change or remove PIN' : 'Set a farm PIN'))}</button>
+  </div></div>
+  <div class="panel"><div class="panel-pad">
     <div class="section-title" style="margin-top:0">${escHtml(tr('Recycle bin'))} ${trash.length?`<span class="recycle-badge">${trash.length}</span>`:''}</div>
     <p class="note" style="margin:4px 0 10px;">${escHtml(tr('Removed records stay here for up to 45 days (max 80 items). Restore any time, or empty permanently.'))}</p>
     <div class="tablewrap"><table><thead><tr><th>${escHtml(tr('Type'))}</th><th>${escHtml(tr('Summary'))}</th><th>${escHtml(tr('Removed'))}</th><th></th></tr></thead><tbody>${trashRows}</tbody></table></div>
@@ -4912,6 +5035,7 @@ async function archiveYearFlow(purge){
   if(purge){
     if(!ask('This will:\n1) Download an archive of all transactions up to '+cutoff+' (end of '+efy+' EFY)\n2) REMOVE those transactions from this device\n3) Reset each livestock batch opening qty to the stock level on that date\n\nCustomers, assets and batches stay. Continue?')) return;
     if(!ask('Final confirmation: remove archived data from this device? Keep the downloaded file safe — this cannot be undone otherwise.')) return;
+    if(!(await requirePin('Enter PIN to remove archived years from this device.'))) return;
     exportYearArchive(efy);
     await purgeArchivedYear(efy);
     render();
@@ -4932,6 +5056,7 @@ async function importBackupFile(file){
     return;
   }
   if(!ask('Import this backup? This will replace ALL current data in the app with the contents of this file.')) return;
+  if(!(await requirePin('Enter PIN to import a backup and replace all data.'))) return;
   state.setup = data.setup || state.setup;
   state.calc = data.calc || state.calc;
   ENTITY_KEYS.forEach(k=>{ state[k] = Array.isArray(data[k]) ? data[k] : []; });
@@ -5101,11 +5226,15 @@ function attachTabEvents(){
   if(clearBtn) clearBtn.addEventListener('click', async ()=>{
     if(!ask('This will permanently delete ALL livestock, production, feed, income/expense and health records. Continue?')) return;
     if(!ask('Are you absolutely sure? This cannot be undone.')) return;
+    if(!(await requirePin('Enter PIN to permanently clear all farm data.'))) return;
     ENTITY_KEYS.forEach(k=>state[k]=[]);
-    await Promise.all(ENTITY_KEYS.map(saveEntity));
+    state.trash = [];
+    await Promise.all([...ENTITY_KEYS.map(saveEntity), saveKey(STORE_KEYS.trash, [])]);
     render();
     showToast('All farm data cleared');
   });
+  const pinSetupBtn = document.getElementById('pinSetupBtn');
+  if(pinSetupBtn) pinSetupBtn.addEventListener('click', openPinSetup);
 
   const ownerInput = document.getElementById('acctOwnerName');
   if(ownerInput) ownerInput.addEventListener('change', async (e)=>{
