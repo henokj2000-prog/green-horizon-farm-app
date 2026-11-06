@@ -350,7 +350,7 @@ const DEFAULT_CALC = {
 };
 
 const DEFAULT_SETUP = {
-  incomeCats:["Egg Sales","Live Bird Sales","Honey Sales","Milk Sales","Wool Sales","Livestock Sales (Goats/Sheep/Oxen)","Manure Sales","Other Income"],
+  incomeCats:["Egg Sales","Live Chicken Sales","Honey Sales","Milk Sales","Wool Sales","Livestock Sales (Goats/Sheep/Oxen)","Manure Sales","Other Income"],
   expenseCats:["Labor","Utilities","Equipment","Transport","Rent","Beekeeping Supplies","Shearing/Processing","Other Expense"],
   feedTypes:["Starter Feed","Grower Feed","Layer Feed","Broiler Finisher","Hay","Pasture/Grazing","Concentrate/Mineral Mix","Bee Syrup/Pollen Supplement"],
   diseases:["Newcastle Disease","Coccidiosis","Fowl Typhoid","Infectious Bronchitis","Avian Influenza","Fowl Pox","Mastitis","Foot Rot","PPR (Peste des Petits Ruminants)","Foot & Mouth Disease","Bloat","Internal Parasites/Worms","Varroa Mites","Nosema","Anaplasmosis"],
@@ -400,210 +400,549 @@ let needsFirstRunWizard = false;
 
 /* ---------------- Language (English / Amharic) ---------------- */
 const AM = {
-  /* --- static / navigation --- */
-  'Green Horizon Farm':'ግሪን ሆራይዘን እርሻ','Green Horizon Farm Manager':'ግሪን ሆራይዘን የእርሻ አስተዳዳሪ',
-  'Poultry · Bees · Goats · Sheep · Oxen':'ዶሮ · ንብ · ፍየል · በግ · በሬ','Loading farm data…':'የእርሻ መረጃ በመጫን ላይ…',
-  'Dashboard':'ዳሽቦርድ','Livestock':'እንስሳት','Reductions':'ቅናሾች','Production':'ምርት','Prod. Stock':'የምርት ክምችት','Employees':'ሠራተኞች',
-  'Feed':'መኖ','Price Calc':'የዋጋ ማስያ','Income':'ገቢ','Expenses':'ወጪዎች','Assets':'ንብረት','Health':'ጤና','Reports':'ሪፖርቶች','Setup':'ቅንብር',
-  /* --- common --- */
-  'Date':'ቀን','Category':'ምድብ','Description':'መግለጫ','Amount':'መጠን','Notes':'ማስታወሻ','Status':'ሁኔታ','Source':'ምንጭ','Unit':'መለኪያ',
-  'Qty':'ብዛት','Quantity':'ብዛት','Cost':'ወጪ','Product':'ምርት','Reason':'ምክንያት','Supplier':'አቅራቢ','Profit':'ትርፍ','Metric':'መለኪያ',
-  'Edit':'አርም','Delete':'ሰርዝ','Save':'አስቀምጥ','Cancel':'ተወው','Add':'ጨምር','Change':'ለውጥ','Yes':'አዎ','No':'አይ','Never':'በጭራሽ',
-  'Active':'ንቁ','Closed':'ተዘግቷል','ETB':'ብር','count':'ብዛት','kg':'ኪ.ግ','liters':'ሊትር','-- select --':'-- ምረጥ --','Other':'ሌላ',
-  'Unit Price':'የአንዱ ዋጋ','Unit Cost':'የአንዱ ዋጋ','Total Cost':'ጠቅላላ ወጪ','Total Value':'ጠቅላላ ዋጋ','Animal Type':'የእንስሳት ዓይነት',
-  /* --- animal types / products --- */
-  'Poultry':'ዶሮዎች','Bees':'ንቦች','Goats':'ፍየሎች','Sheep':'በጎች','Oxen':'በሬዎች',
-  'Eggs':'እንቁላል','Honey':'ማር','Milk':'ወተት','Wool':'ሱፍ','Manure':'ፍግ',
-  /* --- income / expense categories --- */
-  'Egg Sales':'የእንቁላል ሽያጭ','Live Bird Sales':'የሕያው ዶሮ ሽያጭ','Honey Sales':'የማር ሽያጭ','Milk Sales':'የወተት ሽያጭ','Wool Sales':'የሱፍ ሽያጭ',
-  'Livestock Sales (Goats/Sheep/Oxen)':'የእንስሳት ሽያጭ (ፍየል/በግ/በሬ)','Manure Sales':'የፍግ ሽያጭ','Other Income':'ሌላ ገቢ',
-  'Feed Purchase':'የመኖ ግዢ','Vaccination':'ክትባት','Medication':'መድኃኒት','Labor':'የሠራተኛ ወጪ','Utilities':'የፍጆታ ወጪዎች','Equipment':'መሣሪያዎች',
-  'Transport':'ትራንስፖርት','Rent':'ኪራይ','Beekeeping Supplies':'የንብ እርባታ አቅርቦቶች','Shearing/Processing':'የሱፍ ማሳጠር/ማቀነባበሪያ','Other Expense':'ሌላ ወጪ',
-  /* --- feed types / diseases --- */
-  'Starter Feed':'የጫጩት መጀመሪያ መኖ','Grower Feed':'የማሳደጊያ መኖ','Layer Feed':'የእንቁላል ጣይ መኖ','Broiler Finisher':'የሥጋ ዶሮ ማጠናቀቂያ መኖ','Hay':'ድርቆሽ',
-  'Pasture/Grazing':'ግጦሽ','Concentrate/Mineral Mix':'ኮንሰንትሬት/ማዕድን ቅልቅል','Bee Syrup/Pollen Supplement':'የንብ ሽሮፕ/የአበባ ዱቄት ማሟያ',
-  'Newcastle Disease':'ኒውካስል በሽታ','Coccidiosis':'ኮክሲዲዮሲስ','Fowl Typhoid':'የወፍ ታይፎይድ','Infectious Bronchitis':'ተላላፊ ብሮንካይተስ','Avian Influenza':'የወፍ ጉንፋን',
-  'Fowl Pox':'የወፍ ፈንጣጣ','Mastitis':'የጡት በሽታ (ማስቲታይስ)','Foot Rot':'የኮቴ መበስበስ','PPR (Peste des Petits Ruminants)':'ፒፒአር (የበግና ፍየል ቸነፈር)',
-  'Foot & Mouth Disease':'የአፍና እግር በሽታ','Bloat':'የሆድ መነፋት','Internal Parasites/Worms':'የውስጥ ጥገኛ ተውሳኮች/ትሎች','Varroa Mites':'ቫሮአ ምስጦች',
-  'Nosema':'ኖሴማ','Anaplasmosis':'አናፕላዝሞሲስ',
-  /* --- reasons --- */
-  'Death':'ሞት','Sale':'ሽያጭ','Cull':'ማስወገድ','Swarm Lost':'የጠፋ ቅኝ','Transfer Out':'ወደ ሌላ ማዛወር','Theft/Loss':'ስርቆት/ጥፋት',
-  'Consumption':'ፍጆታ','Spoilage':'መበላሸት','Given Away':'በስጦታ የተሰጠ','Broken':'የተሰበረ',
-  /* --- asset classes / methods --- */
-  'Buildings / structures':'ሕንፃዎች / መዋቅሮች','Equipment / machinery':'መሣሪያዎች / ማሽነሪዎች','Vehicles':'ተሽከርካሪዎች','Furniture & fittings':'የቤት ዕቃዎችና ተጓዳኞች',
-  'Computers & software':'ኮምፒውተሮችና ሶፍትዌር','Straight-line':'ቀጥተኛ መስመር','Declining balance':'ቀሪ ሒሳብ መቀነስ',
-  /* --- dashboard --- */
-  'Overview across all species and products.':'በሁሉም የእንስሳት ዓይነቶችና ምርቶች ላይ አጠቃላይ እይታ።',
-  'Current Livestock Qty':'አሁን ያሉ እንስሳት ብዛት','Current Egg Stock':'አሁን ያለ የእንቁላል ክምችት','Current Feed Stock (kg)':'አሁን ያለ የመኖ ክምችት (ኪ.ግ)',
-  'Total Income':'ጠቅላላ ገቢ','Total Expenses':'ጠቅላላ ወጪ','Net Profit / (Loss)':'የተጣራ ትርፍ / (ኪሳራ)','YTD Net Profit / (Loss)':'እስከ አሁን የዓመቱ የተጣራ ትርፍ / (ኪሳራ)',
-  'Livestock by Type':'እንስሳት በዓይነት','Product Stock Summary':'የምርት ክምችት ማጠቃለያ','Current Qty':'አሁን ያለ ብዛት','Current Stock':'አሁን ያለ ክምችት',
-  'No animal types configured.':'ምንም የእንስሳት ዓይነት አልተዋቀረም።','No product types configured.':'ምንም የምርት ዓይነት አልተዋቀረም።','No feed types configured.':'ምንም የመኖ ዓይነት አልተዋቀረም።',
-  'Data is stored privately on this device only (nothing sent to any server). Use Setup → Backup & Restore to move data between devices or save a copy to Google Drive.':'መረጃው በዚህ መሣሪያ ላይ ብቻ በግል ይቀመጣል (ወደ ማንኛውም አገልጋይ አይላክም)። መረጃን በመሣሪያዎች መካከል ለማስተላለፍ ወይም ቅጂ ወደ Google Drive ለማስቀመጥ ቅንብር → ምትኬና መልሶ ማግኛን ይጠቀሙ።',
-  /* --- livestock --- */
-  'One row per batch, herd, or hive — any species.':'ለእያንዳንዱ ቡድን፣ መንጋ ወይም ቀፎ አንድ ረድፍ — ማንኛውም የእንስሳት ዓይነት።','+ Add batch/herd':'+ ቡድን/መንጋ ጨምር',
-  'Batch/Herd ID':'የቡድን/መንጋ መለያ','Breed/Type':'ዝርያ/ዓይነት','Date Acquired':'የተገኘበት ቀን','Initial Qty':'መጀመሪያ ብዛት','Age (Days)':'ዕድሜ (ቀናት)',
-  'No batches/herds yet. Add your first one below.':'እስካሁን ምንም ቡድን/መንጋ የለም። የመጀመሪያውን ይጨምሩ።',
-  /* --- reductions --- */
-  'Livestock Reductions':'የእንስሳት ቅናሾች','Deaths, culls, sales, swarm loss, or transfers — any species.':'ሞት፣ ማስወገድ፣ ሽያጭ፣ የቅኝ መጥፋት ወይም ዝውውር — ማንኛውም የእንስሳት ዓይነት።',
-  '+ Add reduction':'+ ቅናሽ ጨምር','No reductions logged yet.':'እስካሁን ምንም ቅናሽ አልተመዘገበም።',
-  /* --- production --- */
-  'Eggs, honey, milk, wool — one row per collection event.':'እንቁላል፣ ማር፣ ወተት፣ ሱፍ — ለእያንዳንዱ የስብሰባ ጊዜ አንድ ረድፍ።','+ Add production':'+ ምርት ጨምር',
-  'Qty Produced':'የተመረተ ብዛት','Waste/Loss':'ብክነት/ጉዳት','Good Output':'ጥሩ ምርት','No production logged yet.':'እስካሁን ምንም ምርት አልተመዘገበም።',
-  /* --- product stock --- */
-  'Product Stock':'የምርት ክምችት','Auto-calculated stock, plus the sales/consumption log behind it.':'በራስ-ሰር የሚሰላ ክምችት፣ ከጀርባው ካለው የሽያጭና የፍጆታ መዝገብ ጋር።',
-  'Current Stock by Product':'አሁን ያለ ክምችት በምርት','Produced':'የተመረተ','Reduced':'የቀነሰ','Value Sold/Used':'የተሸጠ/የተጠቀመ ዋጋ','Reductions Log':'የቅናሽ መዝገብ',
-  'Consumed, spoiled, broken or given away. Sales are entered in Income and appear here automatically.':'የተሸጠ፣ የተበላ፣ የተበላሸ ወይም በስጦታ የተሰጠ።','No product reductions logged yet.':'እስካሁን ምንም የምርት ቅናሽ አልተመዘገበም።',
-  /* --- feed --- */
-  'Stock, purchases, and daily feeding — any species.':'ክምችት፣ ግዢና የዕለት መኖ — ማንኛውም የእንስሳት ዓይነት።','Feed Stock Summary':'የመኖ ክምችት ማጠቃለያ','Feed Type':'የመኖ ዓይነት',
-  'Purchased (kg)':'የተገዛ (ኪ.ግ)','Used (kg)':'የተጠቀመ (ኪ.ግ)','Current Stock (kg)':'አሁን ያለ ክምችት (ኪ.ግ)','Avg Cost/kg':'አማካይ ዋጋ/ኪ.ግ','Stock Value':'የክምችት ዋጋ',
-  'Feed Purchases':'የመኖ ግዢዎች','+ Add purchase':'+ ግዢ ጨምር','Qty (kg)':'ብዛት (ኪ.ግ)','Feeding Log':'የአመጋገብ መዝገብ','+ Add feeding':'+ አመጋገብ ጨምር','Qty Used':'የተጠቀመ ብዛት',
-  'No feed purchases logged yet.':'እስካሁን ምንም የመኖ ግዢ አልተመዘገበም።','No feeding logged yet.':'እስካሁን ምንም አመጋገብ አልተመዘገበም።',
-  /* --- calculator --- */
-  'Egg Price & Profitability Calculator':'የእንቁላል ዋጋና ትርፋማነት ማስያ',
-  'Set your flock, feed and cost assumptions to find your break-even cost and a recommended selling price per egg.':'የመንጋዎን፣ የመኖዎንና የወጪ ግምቶችዎን ያስገቡ፤ የወጪ ማወራረጃና የሚመከር የአንድ እንቁላል መሸጫ ዋጋ ያገኛሉ።',
-  '↻ Auto-fill from my farm records':'↻ ከእርሻ መዝገቤ በራስ-ሰር ሙላ','Flock & Production':'መንጋና ምርት','Laying birds (count)':'እንቁላል ጣይ ወፎች (ብዛት)',
-  'Laying rate (% eggs/bird/day)':'የእንቁላል ጣይነት መጠን (% እንቁላል/ወፍ/ቀን)','Hen-day production — typically 60–90% for healthy layers':'ዕለታዊ የእንቁላል ምርት መጠን — ለጤናማ ጣይ ዶሮዎች በተለምዶ 60–90%',
-  'Breakage / waste (%)':'መሰበር / ብክነት (%)','Cracked, spoiled or lost eggs':'የተሰነጠቁ፣ የተበላሹ ወይም የጠፉ እንቁላሎች','Feed & Other Costs':'መኖና ሌሎች ወጪዎች',
-  'Total feed used per day, whole flock (kg)':'በቀን የሚጠቀም ጠቅላላ መኖ፣ ለመላው መንጋ (ኪ.ግ)','Feed cost (ETB/kg)':'የመኖ ዋጋ (ብር/ኪ.ግ)',
-  'Other cost per day, whole flock (ETB)':'በቀን ሌላ ወጪ፣ ለመላው መንጋ (ብር)','Labor, health, utilities, housing — everything but feed, as a daily total':'የሠራተኛ፣ ጤና፣ ፍጆታ፣ መጠለያ — ከመኖ ውጭ ያሉ ሁሉም፣ እንደ ዕለታዊ ድምር',
-  'Margin & Selling':'ትርፍና ሽያጭ','Markup on cost':'በወጪ ላይ የሚጨመር ትርፍ','Margin on price':'ከዋጋ የሚገኝ ትርፍ ድርሻ','Desired markup (%)':'የሚፈለግ ጭማሪ (%)','Desired margin (%)':'የሚፈለግ የትርፍ ድርሻ (%)',
-  'Added on top of cost per egg':'በአንድ እንቁላል ወጪ ላይ የሚጨመር','Share of the selling price that is profit':'ከመሸጫ ዋጋ ውስጥ ትርፍ የሆነው ድርሻ','Eggs per crate':'በአንድ ሣጥን ውስጥ ያሉ እንቁላሎች',
-  'Results':'ውጤቶች','Eggs / Day (net of waste)':'እንቁላል / ቀን (ከብክነት በኋላ)','Daily Feed Cost':'የዕለት መኖ ወጪ','Daily Other Cost':'የዕለት ሌላ ወጪ','Break-even Cost / Egg':'የወጪ ማወራረጃ / እንቁላል',
-  'Recommended Price / Egg':'የሚመከር ዋጋ / እንቁላል','Profit / Egg':'ትርፍ / እንቁላል','Recommended Price / Crate':'የሚመከር ዋጋ / ሣጥን','Projected Monthly Profit':'የሚጠበቅ ወርሃዊ ትርፍ',
-  'Break-even vs. Recommended vs. Your Current Average':'የወጪ ማወራረጃ ከሚመከረው እና ከአሁኑ አማካይ ዋጋዎ ጋር ሲነጻጸር','Per Egg':'በአንድ እንቁላል','Cost (break-even)':'ወጪ (ማወራረጃ)',
-  'Recommended selling price':'የሚመከር መሸጫ ዋጋ','Your current average selling price':'የአሁኑ አማካይ መሸጫ ዋጋዎ','Your current average selling price (no egg sales logged yet)':'የአሁኑ አማካይ መሸጫ ዋጋዎ (እስካሁን የእንቁላል ሽያጭ አልተመዘገበም)',
-  "Log some egg sales under Product Stock to compare this recommendation against what you're actually charging today.":'ይህን ምክር አሁን ከሚሸጡበት ዋጋ ጋር ለማነጻጸር በምርት ክምችት ውስጥ የተወሰኑ የእንቁላል ሽያጮችን ያስመዝግቡ።',
-  'Your current average selling price matches the recommended price for this margin.':'የአሁኑ አማካይ መሸጫ ዋጋዎ ለዚህ የትርፍ ድርሻ ከሚመከረው ዋጋ ጋር ይመሳሰላል።',
-  "This calculator doesn't change any of your logged records — it's a planning tool. Your inputs are saved on this device so you can come back to them any time. Figures assume steady daily production; actual results will vary with season, disease, and market prices.":'ይህ ማስያ ከተመዘገቡ መዝገቦችዎ መካከል ምንም አይለውጥም — የዕቅድ መሣሪያ ነው። ያስገቡት መረጃ በዚህ መሣሪያ ላይ ይቀመጣል። አሃዞቹ ዕለታዊ ምርት ቋሚ እንደሆነ ይገምታሉ፤ ትክክለኛ ውጤቱ እንደ ወቅት፣ በሽታና የገበያ ዋጋ ይለያያል።',
-  /* --- income / expenses --- */
-  'Enter Quantity × Unit Price (e.g. eggs sold × price/egg). For lump sums, use Qty = 1.':'ብዛት × የአንዱ ዋጋ ያስገቡ (ለምሳሌ የተሸጡ እንቁላሎች × የእንቁላል ዋጋ)። ለጥቅል መጠን ብዛት = 1 ይጠቀሙ።',
-  '+ Add income':'+ ገቢ ጨምር','Ref No.':'የደረሰኝ ቁጥር','WHT':'ተቀናሽ ግብር','No income logged yet.':'እስካሁን ምንም ገቢ አልተመዘገበም።',
-  'All money out, categorized.':'የወጣ ገንዘብ ሁሉ፣ በምድብ።','+ Add expense':'+ ወጪ ጨምር','Non-deductible':'የማይቀነስ','No expenses logged yet.':'እስካሁን ምንም ወጪ አልተመዘገበም።',
-  /* --- assets --- */
-  '+ Add asset':'+ ንብረት ጨምር','Asset':'ንብረት','Class':'ክፍል','Acquired':'የተገኘበት','Method':'ዘዴ','Rate':'መጠን','Accumulated':'የተጠራቀመ','Net book value':'የተጣራ መዝገብ ዋጋ',
-  'No fixed assets yet. Add houses, mixers, equipment, vehicles.':'እስካሁን ምንም ቋሚ ንብረት የለም። ቤቶችን፣ ማቀላቀያዎችን፣ መሣሪያዎችንና ተሽከርካሪዎችን ይጨምሩ።',
-  /* --- customers / CRM --- */
-  'Customers':'ደንበኞች','Customer':'ደንበኛ','Add customer':'ደንበኛ ጨምር','Add payment':'ክፍያ ጨምር','Add comment':'አስተያየት ጨምር','Add inquiry':'ጥያቄ ጨምር',
-  'Phone':'ስልክ','Type':'ዓይነት','Total Sales':'ጠቅላላ ሽያጭ','Total Paid':'የተከፈለ','Balance Due':'የሚቀር ዕዳ',
-  'No customers yet. Add your first one below.':'እስካሁን ምንም ደንበኛ የለም። የመጀመሪያውን ይጨምሩ።',
-  'Payments Received':'የተገኙ ክፍያዎች','No payments logged yet.':'እስካሁን ምንም ክፍያ አልተመዘገበም።','Method':'ዘዴ',
-  'Comments / Interaction Log':'አስተያየቶች / የግንኙነት መዝገብ','No comments logged yet.':'እስካሁን ምንም አስተያየት አልተመዘገበም።','Comment':'አስተያየት',
-  'Sales Inquiries':'የሽያጭ ጥያቄዎች','No inquiries logged yet.':'እስካሁን ምንም ጥያቄ አልተመዘገበም።','Interested In':'ፍላጎት ያለው','Interested in':'ፍላጎት ያለው',
-  'Status':'ሁኔታ','Follow-up':'ክትትል','Follow-up date':'የክትትል ቀን','Name':'ስም','Location / Address':'አድራሻ','Customer name':'የደንበኛ ስም',
-  'Customer (optional)':'ደንበኛ (አማራጭ)','Payment status':'የክፍያ ሁኔታ','Paid in full':'ሙሉ ተከፍሏል','Partial / Credit':'ከፊል / ብድር',
-  'Amount received now (ETB) — only if Partial/Credit':'አሁን የተከፈለ መጠን (ብር) — ከፊል/ብድር ከተመረጠ ብቻ','Cash':'ጥሬ ገንዘብ','Bank Transfer':'የባንክ ዝውውር','Mobile Money':'ሞባይል ገንዘብ',
-  'New':'አዲስ','Contacted':'ተነጋግሯል','Quoted':'ዋጋ ተሰጥቷል','Converted':'ደንበኛ ሆኗል','Lost':'ጠፍቷል',
-  'Customer directory, cash received, receivables, comments, and sales inquiries.':'የደንበኞች ማውጫ፣ የተገኘ ገንዘብ፣ የሚቀር ዕዳ፣ አስተያየቶችና የሽያጭ ጥያቄዎች።',
-  'Balance Due = total invoiced − amount collected at time of sale − payments logged above. Sales already booked at full invoice value in Income and the Financial Report (accrual basis) regardless of payment status.':'የሚቀር ዕዳ = ጠቅላላ የተላከ ደረሰኝ − በሽያጭ ጊዜ የተሰበሰበ − ከላይ የተመዘገቡ ክፍያዎች። ሽያጮች ምንም ይሁን የክፍያ ሁኔታ በገቢና በፋይናንስ ሪፖርት ውስጥ በሙሉ ደረሰኝ ዋጋ ተመዝግበዋል (በክምችት መሠረት)።',
-  'Total Receivables':'ጠቅላላ የሚቀር ዕዳ','TIN':'የግብር ከፋይ መለያ ቁጥር (TIN)','Buyer name / TIN (if no customer record)':'የገዢ ስም / TIN (ደንበኛ መዝገብ ከሌለ)',
-  'Customer Types':'የደንበኛ ዓይነቶች','Retail / Walk-in':'ችርቻሮ / በቀጥታ የመጣ','Wholesale / Shop':'ጅምላ / ሱቅ','Distributor':'አከፋፋይ','Institution':'ተቋም',
-  /* --- health --- */
-  'Vaccinations and medications — any species.':'ክትባትና መድኃኒት — ማንኛውም የእንስሳት ዓይነት።','💉 Vaccinations':'💉 ክትባቶች','💊 Medications':'💊 መድኃኒቶች','+ Add vaccination':'+ ክትባት ጨምር','+ Add medication':'+ መድኃኒት ጨምር',
-  'Vaccine':'ክትባት','Dose/Route':'መጠን/መስጫ መንገድ','Administered By':'የሰጠው','Disease':'በሽታ','Dosage':'መጠን','No vaccinations logged yet.':'እስካሁን ምንም ክትባት አልተመዘገበም።','No medications logged yet.':'እስካሁን ምንም መድኃኒት አልተመዘገበም።',
-  /* --- reports --- */
-  'Financial Report':'የፋይናንስ ሪፖርት','Profit & Loss Statement':'የትርፍና ኪሳራ መግለጫ',
-  'Business name':'የንግድ ስም','TIN':'የግብር ከፋይ መለያ ቁጥር (TIN)','Taxpayer category':'የግብር ከፋይ ምድብ',
-  'Tax year':'የግብር ዘመን','Report date':'የሪፖርት ቀን','Currency':'ገንዘብ',
-  '1. Revenue':'1. ገቢ (ሽያጭ)','Total revenue':'ጠቅላላ ገቢ','2. Cost of production':'2. የምርት ወጪ','Total cost of production':'ጠቅላላ የምርት ወጪ',
-  '3. Gross profit':'3. ጠቅላላ ትርፍ','4. Operating expenses':'4. የሥራ ማስኬጃ ወጪዎች','Total operating expenses':'ጠቅላላ የሥራ ማስኬጃ ወጪ',
-  '5. Depreciation':'5. የእርጅና ቅናሽ','6. Net profit / (loss) before tax':'6. ከግብር በፊት የተጣራ ትርፍ / (ኪሳራ)',
-  '7. Tax adjustments':'7. የግብር ማስተካከያዎች','Add: non-deductible expenses':'ይጨመር: የማይፈቀዱ ወጪዎች','Less: exempt income':'ይቀነስ: ከግብር ነጻ ገቢ',
-  '8. Taxable income':'8. ግብር የሚከፈልበት ገቢ','Tax rate (%)':'የግብር መጠን (%)','Tax due':'የሚከፈል ግብር',
-  '9. Tax credits':'9. የግብር ክሬዲቶች','Less: withholding tax already deducted':'ይቀነስ: ቀድሞ የተቀነሰ ተቀናሽ ግብር (Withholding)','Net tax payable / (refundable)':'የሚከፈል / (የሚመለስ) የተጣራ ግብር',
-  '10. Livestock on hand':'10. ያሉ እንስሳት','Animal type':'የእንስሳት ዓይነት','Description':'መግለጫ',
-  'Print / Save PDF':'አትም / PDF አስቀምጥ','🖨 Print / Save PDF':'🖨 አትም / PDF አስቀምጥ','Fiscal year':'የበጀት ዓመት','Business & tax details':'የንግድና የግብር ዝርዝር',
-  'Adjustments for this year':'የዚህ ዓመት ማስተካከያዎች','Tax override (ETB)':'የተወሰነ ግብር (ብር) — ከተሞላ ከመጠን ይልቅ ይጠቀማል',
-  'No entries':'ምንም መዝገብ የለም','Prepared by':'ያዘጋጀው','Signature / stamp':'ፊርማ / ማኅተም',
-  'Gross sales (tax base)':'ጠቅላላ ሽያጭ (የግብር መሠረት)','Less: quarterly advance payments made':'ይቀነስ: የተከፈሉ የሩብ ዓመት ቅድመ ክፍያዎች',
-  'Category B — presumptive tax on gross sales':'ምድብ B — በጠቅላላ ሽያጭ ላይ የተመሠረተ ግብር','Category A — tax on net profit':'ምድብ A — በተጣራ ትርፍ ላይ የሚሰላ ግብር',
-  'Presumptive tax on gross sales':'በጠቅላላ ሽያጭ ላይ የተመሠረተ ግብር',
-  'Other depreciation (manual)':'ሌላ የእርጅና ቅናሽ (በእጅ)','Extra non-deductible expenses (manual)':'ተጨማሪ የማይፈቀዱ ወጪዎች (በእጅ)',
-  'Extra exempt income (manual)':'ተጨማሪ ከግብር ነጻ ገቢ (በእጅ)','Extra withholding tax (manual)':'ተጨማሪ ተቀናሽ ግብር (በእጅ)',
-  'Fiscal year boundary is fixed at Jul 8 – Jul 7; check entries dated on those days in Ethiopian leap-year cycles. Tax is computed from the rate or override you enter — confirm rates and category with the tax authority or your accountant.':'የበጀት ዓመቱ ወሰን ከጁላይ 8 እስከ ጁላይ 7 ተወስኗል፤ በኢትዮጵያ የአጋማሽ ዓመት ዑደት በእነዚህ ቀናት የተመዘገቡ መዝገቦችን ያረጋግጡ። ግብሩ የሚሰላው ባስገቡት መጠን ወይም በተወሰነ ግብር ነው — መጠኖችንና ምድቡን ከግብር ባለሥልጣን ወይም ከሂሳብ ባለሙያዎ ጋር ያረጋግጡ።',
-  /* --- setup --- */
-  'Customize the dropdown options used throughout the app.':'በመተግበሪያው ውስጥ የሚጠቀሙ የምርጫ ዝርዝሮችን ያብጁ።',
-  'Income Categories':'የገቢ ምድቦች','Expense Categories':'የወጪ ምድቦች','Feed Types':'የመኖ ዓይነቶች','Diseases':'በሽታዎች','Animal Types':'የእንስሳት ዓይነቶች','Product Types':'የምርት ዓይነቶች','No items yet.':'እስካሁን ምንም የለም።',
-  'Backup & Restore':'ምትኬና መልሶ ማግኛ',
-  'Download a backup file any time and save it to Google Drive, Dropbox, or email it to yourself. Import it later on any device to restore everything.':'በማንኛውም ጊዜ የምትኬ ፋይል አውርደው ወደ Google Drive፣ Dropbox ያስቀምጡ ወይም በኢሜይል ለራስዎ ይላኩ። በኋላ በማንኛውም መሣሪያ ላይ አስገብተው ሁሉንም መልሰው ያግኙ።',
-  '⬇ Export backup (.json)':'⬇ ምትኬ ላክ (.json)','⬆ Import backup (.json)':'⬆ ምትኬ አስገባ (.json)','Danger zone':'የአደጋ ቀጠና',
-  'This permanently clears all farm data (livestock, logs, income/expenses) from this device/account. Category lists are kept.':'ይህ ሁሉንም የእርሻ መረጃ (እንስሳት፣ መዝገቦች፣ ገቢ/ወጪ) ከዚህ መሣሪያ/መለያ እስከመጨረሻው ያጠፋል። የምድብ ዝርዝሮች ይቀራሉ።',
-  'Clear all farm data':'ሁሉንም የእርሻ መረጃ አጽዳ',
-  '☁️ Google Drive Sync':'☁️ Google Drive ማመሳሰል','(optional)':'(አማራጭ)','How to get a Google Client ID (one-time setup)':'Google Client ID እንዴት እንደሚገኝ (አንድ ጊዜ ብቻ የሚደረግ ማዋቀር)',
-  'Go to {0} and create a new project.':'ወደ {0} ይሂዱ እና አዲስ ፕሮጀክት ይፍጠሩ።',
-  'APIs & Services → Library → search {0} → Enable.':'APIs & Services → Library → {0} ይፈልጉ → Enable ይጫኑ።',
-  'APIs & Services → OAuth consent screen. User type: External. Fill in app name/email. Add scope {0}. Add your own Gmail as a test user. Keep it in "Testing" status.':'APIs & Services → OAuth consent screen። User type: External ይምረጡ። የመተግበሪያውን ስምና ኢሜይል ይሙሉ። {0} scope ይጨምሩ። የራስዎን Gmail እንደ test user ይጨምሩ። በ "Testing" ሁኔታ ላይ ያቆዩት።',
-  'Credentials → Create Credentials → OAuth client ID → Application type: {0}.':'Credentials → Create Credentials → OAuth client ID → Application type: {0}።',
-  'Under Authorized JavaScript origins, add: {0}':'በ Authorized JavaScript origins ስር ይህን ይጨምሩ: {0}',
-  'Copy the generated Client ID and paste it below.':'የተፈጠረውን Client ID ገልብጠው ከታች ይለጥፉ።',
-  'The first time you connect, Google shows an "unverified app" warning — expected for your own personal app. Click {0} to continue.':'ለመጀመሪያ ጊዜ ሲገናኙ Google "unverified app" የሚል ማስጠንቀቂያ ያሳያል — ለራስዎ የግል መተግበሪያ የሚጠበቅ ነው። ለመቀጠል {0} ይጫኑ።',
-  'Advanced → Go to (app name)':'Advanced → Go to (የመተግበሪያው ስም)',
-  'Paste your Google Client ID…':'Google Client ID ያስገቡ…','Client ID saved. {0}':'Client ID ተቀምጧል። {0}','🟢 Connected — Last synced: {0}':'🟢 ተገናኝቷል — ለመጨረሻ ጊዜ የተመሳሰለው: {0}',
-  'Sync now':'አሁን አመሳስል','Disconnect':'አቋርጥ','Auto-sync every change':'እያንዳንዱን ለውጥ በራስ-ሰር አመሳስል','Connecting…':'በማገናኘት ላይ…',
-  'Not connected this session — access expires after a while, so you may need to reconnect from time to time.':'በዚህ ክፍለ ጊዜ አልተገናኘም — መዳረሻው ከጊዜ በኋላ ስለሚያልቅ አልፎ አልፎ እንደገና መገናኘት ሊያስፈልግ ይችላል።',
-  'Connect to Google Drive':'ከ Google Drive ጋር ተገናኝ',
-  /* --- forms --- */
-  'Batch / Herd':'ቡድን / መንጋ','Livestock Reduction':'የእንስሳት ቅናሽ','Production Entry':'የምርት መዝገብ','Product Reduction':'የምርት ቅናሽ','Feeding Entry':'የአመጋገብ መዝገብ',
-  'Income Entry':'የገቢ መዝገብ','Expense Entry':'የወጪ መዝገብ','Vaccination Entry':'የክትባት መዝገብ','Medication Entry':'የመድኃኒት መዝገብ','Fixed Asset':'ቋሚ ንብረት',
-  'Initial Quantity':'መጀመሪያ ብዛት','Unit Price (ETB)':'የአንዱ ዋጋ (ብር)','Amount (ETB)':'መጠን (ብር)','Quantity Produced':'የተመረተ ብዛት','Unit (count/kg/liters)':'መለኪያ (ብዛት/ኪ.ግ/ሊትር)',
-  'Quantity (kg)':'ብዛት (ኪ.ግ)','Unit Cost (ETB/kg)':'የአንዱ ዋጋ (ብር/ኪ.ግ)','Quantity Used':'የተጠቀመ ብዛት','Cost (ETB)':'ወጪ (ብር)','Medication':'መድኃኒት',
-  'Asset name':'የንብረት ስም','Date acquired':'የተገኘበት ቀን','Depreciation method':'የእርጅና ቅናሽ ዘዴ','Annual depreciation rate (%) — use the rate allowed for this class':'ዓመታዊ የእርጅና ቅናሽ መጠን (%) — ለዚህ ክፍል የተፈቀደውን መጠን ይጠቀሙ',
-  'Date disposed (if sold/lost)':'የተወገደበት ቀን (ከተሸጠ/ከጠፋ)','Receipt / Invoice No.':'የደረሰኝ / ኢንቮይስ ቁጥር','Buyer name / TIN':'የገዢ ስም / TIN','Withholding tax deducted by buyer (ETB)':'በገዢ የተቀነሰ ተቀናሽ ግብር (ብር)',
-  'Tax-exempt income?':'ከግብር ነጻ ገቢ ነው?','Supplier name / TIN':'የአቅራቢ ስም / TIN','Non-deductible for tax?':'ለግብር የማይቀነስ ነው?',
-  'e.g. FL-002':'ለምሳሌ FL-002','e.g. Layer house, feed mixer':'ለምሳሌ የዶሮ ቤት፣ የመኖ ማቀላቀያ',
-  /* --- messages (toasts / dialogs) --- */
-  '⚠ Could not save — device storage may be full':'⚠ ማስቀመጥ አልተቻለም — የመሣሪያው ማከማቻ ሞልቶ ሊሆን ይችላል','Filled from your current farm records':'ከአሁኑ የእርሻ መዝገቦችዎ ተሞልቷል',
-  'Saved':'ተቀምጧል','Deleted':'ተሰርዟል','Delete this entry? This cannot be undone.':'ይህ መዝገብ ይሰረዝ? ይህ ወደ ኋላ አይመለስም።',
-  'Remove':'አስወግድ','Restore':'መልስ','Recycle bin':'የመልሶ ማግኛ ቅርጫት','Recycle bin is empty.':'የመልሶ ማግኛ ቅርጫት ባዶ ነው።',
-  'Empty recycle bin':'የመልሶ ማግኛ ቅርጫት ባዶ አድርግ','Moved to recycle bin':'ወደ የመልሶ ማግኛ ቅርጫት ተዛውሯል','Restored':'ተመልሷል',
-  'Welcome to Green Horizon Farm':'ወደ ግሪን ሆራይዘን እርሻ እንኳን በደህና መጡ','Start':'ጀምር','Skip':'ዝለል',
-  "Owner's name":'የባለቤት ስም','Opening cash & bank balance (ETB)':'መክፈቻ የጥሬ ገንዘብና ባንክ ቀሪ (ብር)',
-  'Main branch / farm site name':'የዋና ቅርንጫፍ / የእርሻ ቦታ ስም','Add a small sample layer flock (demo data)':'ትንሽ የናሙና እንቁላል ጣይ መንጋ ጨምር (ለማሳያ)',
-  'Farm / business name':'የእርሻ / የንግድ ስም','Preferences':'ምርጫዎች',
-  'Show advanced accounting (ledger, trial balance, detailed tax adjustments)':'የላቀ ሂሳብ አያያዝ አሳይ (የሂሳብ መዝገብ፣ የሙከራ ሚዛን፣ ዝርዝር የግብር ማስተካከያዎች)',
-  'When off, Reports focuses on Profit & Loss and Balance Sheet — enough for most farms.':'ሲጠፋ ሪፖርቶች በትርፍና ኪሳራ እና በሂሳብ ሚዛን ላይ ያተኩራሉ — ለአብዛኛዎቹ እርሻዎች በቂ ነው።',
-  'Why is Cash negative?':'ጥሬ ገንዘብ ለምን አሉታዊ ነው?','CSV downloaded':'CSV ወርዷል',
-  'Cash stays non-negative':'ጥሬ ገንዘብ አሉታዊ አይሆንም',
-  'Enter PIN':'ፒን ያስገቡ','PIN / password':'ፒን / የይለፍ ቃል','Confirm':'አረጋግጥ',
-  'This action requires your farm PIN.':'ይህ እርምጃ የእርሻዎን ፒን ይፈልጋል።',
-  'Enter your PIN':'ፒንዎን ያስገቡ','Wrong PIN. Try again.':'የተሳሳተ ፒን። እንደገና ይሞክሩ።',
-  'Set a farm PIN':'የእርሻ ፒን ያዘጋጁ','Change or remove PIN':'ፒን ይቀይሩ ወይም ያስወግዱ',
-  'Optional protection for deleting records, emptying the recycle bin, importing backups, and clearing data. Stored only on this device.':'መዝገቦችን ለመሰረዝ፣ ቅርጫቱን ለማጽዳት፣ ምትኬ ለማስገባትና ውሂብ ለማጽዳት አማራጭ ጥበቃ። በዚህ መሣሪያ ላይ ብቻ ይቀመጣል።',
-  'Current PIN':'አሁን ያለ ፒን','New PIN (leave blank to remove)':'አዲስ ፒን (ለማስወገድ ባዶ ይተው)','New PIN (4+ characters)':'አዲስ ፒን (ከ4 ቁምፊ በላይ)','Confirm new PIN':'አዲሱን ፒን ያረጋግጡ',
-  'PIN removed':'ፒን ተወግዷል','PIN saved':'ፒን ተቀምጧል','Wrong current PIN.':'የአሁኑ ፒን ተሳስቷል።',
-  'PIN must be at least 4 characters.':'ፒን ቢያንስ 4 ቁምፊ መሆን አለበት።','New PIN and confirmation do not match.':'አዲሱ ፒንና ማረጋገጫው አይዛመዱም።',
-  'Security / PIN':'ደህንነት / ፒን',
-  'Optional PIN for removing records, emptying the recycle bin, importing backups, and clearing all data. Stored only on this device — not sent to any server.':'መዝገቦችን ለማስወገድ፣ ቅርጫቱን ለማጽዳት፣ ምትኬ ለማስገባትና ሁሉንም ውሂብ ለማጽዳት አማራጭ ፒን። በዚህ መሣሪያ ላይ ብቻ ይቀመጣል — ወደ ምንም አገልጋይ አይላክም።',
-  'PIN is active — destructive actions require it.':'ፒን ንቁ ነው — ጎጂ እርምጃዎች ይፈልጉታል።',
-  'No PIN set — anyone using this device can remove records.':'ፒን አልተዘጋጀም — ይህን መሣሪያ የሚጠቀም ማንኛውም ሰው መዝገቦችን ማስወገድ ይችላል።',
-  'Enter PIN to remove this record.':'ይህን መዝገብ ለማስወገድ ፒን ያስገቡ።',
-  'Enter PIN to permanently empty the recycle bin.':'ቅርጫቱን እስከመጨረሻው ለማጽዳት ፒን ያስገቡ።',
-  'Enter PIN to permanently clear all farm data.':'ሁሉንም የእርሻ ውሂብ ለማጽዳት ፒን ያስገቡ።',
-  'Enter PIN to import a backup and replace all data.':'ምትኬ ለማስገባትና ሁሉንም ውሂብ ለመተካት ፒን ያስገቡ።',
-  'Enter PIN to remove archived years from this device.':'የተመረጡ ዓመታትን ከዚህ መሣሪያ ለማስወገድ ፒን ያስገቡ።',
-
-  'Not enough cash (available ':'በቂ ጥሬ ገንዘብ የለም (ያለው: ',
-  '). Recorded as Unpaid on credit so cash stays non-negative.':')። ጥሬ ገንዘብ አሉታዊ እንዳይሆን እንደ ያልተከፈለ (ብድር) ተመዝግቧል።',
-  '). Recorded on supplier credit so cash stays non-negative.':')። ጥሬ ገንዘብ አሉታዊ እንዳይሆን በአቅራቢ ብድር ተመዝግቧል።',
-  'Some purchases were recorded as Paid when there was not enough cash. Those are treated as Unpaid (credit) / supplier payables so Cash never goes below zero. You can still record any expense — if cash is short, choose Unpaid on credit or Paid by owner. Add opening cash or owner investment under Accounting if you started with money in the bank.':'አንዳንድ ግዢዎች ጥሬ ገንዘብ በቂ ባልነበረበት ጊዜ እንደ ተከፈለ ተመዝግበዋል። ጥሬ ገንዘብ ከዜሮ በታች እንዳይወርድ እንደ ያልተከፈለ (ብድር) ይቆጠራሉ። ማንኛውንም ወጪ ማስመዝገብ ይችላሉ — ጥሬ ገንዘብ ካጡ «ያልተከፈለ» ወይም «በባለቤት ተከፍሏል» ይምረጡ። በባንክ ገንዘብ ከጀመሩ በሂሳብ አያያዝ ስር መክፈቻ ጥሬ ገንዘብ ወይም የባለቤት ካፒታል ያስገቡ።',
-
-  'Ready — start by recording a purchase or production':'ዝግጁ — በግዢ ወይም በምርት መመዝገብ ይጀምሩ',
-  'Set a few basics so the books start correctly. You can change everything later in Setup.':'መጽሐፎቹ በትክክል እንዲጀምሩ ጥቂት መሰረታዊ ነገሮችን ያስገቡ። በኋላ በቅንብር ሁሉንም መቀየር ይችላሉ።',
-  'Removed records stay here for up to 45 days (max 80 items). Restore any time, or empty permanently.':'የተወገዱ መዝገቦች እዚህ እስከ 45 ቀናት (ከፍተኛ 80) ይቆያሉ። በማንኛውም ጊዜ መመለስ ወይም እስከመጨረሻው ማጽዳት ይችላሉ።',
-  'Type':'ዓይነት','Summary':'ማጠቃለያ','Removed':'ተወግዷል',
-
-  'Google sign-in was cancelled or failed':'የ Google መግቢያ ተሰርዟል ወይም አልተሳካም','Connected, but the first sync failed — try "Sync now"':'ተገናኝቷል፣ ነገር ግን የመጀመሪያው ማመሳሰል አልተሳካም — "አሁን አመሳስል" ይሞክሩ',
-  'Paste your Google Client ID first.':'መጀመሪያ Google Client ID ያስገቡ።','Still loading Google sign-in — try again in a moment':'የ Google መግቢያ አሁንም እየተጫነ ነው — ከጥቂት ቆይታ በኋላ ይሞክሩ',
-  'Could not start Google sign-in':'የ Google መግቢያን ማስጀመር አልተቻለም','Disconnected — your data stays safely on this device':'ግንኙነት ተቋርጧል — መረጃዎ በዚህ መሣሪያ ላይ በደኅንነት ይቆያል',
-  'Google Drive session expired — tap Connect to sign in again':'የ Google Drive ክፍለ ጊዜ አብቅቷል — እንደገና ለመግባት "ተገናኝ" ይጫኑ',
-  "Found existing farm data on Google Drive. OK = load it (replaces data on this device) Cancel = keep this device's data and upload it to Drive instead":"በ Google Drive ላይ ነባር የእርሻ መረጃ ተገኝቷል።\n\nOK = ጫነው (በዚህ መሣሪያ ላይ ያለውን መረጃ ይተካል)\nCancel = የዚህን መሣሪያ መረጃ አቆይተህ ወደ Drive ስቀል",
-  'Loaded data from Google Drive':'መረጃ ከ Google Drive ተጭኗል',"Uploaded this device's data to Google Drive":'የዚህ መሣሪያ መረጃ ወደ Google Drive ተሰቅሏል','Google Drive connected — backup created':'Google Drive ተገናኝቷል — ምትኬ ተፈጥሯል',
-  'Not connected':'አልተገናኘም','Synced to Google Drive':'ወደ Google Drive ተመሳስሏል','Backup downloaded':'ምትኬ ወርዷል',
-  'Could not read that file. Make sure it is a Green Horizon Farm backup (.json) file.':'ፋይሉን ማንበብ አልተቻለም። የ Green Horizon Farm ምትኬ (.json) ፋይል መሆኑን ያረጋግጡ።',
-  'Import this backup? This will replace ALL current data in the app with the contents of this file.':'ይህ ምትኬ ይግባ? ይህ በመተግበሪያው ውስጥ ያለውን ሁሉንም መረጃ በዚህ ፋይል ይዘት ይተካል።',
-  'Backup imported':'ምትኬ ገብቷል','Already in list':'አስቀድሞ በዝርዝሩ ውስጥ አለ','Added':'ተጨምሯል','Removed':'ተወግዷል','Paste a Client ID first':'መጀመሪያ Client ID ያስገቡ',
-  'Change Client ID? You will need to reconnect.':'Client ID ይቀየር? እንደገና መገናኘት ያስፈልግዎታል።','Auto-sync enabled':'በራስ-ሰር ማመሳሰል በርቷል','Auto-sync disabled':'በራስ-ሰር ማመሳሰል ጠፍቷል',
-  'This will permanently delete ALL livestock, production, feed, income/expense and health records. Continue?':'ይህ ሁሉንም የእንስሳት፣ የምርት፣ የመኖ፣ የገቢ/ወጪና የጤና መዝገቦች እስከመጨረሻው ይሰርዛል። ይቀጥሉ?',
-  'Are you absolutely sure? This cannot be undone.':'እርግጠኛ ነዎት? ይህ ወደ ኋላ አይመለስም።','All farm data cleared':'ሁሉም የእርሻ መረጃ ጸድቷል'
+  "Green Horizon Farm":"ግሪን ሆራይዘን እርሻ",
+  "Green Horizon Farm Manager":"ግሪን ሆራይዘን የእርሻ አስተዳዳሪ",
+  "Poultry · Bees · Goats · Sheep · Oxen":"ዶሮ · ንብ · ፍየል · በግ · በሬ",
+  "Loading farm data…":"የእርሻ መረጃ በመጫን ላይ…",
+  "Dashboard":"ዳሽቦርድ",
+  "Livestock":"እንስሳት",
+  "Reductions":"ቅናሾች",
+  "Production":"ምርት",
+  "Prod. Stock":"የምርት ክምችት",
+  "Employees":"ሠራተኞች",
+  "Feed":"መኖ",
+  "Price Calc":"የዋጋ ማስያ",
+  "Income":"ገቢ",
+  "Expenses":"ወጪዎች",
+  "Assets":"ንብረት",
+  "Health":"ጤና",
+  "Reports":"ሪፖርቶች",
+  "Setup":"ቅንብር",
+  "Date":"ቀን",
+  "Category":"ምድብ",
+  "Description":"መግለጫ",
+  "Amount":"መጠን",
+  "Notes":"ማስታወሻ",
+  "Status":"ሁኔታ",
+  "Source":"ምንጭ",
+  "Unit":"መለኪያ",
+  "Qty":"ብዛት",
+  "Quantity":"ብዛት",
+  "Cost":"ወጪ",
+  "Product":"ምርት",
+  "Reason":"ምክንያት",
+  "Supplier":"አቅራቢ",
+  "Profit":"ትርፍ",
+  "Metric":"መለኪያ",
+  "Edit":"አርም",
+  "Delete":"ሰርዝ",
+  "Save":"አስቀምጥ",
+  "Cancel":"ሰርዝ",
+  "Add":"ጨምር",
+  "Change":"ለውጥ",
+  "Yes":"አዎ",
+  "No":"አይ",
+  "Never":"በጭራሽ",
+  "Active":"ንቁ",
+  "Closed":"ተዘግቷል",
+  "ETB":"ብር",
+  "count":"ብዛት",
+  "kg":"ኪ.ግ",
+  "liters":"ሊትር",
+  "-- select --":"-- ምረጥ --",
+  "Other":"ሌላ",
+  "Unit Price":"የአንዱ የመሸጫ ዋጋ",
+  "Unit Cost":"የአንዱ ዋጋ",
+  "Total Cost":"ጠቅላላ ወጪ",
+  "Total Value":"ጠቅላላ ዋጋ",
+  "Animal Type":"የእንስሳት ዓይነት",
+  "Poultry":"ዶሮዎች",
+  "Bees":"ንቦች",
+  "Goats":"ፍየሎች",
+  "Sheep":"በጎች",
+  "Oxen":"በሬዎች",
+  "Eggs":"እንቁላል",
+  "Honey":"ማር",
+  "Milk":"ወተት",
+  "Wool":"ሱፍ",
+  "Manure":"ፍግ",
+  "Egg Sales":"የእንቁላል ሽያጭ",
+  "Live Chicken Sales":"የዶሮ ሽያጭ",
+  "Live Bird Sales":"የዶሮ ሽያጭ",
+  "Honey Sales":"የማር ሽያጭ",
+  "Milk Sales":"የወተት ሽያጭ",
+  "Wool Sales":"የሱፍ ሽያጭ",
+  "Livestock Sales (Goats/Sheep/Oxen)":"የእንስሳት ሽያጭ (ፍየል/በግ/በሬ)",
+  "Manure Sales":"የፍግ ሽያጭ",
+  "Other Income":"ሌላ ገቢ",
+  "Feed Purchase":"የመኖ ግዢ",
+  "Vaccination":"ክትባት",
+  "Medication":"መድኃኒት",
+  "Labor":"የሠራተኛ ወጪ",
+  "Utilities":"የፍጆታ ወጪዎች",
+  "Equipment":"መሣሪያዎች",
+  "Transport":"ትራንስፖርት",
+  "Rent":"ኪራይ",
+  "Beekeeping Supplies":"የንብ እርባታ አቅርቦቶች",
+  "Shearing/Processing":"የሱፍ ማሳጠር/ማቀነባበሪያ",
+  "Other Expense":"ሌላ ወጪ",
+  "Starter Feed":"የጫጩት መጀመሪያ መኖ",
+  "Grower Feed":"የማሳደጊያ መኖ",
+  "Layer Feed":"የእንቁላል ጣይ መኖ",
+  "Broiler Finisher":"የሥጋ ዶሮ ማጠናቀቂያ መኖ",
+  "Hay":"ድርቆሽ",
+  "Pasture/Grazing":"ግጦሽ",
+  "Concentrate/Mineral Mix":"ኮንሰንትሬት/ማዕድን ቅልቅል",
+  "Bee Syrup/Pollen Supplement":"የንብ ሽሮፕ/የአበባ ዱቄት ማሟያ",
+  "Newcastle Disease":"ኒውካስል በሽታ",
+  "Coccidiosis":"ኮክሲዲዮሲስ",
+  "Fowl Typhoid":"የዶሮ ታይፎይድ",
+  "Infectious Bronchitis":"ተላላፊ ብሮንካይተስ",
+  "Avian Influenza":"የዶሮ ጉንፋን",
+  "Fowl Pox":"የዶሮ ፈንጣጣ",
+  "Mastitis":"የጡት በሽታ (ማስቲታይስ)",
+  "Foot Rot":"የኮቴ መበስበስ",
+  "PPR (Peste des Petits Ruminants)":"ፒፒአር (የበግና ፍየል ቸነፈር)",
+  "Foot & Mouth Disease":"የአፍና እግር በሽታ",
+  "Bloat":"የሆድ መነፋት",
+  "Internal Parasites/Worms":"የውስጥ ጥገኛ ተውሳኮች/ትሎች",
+  "Varroa Mites":"ቫሮአ ምስጦች",
+  "Nosema":"ኖሴማ",
+  "Anaplasmosis":"አናፕላዝሞሲስ",
+  "Death":"ሞት",
+  "Sale":"ሽያጭ",
+  "Cull":"ማስወገድ",
+  "Swarm Lost":"የጠፋ ቅኝ",
+  "Transfer Out":"ወደ ሌላ ማዛወር",
+  "Theft/Loss":"ስርቆት/ጥፋት",
+  "Consumption":"ፍጆታ",
+  "Spoilage":"መበላሸት",
+  "Given Away":"በስጦታ የተሰጠ",
+  "Broken":"የተሰበረ",
+  "Buildings / structures":"ሕንፃዎች / መዋቅሮች",
+  "Equipment / machinery":"መሣሪያዎች / ማሽነሪዎች",
+  "Vehicles":"ተሽከርካሪዎች",
+  "Furniture & fittings":"የቤት ዕቃዎችና ተጓዳኞች",
+  "Computers & software":"ኮምፒውተሮችና ሶፍትዌር",
+  "Straight-line":"ቀጥተኛ መስመር",
+  "Declining balance":"ቀሪ ሒሳብ መቀነስ",
+  "Overview across all species and products.":"በሁሉም የእንስሳት ዓይነቶችና ምርቶች ላይ አጠቃላይ እይታ።",
+  "Current Livestock Qty":"አሁን ያሉ እንስሳት ብዛት",
+  "Current Egg Stock":"አሁን ያለ የእንቁላል ክምችት",
+  "Current Feed Stock (kg)":"አሁን ያለ የመኖ ክምችት (ኪ.ግ)",
+  "Total Income":"ጠቅላላ ገቢ",
+  "Total Expenses":"ጠቅላላ ወጪ",
+  "Net Profit / (Loss)":"የተጣራ ትርፍ / (ኪሳራ)",
+  "YTD Net Profit / (Loss)":"እስከ አሁን የዓመቱ የተጣራ ትርፍ / (ኪሳራ)",
+  "Livestock by Type":"እንስሳት በዓይነት",
+  "Product Stock Summary":"የምርት ክምችት ማጠቃለያ",
+  "Current Qty":"አሁን ያለ ብዛት",
+  "Current Stock":"አሁን ያለ ክምችት",
+  "No animal types configured.":"ምንም የእንስሳት ዓይነት አልተዋቀረም።",
+  "No product types configured.":"ምንም የምርት ዓይነት አልተዋቀረም።",
+  "No feed types configured.":"ምንም የመኖ ዓይነት አልተዋቀረም።",
+  "Data is stored privately on this device only (nothing sent to any server). Use Setup → Backup & Restore to move data between devices or save a copy to Google Drive.":"መረጃው በዚህ መሣሪያ ላይ ብቻ በግል ይቀመጣል (ወደ ማንኛውም አገልጋይ አይላክም)። መረጃን በመሣሪያዎች መካከል ለማስተላለፍ ወይም ቅጂ ወደ Google Drive ለማስቀመጥ ቅንብር → ምትኬና መልሶ ማግኛን ይጠቀሙ።",
+  "One row per batch, herd, or hive — any species.":"ለእያንዳንዱ ቡድን፣ መንጋ ወይም ቀፎ አንድ ረድፍ — ማንኛውም የእንስሳት ዓይነት።",
+  "+ Add batch/herd":"+ ቡድን/መንጋ ጨምር",
+  "Batch/Herd ID":"የቡድን/መንጋ መለያ",
+  "Breed/Type":"ዝርያ/ዓይነት",
+  "Date Acquired":"የተገኘበት ቀን",
+  "Initial Qty":"መጀመሪያ ብዛት",
+  "Age (Days)":"ዕድሜ (ቀናት)",
+  "No batches/herds yet. Add your first one below.":"እስካሁን ምንም ቡድን/መንጋ የለም። የመጀመሪያውን ይጨምሩ።",
+  "Livestock Reductions":"የእንስሳት ቅናሾች",
+  "Deaths, culls, sales, swarm loss, or transfers — any species.":"ሞት፣ ማስወገድ፣ ሽያጭ፣ የቅኝ መጥፋት ወይም ዝውውር — ማንኛውም የእንስሳት ዓይነት።",
+  "+ Add reduction":"+ ቅናሽ ጨምር",
+  "No reductions logged yet.":"እስካሁን ምንም ቅናሽ አልተመዘገበም።",
+  "Eggs, honey, milk, wool — one row per collection event.":"እንቁላል፣ ማር፣ ወተት፣ ሱፍ — ለእያንዳንዱ የስብሰባ ጊዜ አንድ ረድፍ።",
+  "+ Add production":"+ ምርት ጨምር",
+  "Qty Produced":"የተመረተ ብዛት",
+  "Waste/Loss":"ብክነት/ጉዳት",
+  "Good Output":"ጥሩ ምርት",
+  "No production logged yet.":"እስካሁን ምንም ምርት አልተመዘገበም።",
+  "Product Stock":"የምርት ክምችት",
+  "Auto-calculated stock, plus the sales/consumption log behind it.":"በራስ-ሰር የሚሰላ ክምችት፣ ከጀርባው ካለው የሽያጭና የፍጆታ መዝገብ ጋር።",
+  "Current Stock by Product":"አሁን ያለ ክምችት በምርት",
+  "Produced":"የተመረተ",
+  "Reduced":"የቀነሰ",
+  "Value Sold/Used":"የተሸጠ/የተጠቀመ ዋጋ",
+  "Reductions Log":"የቅናሽ መዝገብ",
+  "Consumed, spoiled, broken or given away. Sales are entered in Income and appear here automatically.":"የተሸጠ፣ የተበላ፣ የተበላሸ ወይም በስጦታ የተሰጠ።",
+  "No product reductions logged yet.":"እስካሁን ምንም የምርት ቅናሽ አልተመዘገበም።",
+  "Stock, purchases, and daily feeding — any species.":"ክምችት፣ ግዢና የዕለት መኖ — ማንኛውም የእንስሳት ዓይነት።",
+  "Feed Stock Summary":"የመኖ ክምችት ማጠቃለያ",
+  "Feed Type":"የመኖ ዓይነት",
+  "Purchased (kg)":"የተገዛ (ኪ.ግ)",
+  "Used (kg)":"የተጠቀመ (ኪ.ግ)",
+  "Current Stock (kg)":"አሁን ያለ ክምችት (ኪ.ግ)",
+  "Avg Cost/kg":"አማካይ ዋጋ/ኪ.ግ",
+  "Stock Value":"የክምችት ዋጋ",
+  "Feed Purchases":"የመኖ ግዢዎች",
+  "+ Add purchase":"+ ግዢ ጨምር",
+  "Qty (kg)":"ብዛት (ኪ.ግ)",
+  "Feeding Log":"የአመጋገብ መዝገብ",
+  "+ Add feeding":"+ አመጋገብ ጨምር",
+  "Qty Used":"የተጠቀመ ብዛት",
+  "No feed purchases logged yet.":"እስካሁን ምንም የመኖ ግዢ አልተመዘገበም።",
+  "No feeding logged yet.":"እስካሁን ምንም አመጋገብ አልተመዘገበም።",
+  "Egg Price & Profitability Calculator":"የእንቁላል ዋጋና ትርፋማነት ማስያ",
+  "Set your flock, feed and cost assumptions to find your break-even cost and a recommended selling price per egg.":"የመንጋዎን፣ የመኖዎንና የወጪ ግምቶችዎን ያስገቡ፤ የወጪ ማወራረጃና የሚመከር የአንድ እንቁላል መሸጫ ዋጋ ያገኛሉ።",
+  "↻ Auto-fill from my farm records":"↻ ከእርሻ መዝገቤ በራስ-ሰር ሙላ",
+  "Flock & Production":"መንጋና ምርት",
+  "Laying chickens (count)":"እንቁላል ጣይ ዶሮዎች (ብዛት)",
+  "Laying birds (count)":"እንቁላል ጣይ ዶሮዎች (ብዛት)",
+  "Laying rate (% eggs/chicken/day)":"የእንቁላል ጣይነት መጠን (% እንቁላል/ዶሮ/ቀን)",
+  "Laying rate (% eggs/bird/day)":"የእንቁላል ጣይነት መጠን (% እንቁላል/ዶሮ/ቀን)",
+  "Hen-day production — typically 60–90% for healthy layers":"ዕለታዊ የእንቁላል ምርት መጠን — ለጤናማ ጣይ ዶሮዎች በተለምዶ 60–90%",
+  "Breakage / waste (%)":"መሰበር / ብክነት (%)",
+  "Cracked, spoiled or lost eggs":"የተሰነጠቁ፣ የተበላሹ ወይም የጠፉ እንቁላሎች",
+  "Feed & Other Costs":"መኖና ሌሎች ወጪዎች",
+  "Total feed used per day, whole flock (kg)":"በቀን የሚጠቀም ጠቅላላ መኖ፣ ለመላው መንጋ (ኪ.ግ)",
+  "Feed cost (ETB/kg)":"የመኖ ዋጋ (ብር/ኪ.ግ)",
+  "Other cost per day, whole flock (ETB)":"በቀን ሌላ ወጪ፣ ለመላው መንጋ (ብር)",
+  "Labor, health, utilities, housing — everything but feed, as a daily total":"የሠራተኛ፣ ጤና፣ ፍጆታ፣ መጠለያ — ከመኖ ውጭ ያሉ ሁሉም፣ እንደ ዕለታዊ ድምር",
+  "Margin & Selling":"ትርፍና ሽያጭ",
+  "Markup on cost":"በወጪ ላይ የሚጨመር ትርፍ",
+  "Margin on price":"ከዋጋ የሚገኝ ትርፍ ድርሻ",
+  "Desired markup (%)":"የሚፈለግ ጭማሪ (%)",
+  "Desired margin (%)":"የሚፈለግ የትርፍ ድርሻ (%)",
+  "Added on top of cost per egg":"በአንድ እንቁላል ወጪ ላይ የሚጨመር",
+  "Share of the selling price that is profit":"ከመሸጫ ዋጋ ውስጥ ትርፍ የሆነው ድርሻ",
+  "Eggs per crate":"በአንድ ሣጥን ውስጥ ያሉ እንቁላሎች",
+  "Results":"ውጤቶች",
+  "Eggs / Day (net of waste)":"እንቁላል / ቀን (ከብክነት በኋላ)",
+  "Daily Feed Cost":"የዕለት መኖ ወጪ",
+  "Daily Other Cost":"የዕለት ሌላ ወጪ",
+  "Break-even Cost / Egg":"የወጪ ማወራረጃ / እንቁላል",
+  "Recommended Price / Egg":"የሚመከር ዋጋ / እንቁላል",
+  "Profit / Egg":"ትርፍ / እንቁላል",
+  "Recommended Price / Crate":"የሚመከር ዋጋ / ሣጥን",
+  "Projected Monthly Profit":"የሚጠበቅ ወርሃዊ ትርፍ",
+  "Break-even vs. Recommended vs. Your Current Average":"የወጪ ማወራረጃ ከሚመከረው እና ከአሁኑ አማካይ ዋጋዎ ጋር ሲነጻጸር",
+  "Per Egg":"በአንድ እንቁላል",
+  "Cost (break-even)":"ወጪ (ማወራረጃ)",
+  "Recommended selling price":"የሚመከር መሸጫ ዋጋ",
+  "Your current average selling price":"የአሁኑ አማካይ መሸጫ ዋጋዎ",
+  "Your current average selling price (no egg sales logged yet)":"የአሁኑ አማካይ መሸጫ ዋጋዎ (እስካሁን የእንቁላል ሽያጭ አልተመዘገበም)",
+  "Log some egg sales under Product Stock to compare this recommendation against what you're actually charging today.":"ይህን ምክር አሁን ከሚሸጡበት ዋጋ ጋር ለማነጻጸር በምርት ክምችት ውስጥ የተወሰኑ የእንቁላል ሽያጮችን ያስመዝግቡ።",
+  "Your current average selling price matches the recommended price for this margin.":"የአሁኑ አማካይ መሸጫ ዋጋዎ ለዚህ የትርፍ ድርሻ ከሚመከረው ዋጋ ጋር ይመሳሰላል።",
+  "This calculator doesn't change any of your logged records — it's a planning tool. Your inputs are saved on this device so you can come back to them any time. Figures assume steady daily production; actual results will vary with season, disease, and market prices.":"ይህ ማስያ ከተመዘገቡ መዝገቦችዎ መካከል ምንም አይለውጥም — የዕቅድ መሣሪያ ነው። ያስገቡት መረጃ በዚህ መሣሪያ ላይ ይቀመጣል። አሃዞቹ ዕለታዊ ምርት ቋሚ እንደሆነ ይገምታሉ፤ ትክክለኛ ውጤቱ እንደ ወቅት፣ በሽታና የገበያ ዋጋ ይለያያል።",
+  "Enter Quantity × Unit Price (e.g. eggs sold × price/egg). For lump sums, use Qty = 1.":"ብዛት × የአንዱ ዋጋ ያስገቡ (ለምሳሌ የተሸጡ እንቁላሎች × የእንቁላል ዋጋ)። ለጥቅል መጠን ብዛት = 1 ይጠቀሙ።",
+  "+ Add income":"+ ገቢ ጨምር",
+  "Ref No.":"የደረሰኝ ቁጥር",
+  "WHT":"ተቀናሽ ግብር",
+  "No income logged yet.":"እስካሁን ምንም ገቢ አልተመዘገበም።",
+  "All money out, categorized.":"የወጣ ገንዘብ ሁሉ፣ በምድብ።",
+  "+ Add expense":"+ ወጪ ጨምር",
+  "Non-deductible":"የማይቀነስ",
+  "No expenses logged yet.":"እስካሁን ምንም ወጪ አልተመዘገበም።",
+  "+ Add asset":"+ ንብረት ጨምር",
+  "Asset":"ንብረት",
+  "Class":"ክፍል",
+  "Acquired":"የተገኘበት",
+  "Method":"ዘዴ",
+  "Rate":"መጠን",
+  "Accumulated":"የተጠራቀመ",
+  "Net book value":"የተጣራ መዝገብ ዋጋ",
+  "No fixed assets yet. Add houses, mixers, equipment, vehicles.":"እስካሁን ምንም ቋሚ ንብረት የለም። ቤቶችን፣ ማቀላቀያዎችን፣ መሣሪያዎችንና ተሽከርካሪዎችን ይጨምሩ።",
+  "Customers":"ደንበኞች",
+  "Customer":"ደንበኛ",
+  "Add customer":"ደንበኛ ጨምር",
+  "Add payment":"ክፍያ ጨምር",
+  "Add comment":"አስተያየት ጨምር",
+  "Add inquiry":"ጥያቄ ጨምር",
+  "Phone":"ስልክ",
+  "Type":"ዓይነት",
+  "Total Sales":"ጠቅላላ ሽያጭ",
+  "Total Paid":"የተከፈለ",
+  "Balance Due":"የሚቀር ዕዳ",
+  "No customers yet. Add your first one below.":"እስካሁን ምንም ደንበኛ የለም። የመጀመሪያውን ይጨምሩ።",
+  "Payments Received":"የተገኙ ክፍያዎች",
+  "No payments logged yet.":"እስካሁን ምንም ክፍያ አልተመዘገበም።",
+  "Comments / Interaction Log":"አስተያየቶች / የግንኙነት መዝገብ",
+  "No comments logged yet.":"እስካሁን ምንም አስተያየት አልተመዘገበም።",
+  "Comment":"አስተያየት",
+  "Sales Inquiries":"የሽያጭ ጥያቄዎች",
+  "No inquiries logged yet.":"እስካሁን ምንም ጥያቄ አልተመዘገበም።",
+  "Interested In":"ፍላጎት ያለው",
+  "Interested in":"ፍላጎት ያለው",
+  "Follow-up":"ክትትል",
+  "Follow-up date":"የክትትል ቀን",
+  "Name":"ስም",
+  "Location / Address":"አድራሻ",
+  "Customer name":"የደንበኛ ስም",
+  "Customer (optional)":"ደንበኛ (አማራጭ)",
+  "Payment status":"የክፍያ ሁኔታ",
+  "Paid in full":"ሙሉ ተከፍሏል",
+  "Partial / Credit":"ከፊል / ብድር",
+  "Amount received now (ETB) — only if Partial/Credit":"አሁን የተከፈለ መጠን (ብር) — ከፊል/ብድር ከተመረጠ ብቻ",
+  "Cash":"ጥሬ ገንዘብ",
+  "Bank Transfer":"የባንክ ዝውውር",
+  "Mobile Money":"ሞባይል ገንዘብ",
+  "New":"አዲስ",
+  "Contacted":"ተነጋግሯል",
+  "Quoted":"ዋጋ ተሰጥቷል",
+  "Converted":"ደንበኛ ሆኗል",
+  "Lost":"ጠፍቷል",
+  "Customer directory, cash received, receivables, comments, and sales inquiries.":"የደንበኞች ማውጫ፣ የተገኘ ገንዘብ፣ የሚቀር ዕዳ፣ አስተያየቶችና የሽያጭ ጥያቄዎች።",
+  "Balance Due = total invoiced − amount collected at time of sale − payments logged above. Sales already booked at full invoice value in Income and the Financial Report (accrual basis) regardless of payment status.":"የሚቀር ዕዳ = ጠቅላላ የተላከ ደረሰኝ − በሽያጭ ጊዜ የተሰበሰበ − ከላይ የተመዘገቡ ክፍያዎች። ሽያጮች ምንም ይሁን የክፍያ ሁኔታ በገቢና በፋይናንስ ሪፖርት ውስጥ በሙሉ ደረሰኝ ዋጋ ተመዝግበዋል (በክምችት መሠረት)።",
+  "Total Receivables":"ጠቅላላ የሚቀር ዕዳ",
+  "TIN":"የግብር ከፋይ መለያ ቁጥር (TIN)",
+  "Buyer name / TIN (if no customer record)":"የገዢ ስም / TIN (ደንበኛ መዝገብ ከሌለ)",
+  "Customer Types":"የደንበኛ ዓይነቶች",
+  "Retail / Walk-in":"ችርቻሮ / በቀጥታ የመጣ",
+  "Wholesale / Shop":"ጅምላ / ሱቅ",
+  "Distributor":"አከፋፋይ",
+  "Institution":"ተቋም",
+  "Vaccinations and medications — any species.":"ክትባትና መድኃኒት — ማንኛውም የእንስሳት ዓይነት።",
+  "💉 Vaccinations":"💉 ክትባቶች",
+  "💊 Medications":"💊 መድኃኒቶች",
+  "+ Add vaccination":"+ ክትባት ጨምር",
+  "+ Add medication":"+ መድኃኒት ጨምር",
+  "Vaccine":"ክትባት",
+  "Dose/Route":"መጠን/መስጫ መንገድ",
+  "Administered By":"የሰጠው",
+  "Disease":"በሽታ",
+  "Dosage":"መጠን",
+  "No vaccinations logged yet.":"እስካሁን ምንም ክትባት አልተመዘገበም።",
+  "No medications logged yet.":"እስካሁን ምንም መድኃኒት አልተመዘገበም።",
+  "Financial Report":"የፋይናንስ ሪፖርት",
+  "Profit & Loss Statement":"የትርፍና ኪሳራ መግለጫ",
+  "Business name":"የንግድ ስም",
+  "Taxpayer category":"የግብር ከፋይ ምድብ",
+  "Tax year":"የግብር ዘመን",
+  "Report date":"የሪፖርት ቀን",
+  "Currency":"ገንዘብ",
+  "1. Revenue":"1. ገቢ (ሽያጭ)",
+  "Total revenue":"ጠቅላላ ገቢ",
+  "2. Cost of production":"2. የምርት ወጪ",
+  "Total cost of production":"ጠቅላላ የምርት ወጪ",
+  "3. Gross profit":"3. ጠቅላላ ትርፍ",
+  "4. Operating expenses":"4. የሥራ ማስኬጃ ወጪዎች",
+  "Total operating expenses":"ጠቅላላ የሥራ ማስኬጃ ወጪ",
+  "5. Depreciation":"5. የእርጅና ቅናሽ",
+  "6. Net profit / (loss) before tax":"6. ከግብር በፊት የተጣራ ትርፍ / (ኪሳራ)",
+  "7. Tax adjustments":"7. የግብር ማስተካከያዎች",
+  "Add: non-deductible expenses":"ይጨመር: የማይፈቀዱ ወጪዎች",
+  "Less: exempt income":"ይቀነስ: ከግብር ነጻ ገቢ",
+  "8. Taxable income":"8. ግብር የሚከፈልበት ገቢ",
+  "Tax rate (%)":"የግብር መጠን (%)",
+  "Tax due":"የሚከፈል ግብር",
+  "9. Tax credits":"9. የግብር ክሬዲቶች",
+  "Less: withholding tax already deducted":"ይቀነስ: ቀድሞ የተቀነሰ ተቀናሽ ግብር (Withholding)",
+  "Net tax payable / (refundable)":"የሚከፈል / (የሚመለስ) የተጣራ ግብር",
+  "10. Livestock on hand":"10. ያሉ እንስሳት",
+  "Animal type":"የእንስሳት ዓይነት",
+  "Print / Save PDF":"አትም / PDF አስቀምጥ",
+  "🖨 Print / Save PDF":"🖨 አትም / PDF አስቀምጥ",
+  "Fiscal year":"የበጀት ዓመት",
+  "Business & tax details":"የንግድና የግብር ዝርዝር",
+  "Adjustments for this year":"የዚህ ዓመት ማስተካከያዎች",
+  "Tax override (ETB)":"የተወሰነ ግብር (ብር) — ከተሞላ ከመጠን ይልቅ ይጠቀማል",
+  "No entries":"ምንም መዝገብ የለም",
+  "Prepared by":"ያዘጋጀው",
+  "Signature / stamp":"ፊርማ / ማኅተም",
+  "Gross sales (tax base)":"ጠቅላላ ሽያጭ (የግብር መሠረት)",
+  "Less: quarterly advance payments made":"ይቀነስ: የተከፈሉ የሩብ ዓመት ቅድመ ክፍያዎች",
+  "Category B — presumptive tax on gross sales":"ምድብ B — በጠቅላላ ሽያጭ ላይ የተመሠረተ ግብር",
+  "Category A — tax on net profit":"ምድብ A — በተጣራ ትርፍ ላይ የሚሰላ ግብር",
+  "Presumptive tax on gross sales":"በጠቅላላ ሽያጭ ላይ የተመሠረተ ግብር",
+  "Other depreciation (manual)":"ሌላ የእርጅና ቅናሽ (በእጅ)",
+  "Extra non-deductible expenses (manual)":"ተጨማሪ የማይፈቀዱ ወጪዎች (በእጅ)",
+  "Extra exempt income (manual)":"ተጨማሪ ከግብር ነጻ ገቢ (በእጅ)",
+  "Extra withholding tax (manual)":"ተጨማሪ ተቀናሽ ግብር (በእጅ)",
+  "Fiscal year boundary is fixed at Jul 8 – Jul 7; check entries dated on those days in Ethiopian leap-year cycles. Tax is computed from the rate or override you enter — confirm rates and category with the tax authority or your accountant.":"የበጀት ዓመቱ ወሰን ከጁላይ 8 እስከ ጁላይ 7 ተወስኗል፤ በኢትዮጵያ የአጋማሽ ዓመት ዑደት በእነዚህ ቀናት የተመዘገቡ መዝገቦችን ያረጋግጡ። ግብሩ የሚሰላው ባስገቡት መጠን ወይም በተወሰነ ግብር ነው — መጠኖችንና ምድቡን ከግብር ባለሥልጣን ወይም ከሂሳብ ባለሙያዎ ጋር ያረጋግጡ።",
+  "Customize the dropdown options used throughout the app.":"በመተግበሪያው ውስጥ የሚጠቀሙ የምርጫ ዝርዝሮችን ያብጁ።",
+  "Income Categories":"የገቢ ምድቦች",
+  "Expense Categories":"የወጪ ምድቦች",
+  "Feed Types":"የመኖ ዓይነቶች",
+  "Diseases":"በሽታዎች",
+  "Animal Types":"የእንስሳት ዓይነቶች",
+  "Product Types":"የምርት ዓይነቶች",
+  "No items yet.":"እስካሁን ምንም የለም።",
+  "Backup & Restore":"ምትኬና መልሶ ማግኛ",
+  "Download a backup file any time and save it to Google Drive, Dropbox, or email it to yourself. Import it later on any device to restore everything.":"በማንኛውም ጊዜ የምትኬ ፋይል አውርደው ወደ Google Drive፣ Dropbox ያስቀምጡ ወይም በኢሜይል ለራስዎ ይላኩ። በኋላ በማንኛውም መሣሪያ ላይ አስገብተው ሁሉንም መልሰው ያግኙ።",
+  "⬇ Export backup (.json)":"⬇ ምትኬ ላክ (.json)",
+  "⬆ Import backup (.json)":"⬆ ምትኬ አስገባ (.json)",
+  "Danger zone":"የአደጋ ቀጠና",
+  "This permanently clears all farm data (livestock, logs, income/expenses) from this device/account. Category lists are kept.":"ይህ ሁሉንም የእርሻ መረጃ (እንስሳት፣ መዝገቦች፣ ገቢ/ወጪ) ከዚህ መሣሪያ/መለያ እስከመጨረሻው ያጠፋል። የምድብ ዝርዝሮች ይቀራሉ።",
+  "Clear all farm data":"ሁሉንም የእርሻ መረጃ አጽዳ",
+  "☁️ Google Drive Sync":"☁️ Google Drive ማመሳሰል",
+  "(optional)":"(አማራጭ)",
+  "How to get a Google Client ID (one-time setup)":"Google Client ID እንዴት እንደሚገኝ (አንድ ጊዜ ብቻ የሚደረግ ማዋቀር)",
+  "Go to {0} and create a new project.":"ወደ {0} ይሂዱ እና አዲስ ፕሮጀክት ይፍጠሩ።",
+  "APIs & Services → Library → search {0} → Enable.":"APIs & Services → Library → {0} ይፈልጉ → Enable ይጫኑ።",
+  "APIs & Services → OAuth consent screen. User type: External. Fill in app name/email. Add scope {0}. Add your own Gmail as a test user. Keep it in \"Testing\" status.":"APIs & Services → OAuth consent screen። User type: External ይምረጡ። የመተግበሪያውን ስምና ኢሜይል ይሙሉ። {0} scope ይጨምሩ። የራስዎን Gmail እንደ test user ይጨምሩ። በ \"Testing\" ሁኔታ ላይ ያቆዩት።",
+  "Credentials → Create Credentials → OAuth client ID → Application type: {0}.":"Credentials → Create Credentials → OAuth client ID → Application type: {0}።",
+  "Under Authorized JavaScript origins, add: {0}":"በ Authorized JavaScript origins ስር ይህን ይጨምሩ: {0}",
+  "Copy the generated Client ID and paste it below.":"የተፈጠረውን Client ID ገልብጠው ከታች ይለጥፉ።",
+  "The first time you connect, Google shows an \"unverified app\" warning — expected for your own personal app. Click {0} to continue.":"ለመጀመሪያ ጊዜ ሲገናኙ Google \"unverified app\" የሚል ማስጠንቀቂያ ያሳያል — ለራስዎ የግል መተግበሪያ የሚጠበቅ ነው። ለመቀጠል {0} ይጫኑ።",
+  "Advanced → Go to (app name)":"Advanced → Go to (የመተግበሪያው ስም)",
+  "Paste your Google Client ID…":"Google Client ID ያስገቡ…",
+  "Client ID saved. {0}":"Client ID ተቀምጧል። {0}",
+  "🟢 Connected — Last synced: {0}":"🟢 ተገናኝቷል — ለመጨረሻ ጊዜ የተመሳሰለው: {0}",
+  "Sync now":"አሁን አመሳስል",
+  "Disconnect":"አቋርጥ",
+  "Auto-sync every change":"እያንዳንዱን ለውጥ በራስ-ሰር አመሳስል",
+  "Connecting…":"በማገናኘት ላይ…",
+  "Not connected this session — access expires after a while, so you may need to reconnect from time to time.":"በዚህ ክፍለ ጊዜ አልተገናኘም — መዳረሻው ከጊዜ በኋላ ስለሚያልቅ አልፎ አልፎ እንደገና መገናኘት ሊያስፈልግ ይችላል።",
+  "Connect to Google Drive":"ከ Google Drive ጋር ተገናኝ",
+  "Batch / Herd":"ቡድን / መንጋ",
+  "Livestock Reduction":"የእንስሳት ቅናሽ",
+  "Production Entry":"የምርት መዝገብ",
+  "Product Reduction":"የምርት ቅናሽ",
+  "Feeding Entry":"የአመጋገብ መዝገብ",
+  "Income Entry":"የገቢ መዝገብ",
+  "Expense Entry":"የወጪ መዝገብ",
+  "Vaccination Entry":"የክትባት መዝገብ",
+  "Medication Entry":"የመድኃኒት መዝገብ",
+  "Fixed Asset":"ቋሚ ንብረት",
+  "Initial Quantity":"መጀመሪያ ብዛት",
+  "Unit Price (ETB)":"የአንዱ ዋጋ (ብር)",
+  "Amount (ETB)":"መጠን (ብር)",
+  "Quantity Produced":"የተመረተ ብዛት",
+  "Unit (count/kg/liters)":"መለኪያ (ብዛት/ኪ.ግ/ሊትር)",
+  "Quantity (kg)":"ብዛት (ኪ.ግ)",
+  "Unit Cost (ETB/kg)":"የአንዱ ዋጋ (ብር/ኪ.ግ)",
+  "Quantity Used":"የተጠቀመ ብዛት",
+  "Cost (ETB)":"ወጪ (ብር)",
+  "Asset name":"የንብረት ስም",
+  "Date acquired":"የተገኘበት ቀን",
+  "Depreciation method":"የእርጅና ቅናሽ ዘዴ",
+  "Annual depreciation rate (%) — use the rate allowed for this class":"ዓመታዊ የእርጅና ቅናሽ መጠን (%) — ለዚህ ክፍል የተፈቀደውን መጠን ይጠቀሙ",
+  "Date disposed (if sold/lost)":"የተወገደበት ቀን (ከተሸጠ/ከጠፋ)",
+  "Receipt / Invoice No.":"የደረሰኝ / ኢንቮይስ ቁጥር",
+  "Buyer name / TIN":"የገዢ ስም / TIN",
+  "Withholding tax deducted by buyer (ETB)":"በገዢ የተቀነሰ ተቀናሽ ግብር (ብር)",
+  "Tax-exempt income?":"ከግብር ነጻ ገቢ ነው?",
+  "Supplier name / TIN":"የአቅራቢ ስም / TIN",
+  "Non-deductible for tax?":"ለግብር የማይቀነስ ነው?",
+  "e.g. FL-002":"ለምሳሌ FL-002",
+  "e.g. Layer house, feed mixer":"ለምሳሌ የዶሮ ቤት፣ የመኖ ማቀላቀያ",
+  "⚠ Could not save — device storage may be full":"⚠ ማስቀመጥ አልተቻለም — የመሣሪያው ማከማቻ ሞልቶ ሊሆን ይችላል",
+  "Filled from your current farm records":"ከአሁኑ የእርሻ መዝገቦችዎ ተሞልቷል",
+  "Saved":"ተቀምጧል",
+  "Deleted":"ተሰርዟል",
+  "Delete this entry? This cannot be undone.":"ይህ መዝገብ ይሰረዝ? ይህ ወደ ኋላ አይመለስም።",
+  "Remove":"አስወግድ",
+  "Restore":"መልስ",
+  "Recycle bin":"የመልሶ ማግኛ ቅርጫት",
+  "Recycle bin is empty.":"የመልሶ ማግኛ ቅርጫት ባዶ ነው።",
+  "Empty recycle bin":"የመልሶ ማግኛ ቅርጫት ባዶ አድርግ",
+  "Moved to recycle bin":"ወደ የመልሶ ማግኛ ቅርጫት ተዛውሯል",
+  "Restored":"ተመልሷል",
+  "Welcome to Green Horizon Farm":"ወደ ግሪን ሆራይዘን እርሻ እንኳን በደህና መጡ",
+  "Start":"ጀምር",
+  "Skip":"ዝለል",
+  "Owner's name":"የባለቤት ስም",
+  "Opening cash & bank balance (ETB)":"መክፈቻ የጥሬ ገንዘብና ባንክ ቀሪ (ብር)",
+  "Main branch / farm site name":"የዋና ቅርንጫፍ / የእርሻ ቦታ ስም",
+  "Add a small sample layer flock (demo data)":"ትንሽ የናሙና እንቁላል ጣይ መንጋ ጨምር (ለማሳያ)",
+  "Farm / business name":"የእርሻ / የንግድ ስም",
+  "Preferences":"ምርጫዎች",
+  "Show advanced accounting (ledger, trial balance, detailed tax adjustments)":"የላቀ ሂሳብ አያያዝ አሳይ (የሂሳብ መዝገብ፣ የሙከራ ሚዛን፣ ዝርዝር የግብር ማስተካከያዎች)",
+  "When off, Reports focuses on Profit & Loss and Balance Sheet — enough for most farms.":"ሲጠፋ ሪፖርቶች በትርፍና ኪሳራ እና በሂሳብ ሚዛን ላይ ያተኩራሉ — ለአብዛኛዎቹ እርሻዎች በቂ ነው።",
+  "Why is Cash negative?":"ጥሬ ገንዘብ ለምን አሉታዊ ነው?",
+  "CSV downloaded":"CSV ወርዷል",
+  "Cash stays non-negative":"ጥሬ ገንዘብ አሉታዊ አይሆንም",
+  "Enter PIN":"ፒን ያስገቡ",
+  "PIN / password":"ፒን / የይለፍ ቃል",
+  "Confirm":"አረጋግጥ",
+  "This action requires your farm PIN.":"ይህ እርምጃ የእርሻዎን ፒን ይፈልጋል።",
+  "Enter your PIN":"ፒንዎን ያስገቡ",
+  "Wrong PIN. Try again.":"የተሳሳተ ፒን። እንደገና ይሞክሩ።",
+  "Set a farm PIN":"የእርሻ ፒን ያዘጋጁ",
+  "Change or remove PIN":"ፒን ይቀይሩ ወይም ያስወግዱ",
+  "Optional protection for deleting records, emptying the recycle bin, importing backups, and clearing data. Stored only on this device.":"መዝገቦችን ለመሰረዝ፣ ቅርጫቱን ለማጽዳት፣ ምትኬ ለማስገባትና ውሂብ ለማጽዳት አማራጭ ጥበቃ። በዚህ መሣሪያ ላይ ብቻ ይቀመጣል።",
+  "Current PIN":"አሁን ያለ ፒን",
+  "New PIN (leave blank to remove)":"አዲስ ፒን (ለማስወገድ ባዶ ይተው)",
+  "New PIN (4+ characters)":"አዲስ ፒን (ከ4 ቁምፊ በላይ)",
+  "Confirm new PIN":"አዲሱን ፒን ያረጋግጡ",
+  "PIN removed":"ፒን ተወግዷል",
+  "PIN saved":"ፒን ተቀምጧል",
+  "Wrong current PIN.":"የአሁኑ ፒን ተሳስቷል።",
+  "PIN must be at least 4 characters.":"ፒን ቢያንስ 4 ቁምፊ መሆን አለበት።",
+  "New PIN and confirmation do not match.":"አዲሱ ፒንና ማረጋገጫው አይዛመዱም።",
+  "Security / PIN":"ደህንነት / ፒን",
+  "Optional PIN for removing records, emptying the recycle bin, importing backups, and clearing all data. Stored only on this device — not sent to any server.":"መዝገቦችን ለማስወገድ፣ ቅርጫቱን ለማጽዳት፣ ምትኬ ለማስገባትና ሁሉንም ውሂብ ለማጽዳት አማራጭ ፒን። በዚህ መሣሪያ ላይ ብቻ ይቀመጣል — ወደ ምንም አገልጋይ አይላክም።",
+  "PIN is active — destructive actions require it.":"ፒን ንቁ ነው — ጎጂ እርምጃዎች ይፈልጉታል።",
+  "No PIN set — anyone using this device can remove records.":"ፒን አልተዘጋጀም — ይህን መሣሪያ የሚጠቀም ማንኛውም ሰው መዝገቦችን ማስወገድ ይችላል።",
+  "Enter PIN to remove this record.":"ይህን መዝገብ ለማስወገድ ፒን ያስገቡ።",
+  "Enter PIN to permanently empty the recycle bin.":"ቅርጫቱን እስከመጨረሻው ለማጽዳት ፒን ያስገቡ።",
+  "Enter PIN to permanently clear all farm data.":"ሁሉንም የእርሻ ውሂብ ለማጽዳት ፒን ያስገቡ።",
+  "Enter PIN to import a backup and replace all data.":"ምትኬ ለማስገባትና ሁሉንም ውሂብ ለመተካት ፒን ያስገቡ።",
+  "Enter PIN to remove archived years from this device.":"የተመረጡ ዓመታትን ከዚህ መሣሪያ ለማስወገድ ፒን ያስገቡ።",
+  "Not enough cash (available":"በቂ ጥሬ ገንዘብ የለም (ያለው:",
+  "). Recorded as Unpaid on credit so cash stays non-negative.":")። ጥሬ ገንዘብ አሉታዊ እንዳይሆን እንደ ያልተከፈለ (ብድር) ተመዝግቧል።",
+  "). Recorded on supplier credit so cash stays non-negative.":")። ጥሬ ገንዘብ አሉታዊ እንዳይሆን በአቅራቢ ብድር ተመዝግቧል።",
+  "Some purchases were recorded as Paid when there was not enough cash. Those are treated as Unpaid (credit) / supplier payables so Cash never goes below zero. You can still record any expense — if cash is short, choose Unpaid on credit or Paid by owner. Add opening cash or owner investment under Accounting if you started with money in the bank.":"አንዳንድ ግዢዎች ጥሬ ገንዘብ በቂ ባልነበረበት ጊዜ እንደ ተከፈለ ተመዝግበዋል። ጥሬ ገንዘብ ከዜሮ በታች እንዳይወርድ እንደ ያልተከፈለ (ብድር) ይቆጠራሉ። ማንኛውንም ወጪ ማስመዝገብ ይችላሉ — ጥሬ ገንዘብ ካጡ «ያልተከፈለ» ወይም «በባለቤት ተከፍሏል» ይምረጡ። በባንክ ገንዘብ ከጀመሩ በሂሳብ አያያዝ ስር መክፈቻ ጥሬ ገንዘብ ወይም የባለቤት ካፒታል ያስገቡ።",
+  "Ready — start by recording a purchase or production":"ዝግጁ — በግዢ ወይም በምርት መመዝገብ ይጀምሩ",
+  "Set a few basics so the books start correctly. You can change everything later in Setup.":"መጽሐፎቹ በትክክል እንዲጀምሩ ጥቂት መሰረታዊ ነገሮችን ያስገቡ። በኋላ በቅንብር ሁሉንም መቀየር ይችላሉ።",
+  "Removed records stay here for up to 45 days (max 80 items). Restore any time, or empty permanently.":"የተወገዱ መዝገቦች እዚህ እስከ 45 ቀናት (ከፍተኛ 80) ይቆያሉ። በማንኛውም ጊዜ መመለስ ወይም እስከመጨረሻው ማጽዳት ይችላሉ።",
+  "Summary":"ማጠቃለያ",
+  "Removed":"ተወግዷል",
+  "Google sign-in was cancelled or failed":"የ Google መግቢያ ተሰርዟል ወይም አልተሳካም",
+  "Connected, but the first sync failed — try \"Sync now":"ተገናኝቷል፣ ነገር ግን የመጀመሪያው ማመሳሰል አልተሳካም — \"አሁን አመሳስል\" ይሞክሩ",
+  "Paste your Google Client ID first.":"መጀመሪያ Google Client ID ያስገቡ።",
+  "Still loading Google sign-in — try again in a moment":"የ Google መግቢያ አሁንም እየተጫነ ነው — ከጥቂት ቆይታ በኋላ ይሞክሩ",
+  "Could not start Google sign-in":"የ Google መግቢያን ማስጀመር አልተቻለም",
+  "Disconnected — your data stays safely on this device":"ግንኙነት ተቋርጧል — መረጃዎ በዚህ መሣሪያ ላይ በደኅንነት ይቆያል",
+  "Google Drive session expired — tap Connect to sign in again":"የ Google Drive ክፍለ ጊዜ አብቅቷል — እንደገና ለመግባት \"ተገናኝ\" ይጫኑ",
+  "Found existing farm data on Google Drive. OK = load it (replaces data on this device) Cancel = keep this device's data and upload it to Drive instead":"በ Google Drive ላይ ነባር የእርሻ መረጃ ተገኝቷል።",
+  "Loaded data from Google Drive":"መረጃ ከ Google Drive ተጭኗል",
+  "Uploaded this device's data to Google Drive":"የዚህ መሣሪያ መረጃ ወደ Google Drive ተሰቅሏል",
+  "Google Drive connected — backup created":"Google Drive ተገናኝቷል — ምትኬ ተፈጥሯል",
+  "Not connected":"አልተገናኘም",
+  "Synced to Google Drive":"ወደ Google Drive ተመሳስሏል",
+  "Backup downloaded":"ምትኬ ወርዷል",
+  "Could not read that file. Make sure it is a Green Horizon Farm backup (.json) file.":"ፋይሉን ማንበብ አልተቻለም። የ Green Horizon Farm ምትኬ (.json) ፋይል መሆኑን ያረጋግጡ።",
+  "Import this backup? This will replace ALL current data in the app with the contents of this file.":"ይህ ምትኬ ይግባ? ይህ በመተግበሪያው ውስጥ ያለውን ሁሉንም መረጃ በዚህ ፋይል ይዘት ይተካል።",
+  "Backup imported":"ምትኬ ገብቷል",
+  "Already in list":"አስቀድሞ በዝርዝሩ ውስጥ አለ",
+  "Added":"ተጨምሯል",
+  "Paste a Client ID first":"መጀመሪያ Client ID ያስገቡ",
+  "Change Client ID? You will need to reconnect.":"Client ID ይቀየር? እንደገና መገናኘት ያስፈልግዎታል።",
+  "Auto-sync enabled":"በራስ-ሰር ማመሳሰል በርቷል",
+  "Auto-sync disabled":"በራስ-ሰር ማመሳሰል ጠፍቷል",
+  "This will permanently delete ALL livestock, production, feed, income/expense and health records. Continue?":"ይህ ሁሉንም የእንስሳት፣ የምርት፣ የመኖ፣ የገቢ/ወጪና የጤና መዝገቦች እስከመጨረሻው ይሰርዛል። ይቀጥሉ?",
+  "Are you absolutely sure? This cannot be undone.":"እርግጠኛ ነዎት? ይህ ወደ ኋላ አይመለስም።",
+  "All farm data cleared":"ሁሉም የእርሻ መረጃ ጸድቷል",
+  "Not enough cash (available ":"በቂ ጥሬ ገንዘብ የለም (ያለው: ",
+  "Connected, but the first sync failed — try \"Sync now\"":"ተገናኝቷል፣ ነገር ግን የመጀመሪያው ማመሳሰል አልተሳካም — \"አሁን አመሳስል\" ይሞክሩ",
+  "Purchase / Expense":"ግዢ / ወጪ",
+  "Income / Sale":"ገቢ / ሽያጭ",
+  "Feeding":"አመጋገብ",
+  "Orders":"ትዕዛዞች",
+  "Expenses & Purchases":"ወጪዎችና ግዢዎች",
+  "Add order":"ትዕዛዝ ጨምር",
+  "Add employee":"ሠራተኛ ጨምር",
+  "Employee":"ሠራተኛ",
+  "Full name":"ሙሉ ስም",
+  "Position / role":"ስራ / ድርሻ",
+  "Position":"ስራ",
+  "Hire date":"የቅጥር ቀን",
+  "Monthly salary (ETB)":"ወርሃዊ ደመወዝ (ብር)",
+  "Salary / mo":"ደመወዝ / ወር",
+  "ID / employee No.":"መለያ / የሠራተኛ ቁጥር",
+  "ID No.":"መለያ ቁ.",
+  "Inactive":"እንቅስቃሴ የሌለው",
+  "Active staff":"ንቁ ሠራተኞች",
+  "Total staff":"ጠቅላላ ሠራተኞች",
+  "Est. monthly payroll":"ግምታዊ ወርሃዊ ደመወዝ",
+  "No employees yet. Add your first staff member below.":"እስካሁን ምንም ሠራተኛ የለም። የመጀመሪያውን ከዚህ በታች ይጨምሩ።",
+  "Employee administration — staff directory, roles, and monthly salary reference. Record actual labor payments under Expenses & Purchases.":"የሠራተኛ አስተዳደር — የሰራተኞች ዝርዝር፣ ስራዎች እና ወርሃዊ ደመወዝ ማጣቀሻ። ትክክለኛ የሠራተኛ ክፍያዎችን በወጪዎችና ግዢዎች ስር ይመዝግቡ።",
+  "Salaries shown here are for reference only. To pay staff, add a Labor expense under Expenses & Purchases so cash and P&L stay accurate.":"እዚህ የሚታዩ ደመወዞች ለማጣቀሻ ብቻ ናቸው። ሠራተኞችን ለመክፈል በወጪዎችና ግዢዎች ስር የሠራተኛ ወጪ ይጨምሩ ስለዚህ ጥሬ ገንዘብና ትርፍ/ኪሳራ ትክክለኛ ይሆናሉ።",
+  "Rearing Cost":"የማሳደጊያ ወጪ",
+  "Investment Plan":"የኢንቨስትመንት ዕቅድ",
+  "Per chicken":"በአንድ ዶሮ",
+  "Chickens you can buy & raise":"መግዛትና ማሳደግ የሚችሉት ዶሮዎች",
+  "Cost per chicken (to production)":"ወጪ በአንድ ዶሮ (እስከ ምርት)",
+  "Buying the chickens":"ዶሮዎቹን መግዛት",
+  "Cost for each chicken you buy":"ለእያንዳንዱ የሚገዙት ዶሮ ወጪ",
+  "1. Your chickens":"1. ዶሮዎችዎ",
+  "How many chickens did you buy?":"ስንት ዶሮዎች ገዙ?",
+  "Price of one chicken (ETB)":"የአንድ ዶሮ ዋጋ (ብር)",
+  "Branch":"ቅርንጫፍ"
 };
 
 /* Patterns for strings that contain numbers or other variable parts */
@@ -612,8 +951,8 @@ const AM_PATTERNS = [
   [/^Adjustments for this year \((\d+) EFY\)$/, m=>`የዚህ ዓመት ማስተካከያዎች (${m[1]} ዓ.ም)`],
   [/^Dep\. (\d+) EFY$/, m=>`የእርጅና ቅናሽ ${m[1]} ዓ.ም`],
   [/^Per Crate \((\d+)\)$/, m=>`በአንድ ሣጥን (${m[1]})`],
-  [/^Auto-calculated: ([\d,\.]+) birds × 112g\/bird\/day$/, m=>`በራስ-ሰር የሚሰላ: ${m[1]} ወፎች × 112 ግ/ወፍ/ቀን`],
-  [/^≈ (.+)\/bird\/day at current bird count\.$/, m=>`≈ ${m[1]}/ወፍ/ቀን በአሁኑ የወፎች ብዛት።`],
+  [/^Auto-calculated: ([\d,\.]+) (?:birds|chickens) × 112g\/(?:bird|chicken)\/day$/, m=>`በራስ-ሰር የሚሰላ: ${m[1]} ዶሮዎች × 112 ግ/ዶሮ/ቀን`],
+  [/^≈ (.+)\/(?:bird|chicken)\/day at current (?:bird|chicken) count\.$/, m=>`≈ ${m[1]}/ዶሮ/ቀን በአሁኑ የዶሮዎች ብዛት።`],
   [/^Fixed-asset register\. Depreciation for (\d+) EFY \(change year in Reports\) is added to the financial report automatically\.$/, m=>`የቋሚ ንብረት መዝገብ። የ${m[1]} ዓ.ም የእርጅና ቅናሽ በራስ-ሰር ወደ የፋይናንስ ሪፖርቱ ይጨመራል (ዓመቱን በሪፖርቶች ውስጥ ይቀይሩ)።`],
   [/^Total depreciation for (\d+) EFY: (\{0\})\. Depreciation starts in the fiscal year the asset is acquired \(no part-year proration\)\. Enter the rate your tax authority allows for each class\.$/, m=>`የ${m[1]} ዓ.ም ጠቅላላ የእርጅና ቅናሽ: ${m[2]}። የእርጅና ቅናሹ የሚጀምረው ንብረቱ በተገኘበት የበጀት ዓመት ነው (ከፊል ዓመት ምጣኔ የለም)። ግብር ባለሥልጣንዎ ለእያንዳንዱ ክፍል የፈቀደውን መጠን ያስገቡ።`],
   [/^Your current average price is (.+) above the recommended price — you're earning more margin than the (.+)% target\.$/, m=>`የአሁኑ አማካይ ዋጋዎ ከሚመከረው ዋጋ በ${m[1]} ከፍ ይላል — ከ${m[2]}% ዒላማው የበለጠ ትርፍ እያገኙ ነው።`],
@@ -670,8 +1009,8 @@ Object.assign(AM, {
   'Select branch and animal type':'ቅርንጫፍና የእንስሳት ዓይነት ይምረጡ','Select animal type first':'መጀመሪያ የእንስሳት ዓይነት ይምረጡ',
   'Breed/Type':'ዝርያ/ዓይነት','Bought from':'ከማን ተገዛ','Number of animals bought':'የተገዙ እንስሳት ብዛት','Price per animal (ETB)':'ዋጋ በአንድ እንስሳ (ብር)',
   'Buy as a layer flock (biological asset)?':'እንደ እንቁላል ጣይ መንጋ (ባዮሎጂካል ንብረት) ይግዙ?',
-  'Age of the birds when bought (weeks)':'ወፎቹ ሲገዙ ያላቸው ዕድሜ (ሳምንታት)',
-  'Age of the birds when acquired (weeks)':'ወፎቹ ሲገኙ ያላቸው ዕድሜ (ሳምንታት)',
+  'Age of the chickens when bought (weeks)':'ዶሮዎቹ ሲገዙ ያላቸው ዕድሜ (ሳምንታት)','Age of the birds when bought (weeks)':'ዶሮዎቹ ሲገዙ ያላቸው ዕድሜ (ሳምንታት)',
+  'Age of the chickens when acquired (weeks)':'ዶሮዎቹ ሲገኙ ያላቸው ዕድሜ (ሳምንታት)','Age of the birds when acquired (weeks)':'ዶሮዎቹ ሲገኙ ያላቸው ዕድሜ (ሳምንታት)',
   'Age at onset of laying (weeks) — about 20–24 is typical':'እንቁላል መጣል የሚጀምሩበት ዕድሜ (ሳምንታት) — አብዛኛውን ጊዜ 20–24',
   'Amortise over (months) — 12 to 18 is typical':'በ (ወራት) ይከፋፈል — አብዛኛውን ጊዜ 12 እስከ 18',
   'Amortise the locked cost over (months) — 12 to 18 is typical':'የተቆለፈውን ወጪ በ (ወራት) ይከፋፈሉ — አብዛኛውን ጊዜ 12 እስከ 18',
@@ -741,6 +1080,29 @@ Object.assign(AM, {
   'No employees yet. Add your first staff member below.':'እስካሁን ምንም ሠራተኛ የለም። የመጀመሪያውን ከዚህ በታች ይጨምሩ።',
   'Employee administration — staff directory, roles, and monthly salary reference. Record actual labor payments under Expenses & Purchases.':'የሠራተኛ አስተዳደር — የሰራተኞች ዝርዝር፣ ስራዎች እና ወርሃዊ ደመወዝ ማጣቀሻ። ትክክለኛ የሠራተኛ ክፍያዎችን በወጪዎችና ግዢዎች ስር ይመዝግቡ።',
   'Salaries shown here are for reference only. To pay staff, add a Labor expense under Expenses & Purchases so cash and P&L stay accurate.':'እዚህ የሚታዩ ደመወዞች ለማጣቀሻ ብቻ ናቸው። ሠራተኞችን ለመክፈል በወጪዎችና ግዢዎች ስር የሠራተኛ ወጪ ይጨምሩ ስለዚህ ጥሬ ገንዘብና ትርፍ/ኪሳራ ትክክለኛ ይሆናሉ።',
+
+  'Laying chickens (count)':'እንቁላል ጣይ ዶሮዎች (ብዛት)',
+  'Laying rate (% eggs/chicken/day)':'የእንቁላል ጣይነት መጠን (% እንቁላል/ዶሮ/ቀን)',
+  'Per chicken':'በአንድ ዶሮ',
+  'Per bird':'በአንድ ዶሮ',
+  'Buy price per chicken (ETB)':'የግዢ ዋጋ በአንድ ዶሮ (ብር)',
+  'Buy price per bird (ETB)':'የግዢ ዋጋ በአንድ ዶሮ (ብር)',
+  'Target number of chickens (0 = maximum you can afford)':'የሚፈለግ የዶሮ ብዛት (0 = መግዛት የሚችሉት ከፍተኛ)',
+  'Target number of birds (0 = maximum you can afford)':'የሚፈለግ የዶሮ ብዛት (0 = መግዛት የሚችሉት ከፍተኛ)',
+  'Money you do not want to spend on chickens':'በዶሮ ላይ ማውጣት የማይፈልጉት ገንዘብ',
+  'Money you do not want to spend on birds':'በዶሮ ላይ ማውጣት የማይፈልጉት ገንዘብ',
+  'Tip: open Rearing Cost first and set your real prices. This plan can reuse that cost per chicken automatically.':'ጠቃሚ ምክር፡ መጀመሪያ የማሳደጊያ ወጪን ክፈቱና እውነተኛ ዋጋዎችን ያስገቡ። ይህ ዕቅድ ያንን ወጪ በአንድ ዶሮ በራስ-ሰር ሊጠቀም ይችላል።',
+  'Tip: open Rearing Cost first and set your real prices. This plan can reuse that cost per bird automatically.':'ጠቃሚ ምክር፡ መጀመሪያ የማሳደጊያ ወጪን ክፈቱና እውነተኛ ዋጋዎችን ያስገቡ። ይህ ዕቅድ ያንን ወጪ በአንድ ዶሮ በራስ-ሰር ሊጠቀም ይችላል።',
+  'Not enough funds for even one chicken at this cost. Lower the cost per chicken, reduce the reserve, or add capital / wait for more profit.':'በዚህ ወጪ አንድ ዶሮ እንኳን ለመግዛት በቂ ገንዘብ የለም። የአንድ ዶሮ ወጪን ይቀንሱ፣ ሪዘርቭን ይቀንሱ፣ ወይም ካፒታል ይጨምሩ / ተጨማሪ ትርፍ ይጠብቁ።',
+  'Not enough funds for even one bird at this cost. Lower the cost per bird, reduce the reserve, or add capital / wait for more profit.':'በዚህ ወጪ አንድ ዶሮ እንኳን ለመግዛት በቂ ገንዘብ የለም። የአንድ ዶሮ ወጪን ይቀንሱ፣ ሪዘርቭን ይቀንሱ፣ ወይም ካፒታል ይጨምሩ / ተጨማሪ ትርፍ ይጠብቁ።',
+
+  'Carrying value of chickens sold / culled / lost':'የተሸጡ / የተወገዱ / የጠፉ ዶሮዎች የመጫን ዋጋ',
+  'Carrying value of birds sold / culled / lost':'የተሸጡ / የተወገዱ / የጠፉ ዶሮዎች የመጫን ዋጋ',
+  'Number of chickens sold':'የተሸጡ ዶሮዎች ብዛት',
+  'Number of birds sold':'የተሸጡ ዶሮዎች ብዛት',
+  'Price per chicken (ETB) *':'ዋጋ በአንድ ዶሮ (ብር) *',
+  'Price per bird (ETB) *':'ዋጋ በአንድ ዶሮ (ብር) *',
+  'Choose what you are selling — the form adapts (eggs, honey, milk, wool, manure, chickens, goats/sheep/oxen) and the stock is reduced automatically. For lump sums use Other Income.':'ምን እንደሚሸጡ ይምረጡ — ቅጹ ይስተካከላል (እንቁላል፣ ማር፣ ወተት፣ ሱፍ፣ ፍግ፣ ዶሮ፣ ፍየል/በግ/በሬ) እና ክምችቱ በራስ-ሰር ይቀንሳል። ለጠቅላላ መጠን ሌላ ገቢን ይጠቀሙ።',
   'Name':'ስም',
   'Branch':'ቅርንጫፍ',
   'Phone':'ስልክ'
@@ -1719,7 +2081,7 @@ function computeCalcResults(c){
 /* ---------------- Computed values ---------------- */
 /* ---- Sales are recorded once, in Income. They create the stock reductions below automatically. ---- */
 const PRODUCT_SALE_CATS = {'Egg Sales':'Eggs','Honey Sales':'Honey','Milk Sales':'Milk','Wool Sales':'Wool','Manure Sales':'Manure'};
-const LIVESTOCK_SALE_CATS = ['Live Bird Sales','Livestock Sales (Goats/Sheep/Oxen)'];
+const LIVESTOCK_SALE_CATS = ['Live Chicken Sales','Live Bird Sales','Livestock Sales (Goats/Sheep/Oxen)'];
 const DEFAULT_UNITS = {Eggs:'eggs', Honey:'kg', Milk:'liters', Wool:'kg', Manure:'kg'};
 function productUnit(p){
   const rec = state.production.slice().reverse().find(x=>x.product===p && x.unit && x.unit!=='count');
@@ -2501,8 +2863,8 @@ function renderCalculator(){
   <div class="section-title" style="margin-top:0">Flock &amp; Production</div>
   <div class="panel"><div class="panel-pad">
     <div class="calc-grid">
-      ${field('layerBirds','Laying birds (count)')}
-      ${field('layingRatePct','Laying rate (% eggs/bird/day)',{hint:'Hen-day production — typically 60–90% for healthy layers'})}
+      ${field('layerBirds','Laying chickens (count)')}
+      ${field('layingRatePct','Laying rate (% eggs/chicken/day)',{hint:'Hen-day production — typically 60–90% for healthy layers'})}
       ${field('wastePct','Breakage / waste (%)',{hint:'Cracked, spoiled or lost eggs'})}
     </div>
   </div></div>
@@ -2513,12 +2875,12 @@ function renderCalculator(){
       <div class="calc-field">
         <span>Total feed used per day, whole flock (kg)</span>
         <div class="mono" id="calcFeedPerDayComputed" style="font-size:18px;font-weight:600;color:var(--green-dark);padding:9px 10px;background:var(--surface-alt);border-radius:8px;border:1px solid var(--rule);">${fmtNum(r.feedTotalKgPerDay.toFixed(2))} kg</div>
-        <span class="calc-hint" id="calcFeedPerDayHint">Auto-calculated: ${fmtNum(c.layerBirds)} birds × 112g/bird/day</span>
+        <span class="calc-hint" id="calcFeedPerDayHint">Auto-calculated: ${fmtNum(c.layerBirds)} chickens × 112g/chicken/day</span>
       </div>
       ${field('feedCostPerKg','Feed cost (ETB/kg)')}
       <div>
         ${field('otherCostPerDay','Other cost per day, whole flock (ETB)',{hint:'Labor, health, utilities, housing — everything but feed, as a daily total'})}
-        <p class="calc-hint" id="calcImpliedOtherPerBird" style="margin-top:6px;">≈ ${fmtMoney(r.impliedOtherPerBird)}/bird/day at current bird count.</p>
+        <p class="calc-hint" id="calcImpliedOtherPerBird" style="margin-top:6px;">≈ ${fmtMoney(r.impliedOtherPerBird)}/chicken/day at current chicken count.</p>
       </div>
     </div>
   </div></div>
@@ -2575,7 +2937,7 @@ function updateCalcDom(){
   const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
   set('calcDailyEggs', fmtNum(r.dailyEggs.toFixed(1)));
   set('calcFeedPerDayComputed', fmtNum(r.feedTotalKgPerDay.toFixed(2)) + ' kg');
-  set('calcFeedPerDayHint', `Auto-calculated: ${fmtNum(state.calc.layerBirds)} birds × 112g/bird/day`);
+  set('calcFeedPerDayHint', `Auto-calculated: ${fmtNum(state.calc.layerBirds)} chickens × 112g/chicken/day`);
   set('calcFeedCost', fmtMoney(r.dailyFeedCost));
   set('calcOtherCost', fmtMoney(r.dailyOtherCost));
   set('calcBreakeven', fmtMoney(r.breakeven));
@@ -2590,7 +2952,7 @@ function updateCalcDom(){
   set('calcRowProfitEgg', fmtMoney(r.profitEgg));
   set('calcRowProfitCrate', fmtMoney(r.profitEgg*r.crate));
   set('calcNote', calcComparisonNote(r));
-  set('calcImpliedOtherPerBird', `≈ ${fmtMoney(r.impliedOtherPerBird)}/bird/day at current bird count.`);
+  set('calcImpliedOtherPerBird', `≈ ${fmtMoney(r.impliedOtherPerBird)}/chicken/day at current chicken count.`);
 }
 function attachCalculatorEvents(){
   document.querySelectorAll('[data-calc-field]').forEach(el=>{
@@ -2632,35 +2994,35 @@ Object.assign(AM, {
   'Rearing Cost':'የማሳደጊያ ወጪ',
   'How much does it cost to raise young hens until they start laying well? Fill in your numbers — results update as you type.':'ወጣት ዶሮዎች በደንብ እንቁላል መጣል እስኪጀምሩ ድረስ ለማሳደግ ምን ያህል ያስከፍላል? ቁጥሮችዎን ያስገቡ — ውጤቱ በመተየብ ሂደት ይዘምናል።',
   'Reset to defaults':'ወደ ነባሪ ይመልሱ',
-  '1. Your birds':'1. ወፎችዎ','2. Feed':'2. መኖ','3. People & running costs (monthly)':'3. ሰዎችና የሥራ ወጪዎች (በወር)','4. Health & other (simple totals)':'4. ጤናና ሌላ (ቀላል ድምር)',
-  'How many birds did you buy?':'ስንት ወፎች ገዙ?','Price of one bird (ETB)':'የአንድ ወፍ ዋጋ (ብር)','Expected deaths (%)':'የሚጠበቅ ሞት (%)','Usually 2–4%':'በተለምዶ 2–4%',
+  '1. Your chickens':'1. ዶሮዎችዎ','1. Your birds':'1. ዶሮዎችዎ','2. Feed':'2. መኖ','3. People & running costs (monthly)':'3. ሰዎችና የሥራ ወጪዎች (በወር)','4. Health & other (simple totals)':'4. ጤናና ሌላ (ቀላል ድምር)',
+  'How many chickens did you buy?':'ስንት ዶሮዎች ገዙ?','How many birds did you buy?':'ስንት ዶሮዎች ገዙ?','Price of one chicken (ETB)':'የአንድ ዶሮ ዋጋ (ብር)','Price of one bird (ETB)':'የአንድ ዶሮ ዋጋ (ብር)','Expected deaths (%)':'የሚጠበቅ ሞት (%)','Usually 2–4%':'በተለምዶ 2–4%',
   'Age when you buy them (days)':'ሲገዙ ያላቸው ዕድሜ (ቀናት)','Example: 1 = day-old chick, 55 = about 8 weeks':'ለምሳሌ: 1 = የቀን ጫጩት፣ 55 = በግምት 8 ሳምንት',
   'Age when they lay well (days)':'በደንብ እንቁላል የሚጥሉበት ዕድሜ (ቀናት)','Often about 150–160 days (around 22 weeks)':'ብዙ ጊዜ 150–160 ቀናት (በግምት 22 ሳምንት)',
   'Feed price per kg (ETB)':'የመኖ ዋጋ በኪ.ግ (ብር)','If you buy by quintal: price ÷ 100':'በኩንታል ከገዙ: ዋጋ ÷ 100','Feed waste (%)':'የመኖ ብክነት (%)','Spilled or spoiled feed — try 2–5%':'የፈሰሰ ወይም የተበላሸ መኖ — 2–5% ይሞክሩ',
   'Feed amount is estimated automatically from a standard growth table. You only need the price and waste %.':'የመኖ መጠን ከመደበኛ የእድገት ሰንጠረዥ በራስ-ሰር ይገመታል። የሚያስፈልግዎት ዋጋና የብክነት % ብቻ ነው።',
-  'Number of workers':'የሠራተኞች ብዛት','Pay per worker per month (ETB)':'የአንድ ሠራተኛ ወርሃዊ ደመወዝ (ብር)','% of their time on this flock':'በዚህ መንጋ ላይ የሚያጠፉት ጊዜ %','100 = full time on these birds':'100 = ሙሉ ጊዜ በእነዚህ ወፎች ላይ',
+  'Number of workers':'የሠራተኞች ብዛት','Pay per worker per month (ETB)':'የአንድ ሠራተኛ ወርሃዊ ደመወዝ (ብር)','% of their time on this flock':'በዚህ መንጋ ላይ የሚያጠፉት ጊዜ %','100 = full time on these chickens':'100 = ሙሉ ጊዜ በእነዚህ ዶሮዎች ላይ','100 = full time on these birds':'100 = ሙሉ ጊዜ በእነዚህ ዶሮዎች ላይ',
   'Electricity per month (ETB)':'ኤሌክትሪክ በወር (ብር)','Water per month (ETB)':'ውሃ በወር (ብር)','Bedding / litter per month (ETB)':'አልጋ / ድርቆሽ በወር (ብር)',
-  'Medicine & vitamins per bird per week (ETB)':'መድኃኒትና ቫይታሚን በአንድ ወፍ በሳምንት (ብር)','Small amount for vitamins, treatments':'ለቫይታሚንና ሕክምና ትንሽ መጠን',
-  'Vet / lab total for the whole period (ETB)':'የእንስሳት ሐኪም / ላብራቶሪ ጠቅላላ (ብር)','Transport of birds (ETB total)':'የወፎች ትራንስፖርት (ጠቅላላ ብር)',
+  'Medicine & vitamins per chicken per week (ETB)':'መድኃኒትና ቫይታሚን በአንድ ዶሮ በሳምንት (ብር)','Medicine & vitamins per bird per week (ETB)':'መድኃኒትና ቫይታሚን በአንድ ዶሮ በሳምንት (ብር)','Small amount for vitamins, treatments':'ለቫይታሚንና ሕክምና ትንሽ መጠን',
+  'Vet / lab total for the whole period (ETB)':'የእንስሳት ሐኪም / ላብራቶሪ ጠቅላላ (ብር)','Transport of chickens (ETB total)':'የዶሮዎች ትራንስፖርት (ጠቅላላ ብር)','Transport of birds (ETB total)':'የዶሮዎች ትራንስፖርት (ጠቅላላ ብር)',
   'Cleaning & disinfectant per month (ETB)':'ጽዳትና ፀረ-ተህዋሲያን በወር (ብር)','Repairs & equipment per month (ETB)':'ጥገናና መሣሪያ በወር (ብር)','Any other cost (ETB total)':'ማንኛውም ሌላ ወጪ (ጠቅላላ ብር)',
   'Vaccines are included with a standard schedule in the background. Change medicine and vet totals to match what you really spend.':'ክትባቶች በመደበኛ መርሐግብር ከበስተጀርባ ተካትተዋል። መድኃኒትና የእንስሳት ሐኪም ድምርን በትክክል ከሚያወጡት ጋር ያስተካክሉ።',
   'More options (optional)':'ተጨማሪ አማራጮች (አማራጭ)','Extra buffer (% of running costs)':'ተጨማሪ መጠባበቂያ (% የሥራ ወጪ)','e.g. 3 for unexpected costs':'ለምሳሌ 3 ለያልተጠበቁ ወጪዎች',
   'Loan interest % per year':'የብድር ወለድ % በዓመት','0 if you did not borrow':'ካልተበደሩ 0',
   'This is only a planning tool. It does not change your farm records.':'ይህ የዕቅድ መሣሪያ ብቻ ነው። የእርሻ መዝገቦችዎን አይለውጥም።',
   'Your results':'ውጤቶችዎ','Total cost to raise the flock':'መንጋውን ለማሳደግ ጠቅላላ ወጪ',
-  'Cost for each bird you buy':'ለእያንዳንዱ የሚገዙት ወፍ ወጪ','Cost for each hen that survives':'ለእያንዳንዱ ለሚተርፈው ዶሮ ወጪ',
+  'Cost for each chicken you buy':'ለእያንዳንዱ የሚገዙት ዶሮ ወጪ','Cost for each bird you buy':'ለእያንዳንዱ የሚገዙት ዶሮ ወጪ','Cost for each hen that survives':'ለእያንዳንዱ ለሚተርፈው ዶሮ ወጪ',
   'How long (weeks)':'ስንት ጊዜ (ሳምንታት)','Hens still alive':'አሁንም ሕያው የሆኑ ዶሮዎች','Feed is this % of total':'መኖ ከጠቅላላው ይህ % ነው',
-  'Simple cost list':'ቀላል የወጪ ዝርዝር','What':'ምን','Buying the birds':'ወፎቹን መግዛት','Workers (labour)':'ሠራተኞች (ሠራተኛ)',
+  'Simple cost list':'ቀላል የወጪ ዝርዝር','What':'ምን','Buying the chickens':'ዶሮዎቹን መግዛት','Buying the birds':'ዶሮዎቹን መግዛት','Workers (labour)':'ሠራተኞች (ሠራተኛ)',
   'Electricity, water & bedding':'ኤሌክትሪክ፣ ውሃና አልጋ','Vaccines, medicine & vet':'ክትባት፣ መድኃኒትና እንስሳት ሐኪም',
   'Transport, cleaning & other':'ትራንስፖርት፣ ጽዳትና ሌላ','TOTAL':'ጠቅላላ',
   'Tip: “Cost for each hen that survives” is the useful number — it is what one ready-to-lay hen really cost you after deaths.':'ምክር: «ለእያንዳንዱ ለሚተርፈው ዶሮ ወጪ» ጠቃሚ ቁጥር ነው — ከሞት በኋላ አንድ ለመጣል ዝግጁ ዶሮ በትክክል ያስከፈለዎት ነው።',
   'Investment Plan':'የኢንቨስትመንት ዕቅድ',
-  'How many birds can you buy and raise until they start producing, with the money you have today?':'በዛሬው ገንዘብዎ ምን ያህል ወፎች መግዛትና እስከ ምርት ድረስ ማሳደግ ይችላሉ?',
-  '1. Money available':'1. ያለዎት ገንዘብ','2. Cost to buy & raise one bird':'2. አንድ ወፍ ለመግዛትና ለማሳደግ ወጪ',
+  'How many chickens can you buy and raise until they start producing, with the money you have today?':'በዛሬው ገንዘብዎ ምን ያህል ዶሮዎች መግዛትና እስከ ምርት ድረስ ማሳደግ ይችላሉ?','How many birds can you buy and raise until they start producing, with the money you have today?':'በዛሬው ገንዘብዎ ምን ያህል ዶሮዎች መግዛትና እስከ ምርት ድረስ ማሳደግ ይችላሉ?',
+  '1. Money available':'1. ያለዎት ገንዘብ','2. Cost to buy & raise one chicken':'2. አንድ ዶሮ ለመግዛትና ለማሳደግ ወጪ','2. Cost to buy & raise one bird':'2. አንድ ዶሮ ለመግዛትና ለማሳደግ ወጪ',
   'Use this as your budget':'ይህን እንደ በጀትዎ ይጠቀሙ','Cash & bank today':'ዛሬ ያለ ጥሬ ገንዘብና ባንክ',
   'YTD net profit after tax':'እስከ አሁን የዓመቱ የተጣራ ትርፍ ከግብር በኋላ','Type a budget myself':'በጀት እራሴ ልጻፍ',
   'Manual budget (ETB)':'በእጅ የተጻፈ በጀት (ብር)','Keep this much in reserve (ETB)':'ይህን ያህል በመጠባበቂያ ያቆዩ (ብር)',
-  'Birds you can buy & raise':'መግዛትና ማሳደግ የሚችሉት ወፎች','Cost per bird (to production)':'ወጪ በአንድ ወፍ (እስከ ምርት)',
+  'Chickens you can buy & raise':'መግዛትና ማሳደግ የሚችሉት ዶሮዎች','Birds you can buy & raise':'መግዛትና ማሳደግ የሚችሉት ዶሮዎች','Cost per chicken (to production)':'ወጪ በአንድ ዶሮ (እስከ ምርት)','Cost per bird (to production)':'ወጪ በአንድ ዶሮ (እስከ ምርት)',
   'Total to spend':'ለማውጣት ጠቅላላ','Money left after plan':'ከዕቅዱ በኋላ የሚቀረው ገንዘብ',
   'Time until they lay well':'በደንብ እስኪጥሉ ያለው ጊዜ','weeks':'ሳምንታት','Spend breakdown':'የወጪ ዝርዝር',
   'Raising until production':'እስከ ምርት ድረስ ማሳደግ','Extra (transport, buffer)':'ተጨማሪ (ትራንስፖርት፣ መጠባበቂያ)',
@@ -2743,7 +3105,7 @@ function rearResultsHtml(){
   <div class="section-title">${escHtml(tr('Your results'))}</div>
   <div class="kpi-grid">
     <div class="kpi-card result-highlight"><div class="kpi-label">${escHtml(tr('Total cost to raise the flock'))}</div><div class="kpi-value mono">${fmtMoney(x.total)}</div></div>
-    <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost for each bird you buy'))}</div><div class="kpi-value mono">${fmtMoney(x.perHoused)}</div></div>
+    <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost for each chicken you buy'))}</div><div class="kpi-value mono">${fmtMoney(x.perHoused)}</div></div>
     <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost for each hen that survives'))}</div><div class="kpi-value mono">${fmtMoney(x.perSurvivor)}</div></div>
     <div class="kpi-card"><div class="kpi-label">${escHtml(tr('How long (weeks)'))}</div><div class="kpi-value mono">${wk}</div></div>
     <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Hens still alive'))}</div><div class="kpi-value mono">${fmtNum(Math.round(x.survivors))}</div></div>
@@ -2752,7 +3114,7 @@ function rearResultsHtml(){
   <div class="panel"><div class="panel-pad">
     <div class="section-title" style="margin-top:0">${escHtml(tr('Simple cost list'))}</div>
     <div class="tablewrap"><table>
-      <thead><tr><th>${escHtml(tr('What'))}</th><th class="num">${escHtml(tr('Total'))}</th><th class="num">${escHtml(tr('Per bird'))}</th></tr></thead>
+      <thead><tr><th>${escHtml(tr('What'))}</th><th class="num">${escHtml(tr('Total'))}</th><th class="num">${escHtml(tr('Per chicken'))}</th></tr></thead>
       <tbody>
         ${simpleRow('Buying the birds', c.chicks)}
         ${simpleRow('Feed', c.feed)}
@@ -2782,7 +3144,7 @@ function renderRearing(){
     <button class="btn btn-ghost" id="rearReset" type="button">↺ ${escHtml(tr('Reset to defaults'))}</button>
   </div>
 
-  <div class="section-title" style="margin-top:0">${escHtml(tr('1. Your birds'))}</div>
+  <div class="section-title" style="margin-top:0">${escHtml(tr('1. Your chickens'))}</div>
   <div class="panel"><div class="panel-pad"><div class="calc-grid">
     ${f('birds','How many birds did you buy?')}
     ${f('chickPrice','Price of one bird (ETB)')}
@@ -2962,9 +3324,9 @@ function investResultsHtml(){
   <div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">${escHtml(fundLabel)}</div><div class="kpi-value mono">${fmtMoney(x.budget + num(inv.keepReserve))}</div>
       ${num(inv.keepReserve)>0?`<div class="calc-hint">${escHtml(tr('Reserve kept'))}: ${fmtMoney(inv.keepReserve)} → ${escHtml(tr('Usable'))}: ${fmtMoney(x.budget)}</div>`:''}</div>
-    <div class="kpi-card result-highlight"><div class="kpi-label">${escHtml(tr('Birds you can buy & raise'))}</div><div class="kpi-value mono">${fmtNum(x.birds)}</div>
+    <div class="kpi-card result-highlight"><div class="kpi-label">${escHtml(tr('Chickens you can buy & raise'))}</div><div class="kpi-value mono">${fmtNum(x.birds)}</div>
       <div class="calc-hint">${escHtml(tr('Max possible'))}: ${fmtNum(x.maxBirds)}</div></div>
-    <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost per bird (to production)'))}</div><div class="kpi-value mono">${fmtMoney(x.costs.total)}</div></div>
+    <div class="kpi-card result-clay"><div class="kpi-label">${escHtml(tr('Cost per chicken (to production)'))}</div><div class="kpi-value mono">${fmtMoney(x.costs.total)}</div></div>
     <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Total to spend'))}</div><div class="kpi-value mono">${fmtMoney(x.spendTotal)}</div></div>
     <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Money left after plan'))}</div><div class="kpi-value mono">${fmtMoney(x.leftover)}</div></div>
     <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Time until they lay well'))}</div><div class="kpi-value mono">${x.weeksToLay || '—'} ${escHtml(tr('weeks'))}</div>
@@ -2973,16 +3335,16 @@ function investResultsHtml(){
   <div class="panel"><div class="panel-pad">
     <div class="section-title" style="margin-top:0">${escHtml(tr('Spend breakdown'))}</div>
     <div class="tablewrap"><table>
-      <thead><tr><th>${escHtml(tr('What'))}</th><th class="num">${escHtml(tr('Per bird'))}</th><th class="num">${escHtml(tr('Total'))}</th></tr></thead>
+      <thead><tr><th>${escHtml(tr('What'))}</th><th class="num">${escHtml(tr('Per chicken'))}</th><th class="num">${escHtml(tr('Total'))}</th></tr></thead>
       <tbody>
-        <tr><td>${escHtml(tr('Buying the birds'))}</td><td class="num mono">${fmtMoney(x.costs.buy)}</td><td class="num mono">${fmtMoney(x.spendBuy)}</td></tr>
+        <tr><td>${escHtml(tr('Buying the chickens'))}</td><td class="num mono">${fmtMoney(x.costs.buy)}</td><td class="num mono">${fmtMoney(x.spendBuy)}</td></tr>
         <tr><td>${escHtml(tr('Raising until production'))}</td><td class="num mono">${fmtMoney(x.costs.raise)}</td><td class="num mono">${fmtMoney(x.spendRaise)}</td></tr>
         <tr><td>${escHtml(tr('Extra (transport, buffer)'))}</td><td class="num mono">${fmtMoney(x.costs.extra)}</td><td class="num mono">${fmtMoney(x.spendExtra)}</td></tr>
         <tr style="font-weight:700;background:var(--surface-alt)"><td>${escHtml(tr('TOTAL'))}</td><td class="num mono">${fmtMoney(x.costs.total)}</td><td class="num mono">${fmtMoney(x.spendTotal)}</td></tr>
       </tbody>
     </table></div>
     ${x.birds>0 && x.eggsPerDay>0 ? `<p class="note" style="margin:12px 0 0;">${escHtml(tr('After they start laying (rough):'))} ~${fmtNum(x.eggsPerDay.toFixed(0))} ${escHtml(tr('eggs/day'))}. ${escHtml(tr('This is only a guide — use Price Calc for selling prices.'))}</p>` : ''}
-    ${x.birds===0 ? `<p class="note" style="margin:12px 0 0;color:var(--clay);">${escHtml(tr('Not enough funds for even one bird at this cost. Lower the cost per bird, reduce the reserve, or add capital / wait for more profit.'))}</p>` : ''}
+    ${x.birds===0 ? `<p class="note" style="margin:12px 0 0;color:var(--clay);">${escHtml(tr('Not enough funds for even one chicken at this cost. Lower the cost per chicken, reduce the reserve, or add capital / wait for more profit.'))}</p>` : ''}
   </div></div>`;
 }
 function renderInvest(){
@@ -3000,7 +3362,7 @@ function renderInvest(){
   <div class="pagehead">
     <div>
       <h1>${escHtml(tr('Investment Plan'))}</h1>
-      <p>${escHtml(tr('How many birds can you buy and raise until they start producing, with the money you have today?'))}</p>
+      <p>${escHtml(tr('How many chickens can you buy and raise until they start producing, with the money you have today?'))}</p>
     </div>
   </div>
 
@@ -3015,12 +3377,12 @@ function renderInvest(){
         </select>
       </label>
       ${f('manualBudget','Manual budget (ETB)','Only used if you chose “type a budget”')}
-      ${f('keepReserve','Keep this much in reserve (ETB)','Money you do not want to spend on birds')}
+      ${f('keepReserve','Keep this much in reserve (ETB)','Money you do not want to spend on chickens')}
     </div>
     <p class="note" style="margin:10px 0 0;">${escHtml(tr('“YTD net profit after tax” comes from your Reports tax figure for this Ethiopian fiscal year. Cash is what is in the bank/cash book today.'))}</p>
   </div></div>
 
-  <div class="section-title">${escHtml(tr('2. Cost to buy & raise one bird'))}</div>
+  <div class="section-title">${escHtml(tr('2. Cost to buy & raise one chicken'))}</div>
   <div class="panel"><div class="panel-pad">
     <div class="calc-grid">
       <label class="calc-field">${escHtml(tr('Cost source'))}
@@ -3029,12 +3391,12 @@ function renderInvest(){
           <option value="No" ${inv.useRearingCalc==='No'?'selected':''}>${escHtml(tr('Enter costs myself'))}</option>
         </select>
       </label>
-      ${f('birdPrice','Buy price per bird (ETB)','Used when not using the rearing calculator')}
+      ${f('birdPrice','Buy price per chicken (ETB)','Used when not using the rearing calculator')}
       ${f('raiseCostPerBird','Raise cost per bird until production (ETB)','Feed, labour, health — if not using rearing calculator')}
       ${f('extraPerBird','Extra per bird (ETB)','Transport, unexpected')}
-      ${f('targetBirds','Target number of birds (0 = maximum you can afford)','Leave 0 to see the maximum')}
+      ${f('targetBirds','Target number of chickens (0 = maximum you can afford)','Leave 0 to see the maximum')}
     </div>
-    <p class="note" style="margin:10px 0 0;">${escHtml(tr('Tip: open Rearing Cost first and set your real prices. This plan can reuse that cost per bird automatically.'))}</p>
+    <p class="note" style="margin:10px 0 0;">${escHtml(tr('Tip: open Rearing Cost first and set your real prices. This plan can reuse that cost per chicken automatically.'))}</p>
   </div></div>
 
   <div id="investResults">${investResultsHtml()}</div>
@@ -3377,7 +3739,7 @@ function renderIncome(){
 
   return `
   <div class="pagehead">
-    <div><h1>${t('Income')}</h1><p>${escHtml(tr('Choose what you are selling — the form adapts (eggs, honey, milk, wool, manure, birds, goats/sheep/oxen) and the stock is reduced automatically. For lump sums use Other Income.'))}</p></div>
+    <div><h1>${t('Income')}</h1><p>${escHtml(tr('Choose what you are selling — the form adapts (eggs, honey, milk, wool, manure, chickens, goats/sheep/oxen) and the stock is reduced automatically. For lump sums use Other Income.'))}</p></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-ghost csv-btn" data-csv="income">⬇ CSV</button>
       <button class="btn btn-primary" id="addIncome">+ ${escHtml(tr('Add income'))}</button>
@@ -3674,7 +4036,7 @@ const ACCT_NAMES = {
   '2000':'Accounts payable — suppliers', '2050':'Payable to asset suppliers', '2100':'Loans payable — short-term', '2150':'Loans payable — long-term', '2210':'VAT payable / (receivable)', '2300':'Income tax payable',
   '3000':"Owner's capital", '3100':"Owner's drawings",
   '4000':'Sales revenue', '4900':'Other income', '4950':'Change in agricultural produce inventory (unrealised)', '5000':'Cost of production', '5100':'Change in feed inventory',
-  '6000':'Operating expenses', '6100':'Depreciation', '6110':'Amortisation of mature layers', '6120':'Amortisation of other livestock', '6400':'Poultry mortality expense', '6410':'Carrying value of birds sold / culled / lost', '6420':'Other livestock mortality expense', '6430':'Carrying value of other livestock sold / culled / lost', '6200':'Finance costs (loan interest)', '6900':'Gain / (loss) on disposal of assets', '8000':'Income tax expense'
+  '6000':'Operating expenses', '6100':'Depreciation', '6110':'Amortisation of mature layers', '6120':'Amortisation of other livestock', '6400':'Poultry mortality expense', '6410':'Carrying value of chickens sold / culled / lost', '6420':'Other livestock mortality expense', '6430':'Carrying value of other livestock sold / culled / lost', '6200':'Finance costs (loan interest)', '6900':'Gain / (loss) on disposal of assets', '8000':'Income tax expense'
 };
 const PL_ACCTS = ['4000','4900','4950','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900','8000'];
 const PL_PRETAX = ['4000','4900','4950','5000','5100','6000','6100','6110','6120','6200','6400','6410','6420','6430','6900'];
@@ -3872,7 +4234,7 @@ function bioSim(b){
         lines = [[ex,wo],[AC.imm,-wo]];
       }
       Q -= q;
-      const word = AC.grp==='L' ? 'bird(s)' : 'head';
+      const word = AC.grp==='L' ? 'chicken(s)' : 'head';
       res.entries.push({date:e.date, kind: death?'bioMort':'bioWo', grp:AC.grp, wo, qty:q, redId:e.r.id, lines,
         desc:(death?'Mortality — ':(e.r.reason==='Sale'?'Sold — ':'Removed ('+String(e.r.reason||'other').toLowerCase()+') — '))+id+': '+q+' '+word+' × '+fmtMoney(perHead)+' carrying value'});
     }
@@ -4717,7 +5079,7 @@ function renderPLBody(efy){
         ${sec('4. Operating expenses')}${list(r.opex)}${line(t('Total operating expenses'), r.totOpex,'tot')}
         ${sec('5. Depreciation')}${line(t('5. Depreciation'), r.dep)}${Math.abs(r.bioAmort)>0.005 ? line(t('Amortisation of mature layers (biological assets)'), r.bioAmort) : ''}${Math.abs(r.bioAmortO)>0.005 ? line(t('Amortisation of other livestock (goats, sheep, oxen)'), r.bioAmortO) : ''}
         ${sec('5b. Finance costs and other items')}${line(t('Finance costs (loan interest)'), r.finance)}${line(t('Other income (grants, interest earned)'), r.otherInc)}${line(t('Gain / (loss) on disposal of assets'), r.gainLoss)}
-        ${(bioBatches().length || Math.abs(r.bioMort)+Math.abs(r.bioWo)+Math.abs(r.bioMortO)+Math.abs(r.bioWoO)>0.005) ? sec('5c. Livestock mortality and write-offs')+line(t('Poultry mortality expense (deaths)'), r.bioMort)+line(t('Carrying value of birds sold / culled / lost'), r.bioWo)+line(t('Other livestock mortality expense (deaths)'), r.bioMortO)+line(t('Carrying value of other livestock sold / culled / lost'), r.bioWoO) : ''}
+        ${(bioBatches().length || Math.abs(r.bioMort)+Math.abs(r.bioWo)+Math.abs(r.bioMortO)+Math.abs(r.bioWoO)>0.005) ? sec('5c. Livestock mortality and write-offs')+line(t('Poultry mortality expense (deaths)'), r.bioMort)+line(t('Carrying value of chickens sold / culled / lost'), r.bioWo)+line(t('Other livestock mortality expense (deaths)'), r.bioMortO)+line(t('Carrying value of other livestock sold / culled / lost'), r.bioWoO) : ''}
         ${Math.abs(r.produceChange)>0.005 ? sec('5d. Agricultural produce inventory')+line(t('Change in agricultural produce inventory (unrealised)'), r.produceChange) : ''}
         ${sec('6. Net profit / (loss) before tax')}${line(t('6. Net profit / (loss) before tax'), r.netBefore,'tot')}
         <tr><td class="ind" style="font-style:italic;color:var(--ink-soft);" colspan="2">Livestock policy: ${bioPolicy==='amort'?'Amortise layers':'Hold at cost (no amortisation)'}${tx.vatRegistered?' · VAT registered ('+num(tx.vatRatePct)+'%)':''}</td></tr>
@@ -5151,7 +5513,7 @@ function incomeFormHook(root, record){
       const opts = state.livestock.filter(b=> poultry ? b.animalType==='Poultry' : b.animalType!=='Poultry');
       batch.innerHTML = '<option value="">-- select --</option>' + opts.map(b=>`<option value="${escHtml(b.batchId)}">${escHtml(b.batchId+' — '+(b.breed||b.animalType)+' ('+fmtNum(batchCurrentQty(b.batchId, exclude))+' left)')}</option>`).join('');
       batch.value = cur;
-      ql = (poultry ? 'Number of birds sold' : 'Number of animals sold')+' *'; pl = 'Price per '+(poultry?'bird':'animal')+' (ETB) *';
+      ql = (poultry ? 'Number of chickens sold' : 'Number of animals sold')+' *'; pl = 'Price per '+(poultry?'chicken':'animal')+' (ETB) *';
       if(batch.value){ const left = batchCurrentQty(batch.value, exclude); qty.max = left; h = 'Left in '+batch.value+': '+fmtNum(left)+'. This sale removes them from the herd and writes off their book value automatically.'; }
       else h = 'Choose the batch the animals are sold from.';
     }
