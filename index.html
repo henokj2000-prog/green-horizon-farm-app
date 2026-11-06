@@ -297,41 +297,6 @@ details.section-fold>summary .fold-hint{font-weight:500;font-size:12px;color:var
 .quick-btn:hover{background:var(--surface-alt);}
 .csv-btn{font-size:12px;padding:5px 10px;}
 .advanced-only{opacity:0.92;}
-
-/* ---------- Fit-to-window pages (Dashboard, Price Calc, Rearing Cost, Investment Plan) ---------- */
-@media(min-width:760px){
-  .content.fit{padding:10px 18px 6px;}
-  .content.fit .pagehead{margin-bottom:6px;gap:6px;}
-  .content.fit .pagehead h1{font-size:17px;}
-  .content.fit .pagehead p{display:none;}
-  .content.fit .pagehead .btn{padding:5px 10px;font-size:12px;}
-  .content.fit .section-title{margin:8px 0 4px;font-size:12.5px;}
-  .content.fit .panel{margin-bottom:8px;}
-  .content.fit .panel-pad{padding:8px 12px;}
-  .content.fit .calc-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:6px 10px;}
-  .content.fit .calc-field{gap:2px;font-size:11.5px;}
-  .content.fit .calc-field input,.content.fit .calc-field select{padding:5px 8px;font-size:13px;}
-  .content.fit .calc-hint{display:none;}
-  .content.fit .kpi-grid{gap:8px;margin-bottom:8px;}
-  .content.fit .kpi-card{padding:7px 10px;}
-  .content.fit .kpi-label{font-size:10.5px;line-height:1.25;}
-  .content.fit .kpi-value{font-size:17px;margin-top:2px;}
-  .content.fit th,.content.fit td{padding:4px 8px;}
-  .content.fit .note{margin:4px 0;font-size:11px;}
-  .content.fit .panel-pad .note{margin:6px 0 0 !important;}
-  .content.fit .toggle-row{margin-bottom:6px;}
-  .content.fit .toggle-btn{padding:4px 12px;}
-  .content.fit .quick-bar{margin-bottom:8px;gap:6px;}
-  .content.fit .quick-btn{padding:5px 10px;font-size:12px;}
-  .content.fit .dash-note{padding:6px 10px;margin-bottom:8px;font-size:12px;}
-  .content.fit .branch-status-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-bottom:8px;}
-  .content.fit .branch-card{padding:8px 10px;}
-  .content.fit .branch-card h3{margin:0 0 4px;font-size:13.5px;}
-  .content.fit .branch-card .br-row{padding:2px 0;font-size:12px;}
-  .content.fit .branch-card .br-status{margin-top:4px;}
-  .content.fit .two-col{gap:8px;}
-  .content.fit details{margin-bottom:8px !important;}
-}
 </style>
 
 </head>
@@ -367,7 +332,7 @@ const STORE_KEYS = {
   vaccinations:'gh_vaccinations', medications:'gh_medications', healthSchedule:'gh_healthSchedule',
   calc:'gh_calc', assets:'gh_assets',
   customers:'gh_customers', payments:'gh_payments', comments:'gh_comments', inquiries:'gh_inquiries',
-  orders:'gh_orders',
+  orders:'gh_orders', employees:'gh_employees',
   acct:'gh_acct', trash:'gh_trash'
 };
 
@@ -408,7 +373,7 @@ let state = {
   setup: JSON.parse(JSON.stringify(DEFAULT_SETUP)),
   livestock:[], reductions:[], production:[], prodReductions:[],
   feedPurchases:[], feeding:[], income:[], expenses:[], vaccinations:[], medications:[], healthSchedule:[], assets:[],
-  customers:[], payments:[], comments:[], inquiries:[], orders:[], acct:[],
+  customers:[], payments:[], comments:[], inquiries:[], orders:[], employees:[], acct:[],
   calc: JSON.parse(JSON.stringify(DEFAULT_CALC)),
   trash:[]   // soft-deleted records {entity, record, deletedAt}
 };
@@ -438,7 +403,7 @@ const AM = {
   /* --- static / navigation --- */
   'Green Horizon Farm':'ግሪን ሆራይዘን እርሻ','Green Horizon Farm Manager':'ግሪን ሆራይዘን የእርሻ አስተዳዳሪ',
   'Poultry · Bees · Goats · Sheep · Oxen':'ዶሮ · ንብ · ፍየል · በግ · በሬ','Loading farm data…':'የእርሻ መረጃ በመጫን ላይ…',
-  'Dashboard':'ዳሽቦርድ','Livestock':'እንስሳት','Reductions':'ቅናሾች','Production':'ምርት','Prod. Stock':'የምርት ክምችት',
+  'Dashboard':'ዳሽቦርድ','Livestock':'እንስሳት','Reductions':'ቅናሾች','Production':'ምርት','Prod. Stock':'የምርት ክምችት','Employees':'ሠራተኞች',
   'Feed':'መኖ','Price Calc':'የዋጋ ማስያ','Income':'ገቢ','Expenses':'ወጪዎች','Assets':'ንብረት','Health':'ጤና','Reports':'ሪፖርቶች','Setup':'ቅንብር',
   /* --- common --- */
   'Date':'ቀን','Category':'ምድብ','Description':'መግለጫ','Amount':'መጠን','Notes':'ማስታወሻ','Status':'ሁኔታ','Source':'ምንጭ','Unit':'መለኪያ',
@@ -749,7 +714,36 @@ Object.assign(AM, {
   'Production Entry':'የምርት መግቢያ','Batch / Herd':'ቡድን / መንጋ',
   'Select branch and animal type':'ቅርንጫፍና የእንስሳት ዓይነት ይምረጡ',
   'Auto from branch + animal type':'ከቅርንጫፍ + የእንስሳት ዓይነት በራስ-ሰር',
-  'Payment':'ክፍያ','Booked as':'እንደ','expense':'ወጪ','asset':'ንብረት'
+  'Payment':'ክፍያ','Booked as':'እንደ','expense':'ወጪ','asset':'ንብረት',
+  /* --- home quick actions & nav labels that must translate --- */
+  'Income / Sale':'ገቢ / ሽያጭ',
+  'Feeding':'አመጋገብ',
+  'Orders':'ትዕዛዞች',
+  'Expenses & Purchases':'ወጪዎችና ግዢዎች',
+  'Add order':'ትዕዛዝ ጨምር',
+  'Rearing Cost':'የማሳደጊያ ወጪ',
+  'Investment Plan':'የኢንቨስትመንት ዕቅድ',
+  /* --- employees --- */
+  'Add employee':'ሠራተኛ ጨምር',
+  'Employee':'ሠራተኛ',
+  'Full name':'ሙሉ ስም',
+  'Position / role':'ስራ / ድርሻ',
+  'Position':'ስራ',
+  'Hire date':'የቅጥር ቀን',
+  'Monthly salary (ETB)':'ወርሃዊ ደመወዝ (ብር)',
+  'Salary / mo':'ደመወዝ / ወር',
+  'ID / employee No.':'መለያ / የሠራተኛ ቁጥር',
+  'ID No.':'መለያ ቁ.',
+  'Inactive':'እንቅስቃሴ የሌለው',
+  'Active staff':'ንቁ ሠራተኞች',
+  'Total staff':'ጠቅላላ ሠራተኞች',
+  'Est. monthly payroll':'ግምታዊ ወርሃዊ ደመወዝ',
+  'No employees yet. Add your first staff member below.':'እስካሁን ምንም ሠራተኛ የለም። የመጀመሪያውን ከዚህ በታች ይጨምሩ።',
+  'Employee administration — staff directory, roles, and monthly salary reference. Record actual labor payments under Expenses & Purchases.':'የሠራተኛ አስተዳደር — የሰራተኞች ዝርዝር፣ ስራዎች እና ወርሃዊ ደመወዝ ማጣቀሻ። ትክክለኛ የሠራተኛ ክፍያዎችን በወጪዎችና ግዢዎች ስር ይመዝግቡ።',
+  'Salaries shown here are for reference only. To pay staff, add a Labor expense under Expenses & Purchases so cash and P&L stay accurate.':'እዚህ የሚታዩ ደመወዞች ለማጣቀሻ ብቻ ናቸው። ሠራተኞችን ለመክፈል በወጪዎችና ግዢዎች ስር የሠራተኛ ወጪ ይጨምሩ ስለዚህ ጥሬ ገንዘብና ትርፍ/ኪሳራ ትክክለኛ ይሆናሉ።',
+  'Name':'ስም',
+  'Branch':'ቅርንጫፍ',
+  'Phone':'ስልክ'
 });
 function trStr(raw){
   if(raw===undefined || raw===null) return null;
@@ -1184,6 +1178,11 @@ function exportTableCsv(entityKey){
       const headers = ['Name','Phone','Type','Address','TIN','Notes'];
       const rows = state.customers.map(c=>[c.name,c.phone||'',c.type||'',c.address||'',c.tin||'',c.notes||'']);
       return {name:'customers', headers, rows};
+    },
+    employees: ()=>{
+      const headers = ['Name','Position','Phone','Branch','Hire Date','Salary','Status','ID Number','Notes'];
+      const rows = state.employees.map(e=>[e.name,e.position||'',e.phone||'',e.branch||'',e.hireDate||'',e.salary||0,e.status||'',e.idNumber||'',e.notes||'']);
+      return {name:'employees', headers, rows};
     }
   };
   const fn = map[entityKey];
@@ -1569,7 +1568,7 @@ async function initApp(){
   loadDriveConfigLocal();
   const [setup, livestock, reductions, production, prodReductions,
          feedPurchases, feeding, income, expenses, vaccinations, medications, healthSchedule, calc, assets,
-         customers, payments, comments, inquiries, orders, acct, trash] = await Promise.all([
+         customers, payments, comments, inquiries, orders, employees, acct, trash] = await Promise.all([
     loadKey(STORE_KEYS.setup, null),
     loadKey(STORE_KEYS.livestock, null),
     loadKey(STORE_KEYS.reductions, null),
@@ -1589,6 +1588,7 @@ async function initApp(){
     loadKey(STORE_KEYS.comments, null),
     loadKey(STORE_KEYS.inquiries, null),
     loadKey(STORE_KEYS.orders, null),
+    loadKey(STORE_KEYS.employees, null),
     loadKey(STORE_KEYS.acct, null),
     loadKey(STORE_KEYS.trash, [])
   ]);
@@ -1617,6 +1617,7 @@ async function initApp(){
   state.comments = comments || [];
   state.inquiries = inquiries || [];
   state.orders = orders || [];
+  state.employees = employees || [];
   state.acct = acct || seeds.acct || [];
   state.calc = calc || calcAutoDefaults();
   state.trash = Array.isArray(trash) ? trash : [];
@@ -2016,6 +2017,7 @@ const TABS = [
   {key:'income', label:'Income', icon:'💰'},
   {key:'expenses', label:'Expenses & Purchases', icon:'💸'},
   {key:'customers', label:'Customers', icon:'👥'},
+  {key:'employees', label:'Employees', icon:'👷'},
   {key:'assets', label:'Assets', icon:'🏗️'},
   {key:'accounting', label:'Accounting', icon:'💼'},
   {key:'health', label:'Health', icon:'💊'},
@@ -2042,72 +2044,17 @@ function render(){
     production: renderProduction, prodstock: renderProdStock, feed: renderFeed,
     calculator: renderCalculator, rearing: renderRearing, invest: renderInvest,
     orders: renderOrders,
-    income: renderIncome, expenses: renderExpenses, customers: renderCustomers, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
+    income: renderIncome, expenses: renderExpenses, customers: renderCustomers, employees: renderEmployees, assets: renderAssets, accounting: renderAccounting, health: renderHealth,
     reports: renderReports, setup: renderSetup
   };
   // Old "reductions" tab redirects into Livestock
   if(currentTab==='reductions') currentTab = 'livestock';
-  const html = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
-  const fitPage = FIT_TABS.indexOf(currentTab) >= 0;
-  c.innerHTML = fitPage ? '<div id="fitRoot">'+html+'</div>' : html;
+  c.innerHTML = renderers[currentTab] ? renderers[currentTab]() : '<p>Not found</p>';
   translateDom(c);
   attachTabEvents();
   wireTableTools();
   fitMoneyTexts(c);
-  fitToWindow();
 }
-
-/* ---------------- Fit-to-window (no scrolling) ----------------
- * Dashboard, Price Calc, Rearing Cost and Investment Plan are scaled to fill the
- * window exactly, so the whole page is visible without scrolling. Pages that are
- * still too tall at the minimum scale fall back to normal scrolling. */
-const FIT_TABS = ['dashboard','calculator','rearing','invest'];
-const FIT_MIN_ZOOM = 0.6;
-function fitToWindow(){
-  const c = document.getElementById('content');
-  if(!c) return;
-  const root = document.getElementById('fitRoot');
-  if(!root || FIT_TABS.indexOf(currentTab) < 0 || window.innerWidth < 760){
-    c.classList.remove('fit'); c.style.overflowY = '';
-    if(root) root.style.zoom = '';
-    return;
-  }
-  c.classList.add('fit');
-  c.style.overflowY = 'hidden';                       // measure without a scrollbar
-  const fits = () => c.scrollHeight <= c.clientHeight + 1;
-  const setZ = z => { root.style.zoom = z >= 0.999 ? '' : String(z); };
-  setZ(1);
-  let ok = fits();
-  if(!ok){
-    setZ(FIT_MIN_ZOOM);
-    if(!fits()){ ok = false; }                        // too tall even at minimum: allow scrolling
-    else {
-      let lo = FIT_MIN_ZOOM, hi = 1;
-      for(let i=0;i<7;i++){
-        const mid = (lo+hi)/2;
-        setZ(mid);
-        if(fits()) lo = mid; else hi = mid;
-      }
-      setZ(lo);
-      ok = true;
-    }
-  }
-  c.style.overflowY = ok ? 'hidden' : 'auto';
-  c.scrollTop = 0;
-}
-(function(){
-  let t = null;
-  const schedule = ()=>{ clearTimeout(t); t = setTimeout(fitToWindow, 60); };
-  window.addEventListener('resize', schedule);
-  window.addEventListener('load', schedule);
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const c = document.getElementById('content');
-    if(!c) return;
-    // Live result updates (typing in a calculator) and opened <details> change the height
-    new MutationObserver(schedule).observe(c, {childList:true, subtree:true, characterData:true});
-    c.addEventListener('toggle', schedule, true);
-  });
-})();
 
 /** Shrink ETB / number text so it stays on one line inside its card. */
 function fitMoneyTexts(root){
@@ -3329,6 +3276,45 @@ function renderOrders(){
   `;
 }
 
+function renderEmployees(){
+  const rows = state.employees.length ? state.employees.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(e=>`
+    <tr>
+      <td>${escHtml(e.name)}</td>
+      <td>${escHtml(e.position||'')}</td>
+      <td>${escHtml(e.phone||'')}</td>
+      <td>${escHtml(e.branch||'')}</td>
+      <td>${fmtDate(e.hireDate)}</td>
+      <td class="num mono">${fmtMoney(e.salary||0)}</td>
+      <td><span class="tag ${e.status==='Active'?'tag-active':'tag-closed'}">${escHtml(tr(e.status||''))}</span></td>
+      <td class="mono">${escHtml(e.idNumber||'')}</td>
+      <td class="notes-cell">${escHtml(e.notes||'')}</td>
+      ${rowActionsHtml('employees', e.id)}
+    </tr>`).join('') : emptyRow(10, tr('No employees yet. Add your first staff member below.'));
+
+  const active = state.employees.filter(e=>e.status==='Active').length;
+  const payroll = state.employees.filter(e=>e.status==='Active').reduce((s,e)=>s+num(e.salary),0);
+
+  return `
+  <div class="pagehead">
+    <div>
+      <h1>${t('Employees')}</h1>
+      <p>${escHtml(tr('Employee administration — staff directory, roles, and monthly salary reference. Record actual labor payments under Expenses & Purchases.'))}</p>
+    </div>
+    <button class="btn btn-primary" id="addEmployees">+ ${escHtml(tr('Add employee'))}</button>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:14px">
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Active staff'))}</div><div class="kpi-value mono">${fmtNum(active)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Total staff'))}</div><div class="kpi-value mono">${fmtNum(state.employees.length)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">${escHtml(tr('Est. monthly payroll'))}</div><div class="kpi-value mono">${fmtMoney(payroll)}</div></div>
+  </div>
+  ${tableShell([
+    {label:'Name'},{label:'Position'},{label:'Phone'},{label:'Branch'},{label:'Hire date'},
+    {label:'Salary / mo',num:true},{label:'Status'},{label:'ID No.'},{label:'Notes'},{label:''}
+  ], rows, {id:'tbl_employees'})}
+  <p class="note">${escHtml(tr('Salaries shown here are for reference only. To pay staff, add a Labor expense under Expenses & Purchases so cash and P&L stay accurate.'))}</p>
+  <div style="margin-top:8px"><button class="btn btn-ghost csv-btn" data-csv="employees">⬇ CSV</button></div>
+  `;
+}
 function renderCustomers(){
   const dirRows = state.customers.length ? state.customers.map(c=>{
     const sales=customerSales(c.id), paidAtSale=customerPaidAtSale(c.id), pmts=customerPaymentsTotal(c.id), bal=sales-paidAtSale-pmts;
@@ -5386,6 +5372,17 @@ function FORM_CONFIGS(){
       {name:'followUpDate', label:'Follow-up date', type:'date'},
       {name:'notes', label:'Notes', type:'textarea'}
     ]},
+    employees: { title:'Employee', entity:'employees', fields:[
+      {name:'name', label:'Full name', type:'text', required:true},
+      {name:'position', label:'Position / role', type:'text', required:true, placeholder:'e.g. Farm manager, Feeder, Guard'},
+      {name:'phone', label:'Phone', type:'text'},
+      {name:'branch', label:'Branch', type:'select', options:ensureBranches(), default:(ensureBranches()[0]||'Main')},
+      {name:'hireDate', label:'Hire date', type:'date', default:todayISO()},
+      {name:'salary', label:'Monthly salary (ETB)', type:'number', default:0},
+      {name:'status', label:'Status', type:'select', options:['Active','Inactive'], default:'Active', required:true},
+      {name:'idNumber', label:'ID / employee No.', type:'text'},
+      {name:'notes', label:'Notes', type:'textarea'}
+    ]},
     orders: { title:'Customer Order', entity:'orders', fields:[
       {name:'date', label:'Order date', type:'date', required:true, default:todayISO()},
       {name:'customerId', label:'Existing customer (optional)', type:'select', options:[{value:'',label:'— New / type name below —'}].concat(customerOptions())},
@@ -5774,7 +5771,7 @@ function exportBackup(){
   showToast('Backup downloaded');
 }
 
-const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','healthSchedule','assets','customers','payments','comments','inquiries','orders','acct'];
+const ENTITY_KEYS = ['livestock','reductions','production','prodReductions','feedPurchases','feeding','income','expenses','vaccinations','medications','healthSchedule','assets','customers','payments','comments','inquiries','orders','employees','acct'];
 
 /* Entities with a date field that can be archived by fiscal year */
 const ARCHIVE_DATE_FIELDS = {
@@ -5887,7 +5884,7 @@ function attachTabEvents(){
     addProdReductions:'prodReductions', addFeedPurchases:'feedPurchases', addFeeding:'feeding',
     addIncome:'income', addExpenses:'purchase', addAssets:'assets', addVaccinations:'vaccinations', addMedications:'medications',
     addHealthSchedule:'healthSchedule', addOrders:'orders',
-    addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries', addAcct:'acct'
+    addCustomers:'customers', addPayments:'payments', addComments:'comments', addInquiries:'inquiries', addEmployees:'employees', addAcct:'acct'
   };
   Object.keys(addBtnMap).forEach(btnId=>{
     const el = document.getElementById(btnId);
